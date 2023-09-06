@@ -7,5 +7,5 @@ CREATE TABLE IF NOT EXISTS Applications (
     application_year INT NOT NULL,
     current_status VARCHAR(255),
     status_changed BOOLEAN,
-    last_notified TIMESTAMP
+    last_updated TIMESTAMP
 );
