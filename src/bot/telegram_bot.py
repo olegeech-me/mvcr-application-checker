@@ -48,19 +48,31 @@ async def connect_to_rabbit():
     return connection, channel, queue
 
 
-async def on_message(message: aio_pika.IncomingMessage):
-    # Async function to handle messages from StatusUpdateQueue
+async def on_message(app, message: aio_pika.IncomingMessage):
+    """Async function to handle messages from StatusUpdateQueue"""
     async with message.process():
         msg_data = json.loads(message.body.decode("utf-8"))
-        # TODO: Update application status in the DB
-        # TODO: Notify the user
         logger.info(f"Received status update message: {msg_data}")
+        chat_id = msg_data.get("chat_id", None)
+        status = msg_data.get("status", None)
+        if chat_id and status:
+            # TODO: Update application status in the DB
+
+            # Construct the notification text
+            notification_text = f"Your application status has been updated: {status}"
+
+            # Notify the user
+            try:
+                await app.updater.bot.send_message(chat_id=chat_id, text=notification_text, parse_mode="HTML")
+                logger.info(f"Sent status update to chatID {chat_id}")
+            except Exception as e:
+                logger.error(f"Failed to send status update to {chat_id}: {e}")
 
 
-async def consume_messages():
+async def consume_messages(app):
     _connection, _channel, queue = await connect_to_rabbit()
 
-    await queue.consume(on_message)
+    await queue.consume(lambda message: on_message(app, message))
     logger.info("Started consumer")
 
 
@@ -159,9 +171,6 @@ async def main():
         return
     logger.info("Connected to the message queue")
 
-    # Run RabbitMQ consumer in background
-    asyncio.create_task(consume_messages())
-
     # Initialize telegram bot
     app = Application.builder().token(TOKEN).build()
 
@@ -183,11 +192,14 @@ async def main():
     await app.updater.start_polling()
     await app.start()
 
+    # Run RabbitMQ consumer in background
+    asyncio.create_task(consume_messages(app))
+
     # Run infinite loop until CTRL+C
     try:
         while True:
             # TODO output some stats
-            print("sleeping ...")
+            # print("sleeping ...")
             await asyncio.sleep(30)
             pass
     except KeyboardInterrupt:

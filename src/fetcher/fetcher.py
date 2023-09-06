@@ -1,5 +1,8 @@
 """
 Collect application status
+
+Based on https://github.com/fernflower/trvalypobytexamchecker/blob/main/src/fetcher/a2exams_fetcher.py
+
 """
 import time
 import logging
