@@ -33,7 +33,7 @@ DISPLAY = None
 BROWSER = None
 
 # set up logging
-logging.basicConfig()
+logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
@@ -193,6 +193,7 @@ def main():
 
     channel.queue_declare(queue="ApplicationFetchQueue", durable=True)
     channel.queue_declare(queue="StatusUpdateQueue", durable=True)
+    logger.info("Connected to the RabbitMQ server")
 
     def callback(ch, method, properties, body):
         app_details = json.loads(body.decode("utf-8"))
@@ -213,6 +214,7 @@ def main():
 
     # This will block and wait for messages from ApplicationFetchQueue
     channel.basic_consume(queue="ApplicationFetchQueue", on_message_callback=callback, auto_ack=True)
+    logger.info("Subscribing for updates at ApplicationFetchQueue")
     channel.start_consuming()
 
 

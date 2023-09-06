@@ -30,10 +30,13 @@ Example: /subscribe 12345 0 TP 2023
 """
 
 # set up logging
-# logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.DEBUG)
-logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
+# logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+
+# rabbit channel
+channel = None
 
 
 def init_db():
@@ -109,7 +112,7 @@ async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=update.effective_chat.id, text="Sorry, I didn't understand that command.")
 
 
-async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE, channel=None):
+async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Subscribes user for application status updates"""
     app_data = context.args
     logger.debug(f"Received /subscribe command with args {app_data}")
@@ -154,6 +157,9 @@ async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE, 
 
 
 async def main():
+    # make rabbit channel global variable
+    global channel
+
     # Initialize the database connection
     try:
         db = init_db()
@@ -178,10 +184,7 @@ async def main():
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CallbackQueryHandler(button))
     app.add_handler(CommandHandler("help", help_command))
-    # app.add_handler(CommandHandler("subscribe", subscribe_command(channel=channel)))
-    app.add_handler(
-        CommandHandler("subscribe", lambda update, context: loop.create_task(subscribe_command(update, context, channel)))
-    )
+    app.add_handler(CommandHandler("subscribe", subscribe_command))
     unknown_handler = MessageHandler(filters.COMMAND, unknown)
     app.add_handler(unknown_handler)
 
