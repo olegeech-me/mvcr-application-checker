@@ -1,0 +1,22 @@
+# fetcher
+pika
+beautifulsoup4
+lxml
+mock
+pysocks
+pytest
+pytest-asyncio
+pytz
+requests
+unidecode
+# headless browser related
+fake-useragent
+selenium
+pyvirtualdisplay
+
+# bot
+python-telegram-bot==20.5
+redis
+unidecode
+aio_pika
+
