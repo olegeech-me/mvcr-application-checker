@@ -4,16 +4,12 @@ import os
 import json
 import asyncio
 import aio_pika
-import psycopg2
 import logging
 import signal
+from db import database
 
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "1234567890:ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890")
-DB_HOST = os.getenv("DB_HOST", "localhost")
-DB_NAME = os.getenv("DB_NAME", "AppTrackerDB")
-DB_USER = os.getenv("DB_USER", "postgres")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "postgres")
 RABBIT_HOST = os.getenv("RABBIT_HOST", "localhost")
 RABBIT_USER = os.getenv("RABBIT_USER", "bunny_admin")
 RABBIT_PASSWORD = os.getenv("RABBIT_PASSWORD", "password")
@@ -36,14 +32,14 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 # rabbit and db connectors
+db = None
 channel = None
-db_conn = None
 
 # loop control
 running = True
 
 
-async def shutdown(app, rabbit, db_conn):
+async def shutdown(app, rabbit, db):
     logger.info("Shutting down...")
     global running
     # Stop bot
@@ -52,76 +48,9 @@ async def shutdown(app, rabbit, db_conn):
     await app.shutdown()
     # Cleanup
     await rabbit.close()
-    db_conn.close()
+    db.conn.close()
     logger.info("Gracefully shut down")
     running = False
-
-
-def init_db():
-    conn = psycopg2.connect(dbname=DB_NAME, user=DB_USER, password=DB_PASSWORD, host=DB_HOST, port="5432")
-    return conn
-
-
-async def add_to_db(chat_id, application_number, application_suffix, application_type, application_year):
-    cur = db_conn.cursor()
-    logger.info(f"Adding chatID {chat_id} with application number {application_number} to DB")
-    try:
-        cur.execute(
-            "INSERT INTO Applications (chat_id, application_number, application_suffix, application_type, application_year) VALUES (%s, %s, %s, %s, %s)",
-            (chat_id, application_number, application_suffix, application_type, application_year),
-        )
-        db_conn.commit()
-    except Exception as e:
-        db_conn.rollback()
-        logger.error(f"Error inserting into DB: {e}")
-    finally:
-        cur.close()
-
-
-async def update_db_status(chat_id, current_status):
-    cur = db_conn.cursor()
-    logger.info(f"Updating chatID {chat_id} current status in DB")
-    try:
-        cur.execute(
-            "UPDATE Applications SET current_status = %s, status_changed = True, last_notified = CURRENT_TIMESTAMP WHERE chat_id = %s",
-            (current_status, chat_id),
-        )
-        db_conn.commit()
-    except Exception as e:
-        db_conn.rollback()
-        logger.error(f"Error updating DB: {e}")
-    finally:
-        cur.close()
-
-
-async def remove_from_db(chat_id):
-    cur = db_conn.cursor()
-    logger.info(f"Removing chatID {chat_id} from DB")
-    try:
-        cur.execute("DELETE FROM Applications WHERE chat_id = %s", (chat_id,))
-        db_conn.commit()
-    except Exception as e:
-        db_conn.rollback()
-        logger.error(f"Error deleting from DB: {e}")
-    finally:
-        cur.close()
-
-
-async def get_data_from_db(chat_id):
-    """Queries the database for application data."""
-    try:
-        # Assuming conn is your DB connection object. Make sure it's initialized before this function is called.
-        with db_conn.cursor() as cur:
-            cur.execute("""SELECT current_status, last_updated FROM Applications WHERE chat_id = %s;""", (chat_id,))
-            result = cur.fetchone()
-            if result is not None:
-                current_status, last_updated = result
-                return f"Current Status: {current_status}, Last Updated: <b>{last_updated}</b>"
-            else:
-                return "No data found."
-    except Exception as e:
-        print(f"Error while fetching data from the database: {e}")
-        return "Error while fetching data."
 
 
 async def connect_to_rabbit():
@@ -140,7 +69,7 @@ async def on_message(app, message: aio_pika.IncomingMessage):
         status = msg_data.get("status", None)
         if chat_id and status:
             # Update application status in the DB
-            await update_db_status(chat_id, status)
+            await db.update_db_status(chat_id, status)
 
             # Construct the notification text
             notification_text = f"Your application status has been updated: {status}"
@@ -172,31 +101,19 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Please choose:", reply_markup=reply_markup)
 
 
-def check_subscription(chat_id):
-    cur = db_conn.cursor()
-    try:
-        cur.execute("SELECT * FROM Applications WHERE chat_id = %s", (chat_id,))
-        return bool(cur.fetchone())
-    except Exception as e:
-        logger.error(f"Error querying DB: {e}")
-        return False
-    finally:
-        cur.close()
-
-
 # Handler for button clicks
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
     if query.data == "subscribe":
-        if check_subscription(query.message.chat_id):
+        if await db.check_subscription_in_db(query.message.chat_id):
             await query.edit_message_text("You are already subscribed.")
         else:
             await query.edit_message_text(subscribe_helper_text)
     elif query.data == "unsubscribe":
-        if check_subscription(query.message.chat_id):
-            await remove_from_db(query.message.chat_id)
+        if await db.check_subscription_in_db(query.message.chat_id):
+            await db.remove_from_db(query.message.chat_id)
             await query.edit_message_text("You have unsubscribed.")
         else:
             await query.edit_message_text("You are not subscribed.")
@@ -215,8 +132,8 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Returns current status of the application"""
     logger.debug("Received /status command")
 
-    if check_subscription(update.message.chat_id):
-        app_status = await get_data_from_db(update.message.chat_id)
+    if await db.check_subscription_in_db(update.message.chat_id):
+        app_status = await db.get_status_from_db(update.message.chat_id)
         await update.message.reply_text(app_status, parse_mode="HTML")
     else:
         await update.message.reply_text("You are not subscribed")
@@ -226,8 +143,8 @@ async def unsubscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     """Unsubscribes user from application status updates"""
     logger.debug("Received /unsubscribe command")
 
-    if check_subscription(update.message.chat_id):
-        await remove_from_db(update.message.chat_id)
+    if await db.check_subscription_in_db(update.message.chat_id):
+        await db.remove_from_db(update.message.chat_id)
         await update.message.reply_text("You have unsubscribed")
     else:
         await update.message.reply_text("You are not subscribed")
@@ -237,7 +154,7 @@ async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Subscribes user for application status updates"""
     app_data = context.args
     logger.debug(f"Received /subscribe command with args {app_data}")
-    if check_subscription(update.message.chat_id):
+    if await db.check_subscription_in_db(update.message.chat_id):
         await update.message.reply_text("You are already subscribed")
         return
     try:
@@ -266,7 +183,7 @@ async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             }
             logger.info(f"Received application details {message}")
             # add data to the db
-            await add_to_db(update.message.chat_id, number, suffix, type.upper(), year)
+            await db.add_to_db(update.message.chat_id, number, suffix, type.upper(), year)
 
             # publish request for fetchers
             await channel.default_exchange.publish(
@@ -286,29 +203,24 @@ async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def main():
     # make rabbit and db connectors global
     global channel
-    global db_conn
+    global db
     global running
 
     # Initialize the database connection
-    try:
-        db_conn = init_db()
-    except Exception as e:
-        print(f"Failed to connect to the database: {e}")
-        return
-    logger.info("Connected to the db")
+    db = database.Database()
 
     # Init RabbitMQ
     try:
         rabbit, channel, queue = await connect_to_rabbit()
     except Exception as e:
         print(f"Failed to connect to RabbitMQ: {e}")
-        db_conn.close()
+        db.conn.close()
         return
     logger.info("Connected to the message queue")
 
     # Install signal handlers for SIGINT and SIGTERM
-    signal.signal(signal.SIGINT, lambda s, f: asyncio.create_task(shutdown(app, rabbit, db_conn)))
-    signal.signal(signal.SIGTERM, lambda s, f: asyncio.create_task(shutdown(app, rabbit, db_conn)))
+    signal.signal(signal.SIGINT, lambda s, f: asyncio.create_task(shutdown(app, rabbit, db)))
+    signal.signal(signal.SIGTERM, lambda s, f: asyncio.create_task(shutdown(app, rabbit, db)))
 
     # Initialize telegram bot
     app = Application.builder().token(TOKEN).build()
