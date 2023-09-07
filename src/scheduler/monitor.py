@@ -5,7 +5,7 @@ from datetime import timedelta
 
 logger = logging.getLogger(__name__)
 
-REFRESH_PERIOD = os.getenv("REFRESH_PERIOD", 3600)
+REFRESH_PERIOD = int(os.getenv("REFRESH_PERIOD", 3600))
 
 
 class ApplicationMonitor:
@@ -16,6 +16,7 @@ class ApplicationMonitor:
         self.shutdown_event = asyncio.Event()
 
     async def start(self):
+        logger.info(f"Application status monitor started, refresh_interval={REFRESH_PERIOD}")
         while not self.shutdown_event.is_set():
             logger.info("Running periodic status checks")
             await self.check_for_updates()

@@ -1,16 +1,19 @@
 """
-Collect application status
+Read requests from the message queue, collect application status, post status update message
 
 Based on https://github.com/fernflower/trvalypobytexamchecker/blob/main/src/fetcher/a2exams_fetcher.py
 
 """
 import time
+import sys
 import logging
 import os
 import random
 import json
 import urllib3
 import pika
+import signal
+import fake_useragent
 from pyvirtualdisplay import Display
 from selenium import webdriver
 from selenium.common.exceptions import WebDriverException
@@ -18,15 +21,16 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-import utils
-
 
 URL = os.getenv("URL", "https://frs.gov.cz/informace-o-stavu-rizeni/")
 # interval to wait before repeating the request
 POLLING_INTERVAL = int(os.getenv("POLLING_INTERVAL", "30"))
 OUTPUT_DIR = os.getenv("OUTPUT_DIR", "output")
 PAGE_LOAD_LIMIT_SECONDS = 20
-RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "localhost")
+# Rabbit config
+RABBIT_HOST = os.getenv("RABBIT_HOST", "localhost")
+RABBIT_USER = os.getenv("RABBIT_USER", "bunny_admin")
+RABBIT_PASSWORD = os.getenv("RABBIT_PASSWORD", "password")
 
 # globals to reuse for browser page displaying
 DISPLAY = None
@@ -36,6 +40,19 @@ BROWSER = None
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+
+# User agent
+UA = fake_useragent.UserAgent(browsers=["firefox"])
+
+# Globals for rabbit
+connection = None
+channel = None
+current_message = None
+
+
+def get_useragent(ua=UA):
+    useragent = ua.random
+    return useragent
 
 
 def _close_browser():
@@ -61,7 +78,7 @@ def _get_browser(force=False):
     options.set_preference("intl.accept_languages", "cs-CZ")
     options.set_preference("http.response.timeout", PAGE_LOAD_LIMIT_SECONDS)
     # set user-agent
-    useragent = utils.get_useragent()
+    useragent = get_useragent()
     logger.info("User-Agent for this request will be %s", useragent)
     options.set_preference("general.useragent.override", useragent)
     options.set_preference("dom.webdriver.enabled", False)
@@ -179,15 +196,35 @@ def fetch(url, app_details, retry_interval=POLLING_INTERVAL, fetch_func=_do_fetc
     return res
 
 
+def shutdown():
+    """Shutdown the fetcher"""
+    if current_message:
+        logger.info(f"NACK'ing message with delivery_tag: {current_message}")
+        channel.basic_nack(delivery_tag=current_message)
+    if channel:
+        logger.info("Closing RabbitMQ channel...")
+        channel.close()
+    if connection:
+        logger.info("Closing RabbitMQ connection...")
+        connection.close()
+
+    # Close the browser as well
+    _close_browser()
+
+    sys.exit(0)
+
+
 def main():
     """Connect to the message queue, run fetch for the application data, post back status"""
+    global connection, channel
 
-    # app_details = json.loads('{"number": "5777", "suffix": "3", "type": "TP", "year": "2023"}')
-    # app_status = fetch(URL, app_details)
-    # logger.info(f"Status is :{app_status}")
-    # return
+    # Register the signal handlers
+    signal.signal(signal.SIGINT, lambda s, f: shutdown())
+    signal.signal(signal.SIGTERM, lambda s, f: shutdown())
+
+    # Connect to rabbit & set up
     connection = pika.BlockingConnection(
-        pika.ConnectionParameters(host=RABBITMQ_HOST, credentials=pika.PlainCredentials("bunny_admin", "password"))
+        pika.ConnectionParameters(host=RABBIT_HOST, credentials=pika.PlainCredentials(RABBIT_USER, RABBIT_PASSWORD))
     )
     channel = connection.channel()
 
@@ -196,6 +233,8 @@ def main():
     logger.info("Connected to the RabbitMQ server")
 
     def callback(ch, method, properties, body):
+        global current_message
+        current_message = method.delivery_tag
         app_details = json.loads(body.decode("utf-8"))
         logger.info("Received application details %s", app_details)
 
@@ -207,13 +246,15 @@ def main():
                 routing_key="StatusUpdateQueue",
                 body=json.dumps({"chat_id": app_details["chat_id"], "status": app_status}),
             )
+            ch.basic_ack(delivery_tag=method.delivery_tag)  # Acknowledge the message
+            current_message = None
             logger.debug("Message was pushed to StateUpdateQueue")
         else:
             logger.error(f"Failed to fetch status for application number {app_details['number']}")
-            # do some magic to restore the message??
+            ch.basic_nack(delivery_tag=method.delivery_tag)  # NACK the message
+            current_message = None
 
-    # This will block and wait for messages from ApplicationFetchQueue
-    channel.basic_consume(queue="ApplicationFetchQueue", on_message_callback=callback, auto_ack=True)
+    channel.basic_consume(queue="ApplicationFetchQueue", on_message_callback=callback, auto_ack=False)
     logger.info("Subscribing for updates at ApplicationFetchQueue")
     channel.start_consuming()
 

@@ -109,6 +109,14 @@ class Database:
             logger.error(f"Error while fetching applications needing update. Error: {e}")
             return []
 
+    async def update_timestamp(self, chat_id):
+        logger.info(f"Updating last_updated timestamp for chatID {chat_id} in DB")
+        query = "UPDATE Applications SET last_updated = CURRENT_TIMESTAMP WHERE chat_id = $1"
+        try:
+            await self.pool.execute(query, chat_id)
+        except Exception as e:
+            logger.error(f"Error while updating timestamp for chat ID: {chat_id}. Error: {e}")
+
     async def close(self):
         logger.info("Shutting down DB connection")
         try:

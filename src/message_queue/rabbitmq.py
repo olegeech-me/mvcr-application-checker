@@ -43,6 +43,7 @@ class RabbitMQ:
 
                 if current_status == received_status:
                     logger.info(f"Status didn't change for user {chat_id} application")
+                    await self.db.update_timestamp(chat_id)
                     return
                 logger.info(f"Status of application has changed, notifying user {chat_id}")
                 # If status differs, update application status in the DB
