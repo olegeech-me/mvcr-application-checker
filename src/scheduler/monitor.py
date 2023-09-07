@@ -1,16 +1,18 @@
 import asyncio
 import logging
+import os
 from datetime import timedelta
 
 logger = logging.getLogger(__name__)
 
-REFRESH_PERIOD = timedelta(minutes=5)
+REFRESH_PERIOD = os.getenv("REFRESH_PERIOD", 3600)
 
 
 class ApplicationMonitor:
     def __init__(self, db, rabbit):
         self.db = db
         self.rabbit = rabbit
+        self.refresh = timedelta(seconds=REFRESH_PERIOD)
         self.shutdown_event = asyncio.Event()
 
     async def start(self):
@@ -25,7 +27,7 @@ class ApplicationMonitor:
                 pass
 
     async def check_for_updates(self):
-        applications_to_update = await self.db.get_applications_needing_update(REFRESH_PERIOD)
+        applications_to_update = await self.db.get_applications_needing_update(self.refresh)
 
         if not applications_to_update:
             logger.info("No applications need status refresh")
