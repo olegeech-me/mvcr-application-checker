@@ -1,19 +1,18 @@
 import json
 import aio_pika
 import logging
-import os
 
 logger = logging.getLogger(__name__)
 
 
 class RabbitMQ:
-    def __init__(self, app, db):
-        self.app = app
+    def __init__(self, host, user, password, bot, db, loop):
+        self.host = host
+        self.user = user
+        self.password = password
+        self.bot = bot
         self.db = db
-
-        self.RABBIT_HOST = os.getenv("RABBIT_HOST", "localhost")
-        self.RABBIT_USER = os.getenv("RABBIT_USER", "bunny_admin")
-        self.RABBIT_PASSWORD = os.getenv("RABBIT_PASSWORD", "password")
+        self.loop = loop
 
         self.connection = None
         self.channel = None
@@ -22,7 +21,10 @@ class RabbitMQ:
 
     async def connect(self):
         """Establishes a connection to RabbitMQ and initializes the channel and queue."""
-        self.connection = await aio_pika.connect_robust(f"amqp://{self.RABBIT_USER}:{self.RABBIT_PASSWORD}@{self.RABBIT_HOST}")
+        self.connection = await aio_pika.connect_robust(
+            f"amqp://{self.user}:{self.password}@{self.host}",
+            loop=self.loop,
+        )
         self.channel = await self.connection.channel()
         self.queue = await self.channel.declare_queue("StatusUpdateQueue", durable=True)
         self.default_exchange = self.channel.default_exchange
@@ -44,7 +46,7 @@ class RabbitMQ:
 
                 # Notify the user
                 try:
-                    await self.app.updater.bot.send_message(chat_id=chat_id, text=notification_text, parse_mode="HTML")
+                    await self.bot.updater.bot.send_message(chat_id=chat_id, text=notification_text)
                     logger.info(f"Sent status update to chatID {chat_id}")
                 except Exception as e:
                     logger.error(f"Failed to send status update to {chat_id}: {e}")

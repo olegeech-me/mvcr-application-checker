@@ -16,7 +16,7 @@ pyvirtualdisplay
 
 # bot
 python-telegram-bot==20.5
-redis
-unidecode
 aio_pika
+asyncpg
+uvloop
 
