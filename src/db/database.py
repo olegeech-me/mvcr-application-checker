@@ -61,7 +61,16 @@ class Database:
         except Exception as e:
             logger.error(f"Error while updating DB for chat ID: {chat_id}. Error: {e}")
 
-    async def get_status_from_db(self, chat_id):
+    async def get_application_status(self, chat_id):
+        query = "SELECT current_status FROM Applications WHERE chat_id = $1;"
+        try:
+            result = await self.pool.fetchval(query, chat_id)
+            return result
+        except Exception as e:
+            logger.error(f"Error while fetching application status for chat ID: {chat_id}. Error: {e}")
+            return None
+
+    async def get_application_status_timestamp(self, chat_id):
         query = "SELECT current_status, last_updated FROM Applications WHERE chat_id = $1;"
         try:
             result = await self.pool.fetchrow(query, chat_id)
@@ -82,6 +91,23 @@ class Database:
         except Exception as e:
             logger.error(f"Error while checking chat_id {chat_id} subscription. Error: {e}")
             return False
+
+    async def get_applications_needing_update(self, refresh_period):
+        # Convert the timedelta refresh period to seconds for the SQL interval.
+        seconds = refresh_period.total_seconds()
+
+        # Fetch rows where the current time minus last_checked is more than the refresh period.
+        query = """
+            SELECT chat_id, application_number, application_suffix, application_type, application_year
+            FROM Applications
+            WHERE EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - COALESCE(last_updated, TIMESTAMP '1970-01-01'))) > $1
+        """
+
+        try:
+            return await self.pool.fetch(query, seconds)
+        except Exception as e:
+            logger.error(f"Error while fetching applications needing update. Error: {e}")
+            return []
 
     async def close(self):
         logger.info("Shutting down DB connection")

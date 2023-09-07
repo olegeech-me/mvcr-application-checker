@@ -5,19 +5,21 @@ import signal
 
 from bot.loader import loop, bot, db, rabbit
 from bot.handlers import start_command, button, help_command, unknown, status_command, unsubscribe_command, subscribe_command
+from scheduler import monitor
 
 
-# set up logging
+# Set up logging
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-# loop control
-running = True
+# Instantiate application scheduler
+app_monitor = monitor.ApplicationMonitor(db=db, rabbit=rabbit)
 
 
 async def shutdown():
-    global running
+    logger.info("Shutting down scheduler...")
+    app_monitor.stop()
     # Stop bot
     logger.info("Shutting down bot...")
     await bot.updater.stop()
@@ -29,12 +31,9 @@ async def shutdown():
     logger.info("Shutting down db...")
     await db.close()
     logger.info("Done.")
-    running = False
 
 
 async def main():
-    global running
-
     # Connect to rabbit
     await rabbit.connect()
 
@@ -62,10 +61,9 @@ async def main():
     # Run RabbitMQ consumer
     await rabbit.consume_messages()
 
-    # Main loop
-    while running:
-        # do some usefull stuff here
-        await asyncio.sleep(3)
+    # Start ApplicationMonitor
+    await asyncio.sleep(15)  # wait some time before running scheduler
+    await app_monitor.start()
 
     logger.info("Main loop has exited")
 

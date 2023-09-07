@@ -36,14 +36,20 @@ class RabbitMQ:
             msg_data = json.loads(message.body.decode("utf-8"))
             logger.info(f"Received status update message: {msg_data}")
             chat_id = msg_data.get("chat_id", None)
-            status = msg_data.get("status", None)
-            if chat_id and status:
-                # Update application status in the DB
-                await self.db.update_db_status(chat_id, status)
+            received_status = msg_data.get("status", None)
+            if chat_id and received_status:
+                # Fetch the current status from the database
+                current_status = await self.db.get_application_status(chat_id)
+
+                if current_status == received_status:
+                    logger.info(f"Status didn't change for user {chat_id} application")
+                    return
+                logger.info(f"Status of application has changed, notifying user {chat_id}")
+                # If status differs, update application status in the DB
+                await self.db.update_db_status(chat_id, received_status)
 
                 # Construct the notification text
-                notification_text = f"Your application status has been updated: {status}"
-
+                notification_text = f"Your application status has been updated: {received_status}"
                 # Notify the user
                 try:
                     await self.bot.updater.bot.send_message(chat_id=chat_id, text=notification_text)

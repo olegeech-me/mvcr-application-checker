@@ -65,7 +65,7 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"Received /status command from {update.effective_chat.id}")
 
     if await db.check_subscription_in_db(update.message.chat_id):
-        app_status = await db.get_status_from_db(update.message.chat_id)
+        app_status = await db.get_application_status_timestamp(update.message.chat_id)
         await update.message.reply_text(app_status)
     else:
         await update.message.reply_text("You are not subscribed")
