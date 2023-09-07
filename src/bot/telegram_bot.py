@@ -1,9 +1,7 @@
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 import os
-import json
 import asyncio
-import aio_pika
 import logging
 import signal
 from db import database
