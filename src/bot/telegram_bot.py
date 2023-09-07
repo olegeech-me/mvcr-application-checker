@@ -23,7 +23,6 @@ Example: /subscribe 12345 0 TP 2023
 
 # set up logging
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
-# logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
@@ -42,7 +41,7 @@ async def shutdown(app, rabbit, db):
     await app.updater.stop()
     await app.stop()
     await app.shutdown()
-    # Cleanup
+    # Terminate rabbit & db connections
     await rabbit.close()
     await db.close()
     logger.info("Gracefully shut down")
@@ -188,16 +187,17 @@ async def main():
     unknown_handler = MessageHandler(filters.COMMAND, unknown)
     app.add_handler(unknown_handler)
 
-    # Run the bot until the user presses Ctrl-C
+    # Run the bot
     logger.info("Starting telegram bot")
     # https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-requested-design-patterns/#running-ptb-alongside-other-asyncio-frameworks
     await app.initialize()
     await app.updater.start_polling()
     await app.start()
 
-    # Run RabbitMQ consumer in background
+    # Run RabbitMQ consumer
     await rabbit.consume_messages()
 
+    # Main loop
     while running:
         # do some useful stuff here
         await asyncio.sleep(3)
