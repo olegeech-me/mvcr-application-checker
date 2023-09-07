@@ -7,12 +7,10 @@ import aio_pika
 import logging
 import signal
 from db import database
+from message_queue import rabbitmq
 
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "1234567890:ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890")
-RABBIT_HOST = os.getenv("RABBIT_HOST", "localhost")
-RABBIT_USER = os.getenv("RABBIT_USER", "bunny_admin")
-RABBIT_PASSWORD = os.getenv("RABBIT_PASSWORD", "password")
 
 subscribe_helper_text = """
 Please run command /subscribe with the following arguments
@@ -32,8 +30,8 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 # rabbit and db connectors
+rabbit = None
 db = None
-channel = None
 
 # loop control
 running = True
@@ -48,45 +46,9 @@ async def shutdown(app, rabbit, db):
     await app.shutdown()
     # Cleanup
     await rabbit.close()
-    db.conn.close()
+    await db.close()
     logger.info("Gracefully shut down")
     running = False
-
-
-async def connect_to_rabbit():
-    connection = await aio_pika.connect_robust(f"amqp://{RABBIT_USER}:{RABBIT_PASSWORD}@{RABBIT_HOST}")
-    channel = await connection.channel()
-    queue = await channel.declare_queue("StatusUpdateQueue", durable=True)
-    return connection, channel, queue
-
-
-async def on_message(app, message: aio_pika.IncomingMessage):
-    """Async function to handle messages from StatusUpdateQueue"""
-    async with message.process():
-        msg_data = json.loads(message.body.decode("utf-8"))
-        logger.info(f"Received status update message: {msg_data}")
-        chat_id = msg_data.get("chat_id", None)
-        status = msg_data.get("status", None)
-        if chat_id and status:
-            # Update application status in the DB
-            await db.update_db_status(chat_id, status)
-
-            # Construct the notification text
-            notification_text = f"Your application status has been updated: {status}"
-
-            # Notify the user
-            try:
-                await app.updater.bot.send_message(chat_id=chat_id, text=notification_text, parse_mode="HTML")
-                logger.info(f"Sent status update to chatID {chat_id}")
-            except Exception as e:
-                logger.error(f"Failed to send status update to {chat_id}: {e}")
-
-
-async def consume_messages(app):
-    _connection, _channel, queue = await connect_to_rabbit()
-
-    await queue.consume(lambda message: on_message(app, message))
-    logger.info("Started consumer")
 
 
 # Handler for the /start command
@@ -186,10 +148,8 @@ async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await db.add_to_db(update.message.chat_id, number, suffix, type.upper(), year)
 
             # publish request for fetchers
-            await channel.default_exchange.publish(
-                aio_pika.Message(body=json.dumps(message).encode("utf-8")),
-                routing_key="ApplicationFetchQueue",
-            )
+            await rabbit.publish_message(message)
+
             await update.message.reply_text(
                 f"You have been subscribed for application <b>OAM-{number}-{suffix}/{type.upper()}-{year}</b> updates.",
                 parse_mode="HTML",
@@ -202,28 +162,23 @@ async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def main():
     # make rabbit and db connectors global
-    global channel
     global db
+    global rabbit
     global running
 
     # Initialize the database connection
     db = database.Database()
 
-    # Init RabbitMQ
-    try:
-        rabbit, channel, queue = await connect_to_rabbit()
-    except Exception as e:
-        print(f"Failed to connect to RabbitMQ: {e}")
-        db.conn.close()
-        return
-    logger.info("Connected to the message queue")
+    # Initialize telegram bot
+    app = Application.builder().token(TOKEN).build()
+
+    # Initialize rabbit
+    rabbit = rabbitmq.RabbitMQ(app, db)
+    await rabbit.connect()
 
     # Install signal handlers for SIGINT and SIGTERM
     signal.signal(signal.SIGINT, lambda s, f: asyncio.create_task(shutdown(app, rabbit, db)))
     signal.signal(signal.SIGTERM, lambda s, f: asyncio.create_task(shutdown(app, rabbit, db)))
-
-    # Initialize telegram bot
-    app = Application.builder().token(TOKEN).build()
 
     # Register command and message handlers
     app.add_handler(CommandHandler("start", start_command))
@@ -243,7 +198,7 @@ async def main():
     await app.start()
 
     # Run RabbitMQ consumer in background
-    asyncio.create_task(consume_messages(app))
+    await rabbit.consume_messages()
 
     while running:
         # do some useful stuff here

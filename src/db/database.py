@@ -38,7 +38,7 @@ class Database:
             logger.info(f"Updating chatID {chat_id} current status in DB")
             query = (
                 "UPDATE Applications SET current_status = %s, "
-                "status_changed = True, last_notified = CURRENT_TIMESTAMP WHERE chat_id = %s"
+                "status_changed = True, last_updated = CURRENT_TIMESTAMP WHERE chat_id = %s"
             )
             params = (current_status, chat_id)
             try:
@@ -70,7 +70,7 @@ class Database:
                     result = cur.fetchone()
                     if result is not None:
                         current_status, last_updated = result
-                        return f"Current Status: {current_status}\nLast Updated: <b>{last_updated}</b>"
+                        return f"Current Status: {current_status}\nLast Updated: <b>{last_updated} UTC</b>"
                     else:
                         return "No data found."
             except Exception as e:
@@ -87,3 +87,9 @@ class Database:
                 return False
             finally:
                 cur.close()
+
+    async def close(self):
+        if self.conn:
+            logger.info("Shutting down DB connection")
+            self.conn.close()
+            self.conn = None
