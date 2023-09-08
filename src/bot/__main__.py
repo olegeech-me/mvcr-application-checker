@@ -1,4 +1,5 @@
 from telegram.ext import CallbackQueryHandler, CommandHandler, MessageHandler, filters
+from telegram.error import NetworkError
 import asyncio
 import logging
 import signal
@@ -7,6 +8,8 @@ from bot.loader import loop, bot, db, rabbit
 from bot.handlers import start_command, button, help_command, unknown, status_command, unsubscribe_command, subscribe_command
 from bot import monitor
 
+MAX_RETRIES = 15  # maximum number bot of connection retries
+RETRY_DELAY = 5  # delay (in seconds) between retries
 
 # Set up logging
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
@@ -53,10 +56,19 @@ async def main():
 
     # Run the bot
     logger.info("Starting telegram bot")
-    # https://github.com/python-telegram-bot/python-telegram-bot/wiki/Frequently-requested-design-patterns/#running-ptb-alongside-other-asyncio-frameworks
-    await bot.initialize()
-    await bot.updater.start_polling()
-    await bot.start()
+    for retry in range(1, MAX_RETRIES + 1):
+        try:
+            await bot.initialize()
+            await bot.updater.start_polling()
+            await bot.start()
+            break
+        except NetworkError as e:
+            if retry < MAX_RETRIES:
+                logger.error(f"Failed to start bot due to network error: {e}")
+                await asyncio.sleep(RETRY_DELAY)
+            else:
+                logger.error("Max retries reached. Could not start telegram bot")
+                raise
 
     # Run RabbitMQ consumer
     await rabbit.consume_messages()
