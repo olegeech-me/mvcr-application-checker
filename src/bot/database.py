@@ -1,7 +1,7 @@
 import asyncpg
 import logging
 import pytz
-import time
+import asyncio
 
 MAX_RETRIES = 10  # maximum number of connection retries
 RETRY_DELAY = 3  # delay (in seconds) between retries
@@ -10,32 +10,33 @@ logger = logging.getLogger(__name__)
 
 
 class Database:
-    def __init__(self, dbname, user, password, host, port, loop, retries=MAX_RETRIES, delay=RETRY_DELAY):
+    def __init__(self, dbname, user, password, host, port, loop):
         self.dbname = dbname
         self.user = user
         self.password = password
         self.host = host
         self.port = port
         self.loop = loop
+        self.pool = None
 
-        while retries < MAX_RETRIES:
+    async def connect(self, max_retries=MAX_RETRIES, delay=RETRY_DELAY):
+        for attempt in range(1, max_retries + 1):
             try:
-                self.pool = loop.run_until_complete(
+                self.pool = self.loop.run_until_complete(
                     asyncpg.create_pool(
-                        database=dbname,
-                        user=user,
-                        password=password,
-                        host=host,
-                        port=port,
+                        database=self.dbname,
+                        user=self.user,
+                        password=self.password,
+                        host=self.host,
+                        port=self.port,
                     )
                 )
                 logger.info("Connected to the db")
                 break
             except Exception as e:
-                retries += 1
-                logger.error(f"Failed to connect to the database. Attempt {retries}/{MAX_RETRIES}. Error: {e}")
-                if retries < MAX_RETRIES:
-                    time.sleep(delay)
+                logger.error(f"Failed to connect to the database. Attempt {attempt}/{max_retries}. Error: {e}")
+                if attempt < max_retries:
+                    await asyncio.sleep(delay)
                     delay *= 2  # Double the delay for next retry
                 else:
                     logger.error("Max retries reached. Unable to connect to the database")

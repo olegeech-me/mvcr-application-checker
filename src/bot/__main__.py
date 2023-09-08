@@ -37,6 +37,8 @@ async def shutdown():
 
 
 async def main():
+    # Connect to postgres
+    await db.connect()
     # Connect to rabbit
     await rabbit.connect()
 
