@@ -20,7 +20,7 @@ class Messaging:
         self.channel = None
 
     def _create_ssl_context(self, ssl_params):
-        logger.error(f"ssl_params: {ssl_params}")
+        logger.info(f"Rabbit connection ssl_params: {ssl_params}")
         context = ssl.create_default_context(cafile=ssl_params["cafile"])
         context.load_cert_chain(certfile=ssl_params["certfile"], keyfile=ssl_params["keyfile"])
         context.verify_mode = ssl.CERT_REQUIRED
@@ -33,7 +33,7 @@ class Messaging:
         if ssl_params:
             ssl_context = self._create_ssl_context(ssl_params)
             ssl_options = pika.SSLOptions(ssl_context, self.host)
-            self.port = 5671
+            self.port = ssl_params["ssl_port"]
         else:
             ssl_options = None
 

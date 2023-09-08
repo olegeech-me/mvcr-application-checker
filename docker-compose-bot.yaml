@@ -16,7 +16,7 @@ services:
     env_file:
       - ./rabbit.env
     ports:
-      - "5671:5671"      # AMQPS protocol
+      - "56671:5671"     # AMQPS protocol
       - "15672:15672"    # Management console
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq

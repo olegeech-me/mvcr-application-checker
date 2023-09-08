@@ -5,7 +5,7 @@ Read requests from the message queue, collect application status, post status up
 import logging
 import signal
 
-from fetcher.config import URL, RABBIT_HOST, RABBIT_USER, RABBIT_PASSWORD
+from fetcher.config import URL, RABBIT_HOST, RABBIT_SSL_PORT, RABBIT_USER, RABBIT_PASSWORD
 from fetcher.config import RABBIT_SSL_CACERTFILE, RABBIT_SSL_CERTFILE, RABBIT_SSL_KEYFILE
 from fetcher.browser import Browser
 from fetcher.messaging import Messaging
@@ -19,8 +19,9 @@ logger.setLevel(logging.DEBUG)
 
 
 def rabbit_ssl_params():
-    if all([RABBIT_SSL_CACERTFILE, RABBIT_SSL_CERTFILE, RABBIT_SSL_KEYFILE]):
+    if all([RABBIT_SSL_PORT, RABBIT_SSL_CACERTFILE, RABBIT_SSL_CERTFILE, RABBIT_SSL_KEYFILE]):
         return {
+            "ssl_port": RABBIT_SSL_PORT,
             "cafile": RABBIT_SSL_CACERTFILE,
             "certfile": RABBIT_SSL_CERTFILE,
             "keyfile": RABBIT_SSL_KEYFILE,
