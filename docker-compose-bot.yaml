@@ -4,21 +4,16 @@ services:
   apptrackerdb:
     image: postgres:15.4
     container_name: postgres
-    environment:
-      POSTGRES_DB: AppTrackerDB
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+    env_file:
+      - ./postgres.env
     volumes:
       - ./db-init-scripts:/docker-entrypoint-initdb.d
-    ports:
-      - "5432:5432"
   # RabbitMQ service
   rabbitmq:
     image: "rabbitmq:3.12-management"
     container_name: rabbitmq
-    environment:
-      RABBITMQ_DEFAULT_USER: bunny_admin
-      RABBITMQ_DEFAULT_PASS: password
+    env_file:
+      - ./rabbit.env
     ports:
       - "5672:5672"      # AMQP protocol
       - "15672:15672"    # Management console

@@ -163,6 +163,8 @@ cython_debug/
 .env.devel
 fetcher.env
 bot.env
+rabbit.env
+postgres.env
 
 # inessa samples
 inessa/
