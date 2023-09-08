@@ -20,28 +20,25 @@ class Database:
         self.pool = None
 
     async def connect(self, max_retries=MAX_RETRIES, delay=RETRY_DELAY):
-        async def _connect_coroutine(delay):
-            for attempt in range(1, max_retries + 1):
-                try:
-                    asyncpg.create_pool(
-                        database=self.dbname,
-                        user=self.user,
-                        password=self.password,
-                        host=self.host,
-                        port=self.port,
-                    )
-                    logger.info("Connected to the db")
-                    break
-                except Exception as e:
-                    logger.error(f"Failed to connect to the database. Attempt {attempt}/{max_retries}. Error: {e}")
-                    if attempt < max_retries:
-                        await asyncio.sleep(delay)
-                        delay *= 2  # Double the delay for next retry
-                    else:
-                        logger.error("Max retries reached. Unable to connect to the database")
-                        raise
-
-        self.pool = self.loop.run_until_complete(_connect_coroutine(delay=delay))
+        for attempt in range(1, max_retries + 1):
+            try:
+                asyncpg.create_pool(
+                    database=self.dbname,
+                    user=self.user,
+                    password=self.password,
+                    host=self.host,
+                    port=self.port,
+                )
+                logger.info("Connected to the db")
+                break
+            except Exception as e:
+                logger.error(f"Failed to connect to the database. Attempt {attempt}/{max_retries}. Error: {e}")
+                if attempt < max_retries:
+                    await asyncio.sleep(delay)
+                    delay *= 2  # Double the delay for next retry
+                else:
+                    logger.error("Max retries reached. Unable to connect to the database")
+                    raise
 
     async def add_to_db(self, chat_id, application_number, application_suffix, application_type, application_year):
         logger.info(f"Adding chatID {chat_id} with application number {application_number} to DB")
