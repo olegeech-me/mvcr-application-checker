@@ -5,7 +5,7 @@ import signal
 
 from bot.loader import loop, bot, db, rabbit
 from bot.handlers import start_command, button, help_command, unknown, status_command, unsubscribe_command, subscribe_command
-from scheduler import monitor
+from bot import monitor
 
 
 # Set up logging

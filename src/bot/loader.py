@@ -3,8 +3,8 @@ import uvloop
 import os
 from telegram.ext import Application, Defaults
 from telegram.constants import ParseMode
-from db import database
-from message_queue import rabbitmq
+from bot import database
+from bot import rabbitmq
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 # DB config
