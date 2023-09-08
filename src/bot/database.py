@@ -3,8 +3,8 @@ import logging
 import pytz
 import asyncio
 
-MAX_RETRIES = 10  # maximum number of connection retries
-RETRY_DELAY = 3  # delay (in seconds) between retries
+MAX_RETRIES = 5  # maximum number of connection retries
+RETRY_DELAY = 2  # delay (in seconds) between retries
 
 logger = logging.getLogger(__name__)
 
@@ -17,12 +17,12 @@ class Database:
         self.host = host
         self.port = port
         self.loop = loop
-        self.pool = None
+        self.conn = None
 
     async def connect(self, max_retries=MAX_RETRIES, delay=RETRY_DELAY):
         for attempt in range(1, max_retries + 1):
             try:
-                self.pool = asyncpg.pool(
+                self.conn = await asyncpg.connect(
                     database=self.dbname,
                     user=self.user,
                     password=self.password,
@@ -49,7 +49,7 @@ class Database:
         )
         params = (chat_id, application_number, application_suffix, application_type, application_year)
         try:
-            await self.pool.execute(query, *params)
+            await self.conn.execute(query, *params)
         except asyncpg.UniqueViolationError:
             logger.error(f"Attempt to insert duplicate chat ID {chat_id} and application number {application_number}")
         except Exception as e:
@@ -65,7 +65,7 @@ class Database:
         )
         params = (current_status, chat_id)
         try:
-            await self.pool.execute(query, *params)
+            await self.conn.execute(query, *params)
         except Exception as e:
             logger.error(f"Error while updating DB for chat ID: {chat_id}. Error: {e}")
 
@@ -73,14 +73,14 @@ class Database:
         logger.info(f"Removing chatID {chat_id} from DB")
         query = "DELETE FROM Applications WHERE chat_id = $1"
         try:
-            await self.pool.execute(query, chat_id)
+            await self.conn.execute(query, chat_id)
         except Exception as e:
             logger.error(f"Error while updating DB for chat ID: {chat_id}. Error: {e}")
 
     async def get_application_status(self, chat_id):
         query = "SELECT current_status FROM Applications WHERE chat_id = $1;"
         try:
-            result = await self.pool.fetchval(query, chat_id)
+            result = await self.conn.fetchval(query, chat_id)
             return result
         except Exception as e:
             logger.error(f"Error while fetching application status for chat ID: {chat_id}. Error: {e}")
@@ -89,7 +89,7 @@ class Database:
     async def get_application_status_timestamp(self, chat_id):
         query = "SELECT current_status, last_updated FROM Applications WHERE chat_id = $1;"
         try:
-            result = await self.pool.fetchrow(query, chat_id)
+            result = await self.conn.fetchrow(query, chat_id)
             if result is not None:
                 current_status = result["current_status"]
                 last_updated_utc = result["last_updated"].replace(tzinfo=pytz.utc)
@@ -106,7 +106,7 @@ class Database:
     async def check_subscription_in_db(self, chat_id):
         query = "SELECT EXISTS(SELECT chat_id FROM Applications WHERE chat_id=$1)"
         try:
-            result = await self.pool.fetchval(query, chat_id)
+            result = await self.conn.fetchval(query, chat_id)
             return result
         except Exception as e:
             logger.error(f"Error while checking chat_id {chat_id} subscription. Error: {e}")
@@ -124,7 +124,7 @@ class Database:
         """
 
         try:
-            return await self.pool.fetch(query, seconds)
+            return await self.conn.fetch(query, seconds)
         except Exception as e:
             logger.error(f"Error while fetching applications needing update. Error: {e}")
             return []
@@ -133,13 +133,13 @@ class Database:
         logger.info(f"Updating last_updated timestamp for chatID {chat_id} in DB")
         query = "UPDATE Applications SET last_updated = CURRENT_TIMESTAMP WHERE chat_id = $1"
         try:
-            await self.pool.execute(query, chat_id)
+            await self.conn.execute(query, chat_id)
         except Exception as e:
             logger.error(f"Error while updating timestamp for chat ID: {chat_id}. Error: {e}")
 
     async def close(self):
         logger.info("Shutting down DB connection")
         try:
-            await self.pool.close()
+            await self.conn.close()
         except Exception as e:
             logger.error(f"Error while shutting down DB connection. Error: {e}")
