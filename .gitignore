@@ -159,15 +159,12 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-# env files
-.env.devel
+# deployment env files
 fetcher.env
 bot.env
 rabbit.env
 postgres.env
 
-# inessa samples
-inessa/
-
-# telegram-bot-template
-telegram-bot-template/
+# local certs
+ssl/*.key
+ssl/*.crt

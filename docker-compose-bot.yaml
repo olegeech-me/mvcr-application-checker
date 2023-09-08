@@ -7,6 +7,7 @@ services:
     env_file:
       - ./postgres.env
     volumes:
+      - postgres_data:/var/lib/postgresql/data
       - ./db-init-scripts:/docker-entrypoint-initdb.d
   # RabbitMQ service
   rabbitmq:
@@ -15,10 +16,17 @@ services:
     env_file:
       - ./rabbit.env
     ports:
-      - "5672:5672"      # AMQP protocol
+      - "5671:5671"      # AMQPS protocol
       - "15672:15672"    # Management console
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+      - ./conf/rabbitmq-server.conf:/etc/rabbitmq/conf.d/ssl.conf:ro
+      - ./ssl/ca.crt:/etc/ssl/ca.crt:ro
+      - ./ssl/server.crt:/etc/ssl/server.crt:ro
+      - ./ssl/server.key:/etc/ssl/server.key:ro
   # Telegram bot
   telegram-bot:
+    container_name: telegram-bot
     build:
       context: .
       dockerfile: Dockerfile_bot
@@ -28,3 +36,7 @@ services:
       - apptrackerdb
       - rabbitmq
     restart: always
+
+volumes:
+  rabbitmq_data:
+  postgres_data:
