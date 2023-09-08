@@ -161,6 +161,8 @@ cython_debug/
 
 # env files
 .env.devel
+fetcher.env
+bot.env
 
 # inessa samples
 inessa/

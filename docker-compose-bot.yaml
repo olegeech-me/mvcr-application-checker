@@ -1,4 +1,4 @@
-version: '3'
+version: '3.7'
 services:
   # PostgreSQL service
   apptrackerdb:
@@ -12,7 +12,6 @@ services:
       - ./db-init-scripts:/docker-entrypoint-initdb.d
     ports:
       - "5432:5432"
-
   # RabbitMQ service
   rabbitmq:
     image: "rabbitmq:3.12-management"
@@ -23,3 +22,14 @@ services:
     ports:
       - "5672:5672"      # AMQP protocol
       - "15672:15672"    # Management console
+  # Telegram bot
+  telegram-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile_bot
+    env_file:
+      - ./bot.env
+    depends_on:
+      - apptrackerdb
+      - rabbitmq
+    restart: always
