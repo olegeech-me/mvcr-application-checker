@@ -22,7 +22,7 @@ class Database:
     async def connect(self, max_retries=MAX_RETRIES, delay=RETRY_DELAY):
         for attempt in range(1, max_retries + 1):
             try:
-                asyncpg.create_pool(
+                self.pool = asyncpg.pool(
                     database=self.dbname,
                     user=self.user,
                     password=self.password,
