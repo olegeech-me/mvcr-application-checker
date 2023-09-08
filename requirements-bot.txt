@@ -2,3 +2,4 @@ python-telegram-bot==20.5
 aio-pika==9.2.2
 asyncpg==0.28.0
 uvloop==0.17.0
+pytz

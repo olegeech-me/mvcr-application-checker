@@ -1,5 +1,6 @@
 import asyncpg
 import logging
+import pytz
 
 
 logger = logging.getLogger(__name__)
@@ -75,8 +76,12 @@ class Database:
         try:
             result = await self.pool.fetchrow(query, chat_id)
             if result is not None:
-                current_status, last_updated = result["current_status"], result["last_updated"]
-                return f"Current Status: {current_status}\nLast Updated: <b>{last_updated} UTC</b>"
+                current_status = result["current_status"]
+                last_updated_utc = result["last_updated"].replace(tzinfo=pytz.utc)
+                last_updated_prague = last_updated_utc.astimezone(pytz.timezone("Europe/Prague"))
+                timestamp = last_updated_prague.strftime("%H:%M:%S %d-%m-%Y")
+
+                return f"Current Status: {current_status}\nLast Updated: <b>{timestamp}</b>"
             else:
                 return "No data found."
         except Exception as e:
