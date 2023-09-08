@@ -115,6 +115,7 @@ async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "suffix": suffix,
                 "type": type.upper(),
                 "year": year,
+                "last_updated": "0",
             }
             logger.info(f"Received application details {message}")
             # add data to the db

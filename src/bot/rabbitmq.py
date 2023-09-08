@@ -2,6 +2,7 @@ import json
 import aio_pika
 import asyncio
 import logging
+import hashlib
 from aiormq.exceptions import AMQPConnectionError
 
 MAX_RETRIES = 5  # maximum number of connection retries
@@ -18,7 +19,7 @@ class RabbitMQ:
         self.bot = bot
         self.db = db
         self.loop = loop
-
+        self.published_messages = set()
         self.connection = None
         self.channel = None
         self.queue = None
@@ -45,6 +46,25 @@ class RabbitMQ:
                     logger.error("Max retries reached. Could not connect to RabbitMQ.")
                     raise
 
+    def generate_unique_id(self, message):
+        """Generate a unique ID for a given message"""
+        uid_string = f"{message['chat_id']}_{message['number']}_{message['last_updated']}"
+        return hashlib.md5(uid_string.encode()).hexdigest()
+
+    def is_message_published(self, unique_id):
+        """Check if a message with the given unique ID has been published"""
+        return unique_id in self.published_messages
+
+    def mark_message_as_published(self, unique_id):
+        """Mark the message with the given unique ID as published"""
+        self.published_messages.add(unique_id)
+
+    def discard_message_id(self, unique_id):
+        """Discard the message ID if it exists"""
+        if unique_id in self.published_messages:
+            self.published_messages.remove(unique_id)
+            logger.info(f"Reply received for message ID {unique_id}")
+
     async def on_message(self, message: aio_pika.IncomingMessage):
         """Async function to handle messages from StatusUpdateQueue"""
         async with message.process():
@@ -52,6 +72,11 @@ class RabbitMQ:
             logger.info(f"Received status update message: {msg_data}")
             chat_id = msg_data.get("chat_id", None)
             received_status = msg_data.get("status", None)
+
+            # Generate unique ID for the consumed message and remove it from published_messages
+            unique_id = self.generate_unique_id(msg_data)
+            self.discard_message_id(unique_id)
+
             if chat_id and received_status:
                 # Fetch the current status from the database
                 current_status = await self.db.get_application_status(chat_id)
@@ -79,12 +104,17 @@ class RabbitMQ:
         logger.info("Started consumer")
 
     async def publish_message(self, message, routing_key="ApplicationFetchQueue"):
-        """Publishes a message to a RabbitMQ queue."""
+        """Publishes a message to fetchers queue, ensuring not to publish duplicates"""
+        unique_id = self.generate_unique_id(message)
+        if self.is_message_published(unique_id):
+            logger.warning(f"Message {unique_id} has already been published. Skipping.")
+            return
         if not self.default_exchange:
             raise Exception("Cannot publish message: default exchange is not initialized.")
 
         await self.default_exchange.publish(aio_pika.Message(body=json.dumps(message).encode("utf-8")), routing_key=routing_key)
-        logger.info(f"Message published to {routing_key}")
+        self.mark_message_as_published(unique_id)
+        logger.info(f"Request to fetch update has been sent for {unique_id}")
 
     async def close(self):
         if self.connection:

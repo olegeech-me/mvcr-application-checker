@@ -42,9 +42,10 @@ class ApplicationMonitor:
                 "suffix": app["application_suffix"],
                 "type": app["application_type"],
                 "year": app["application_year"],
+                "last_updated": app["last_updated"].isoformat() if app["last_updated"] else "0",
             }
             await self.rabbit.publish_message(message)
-            logger.info(f"Scheduling status update for application {app['application_number']} user {app['chat_id']}")
+            logger.info(f"Scheduling status update for {app['application_number']} user {app['chat_id']} {app['last_updated']}")
 
     def stop(self):
         self.shutdown_event.set()

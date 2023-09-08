@@ -1,6 +1,10 @@
 import pika
+import time
 import json
 import logging
+
+MAX_RETRIES = 25  # maximum number of connection retries
+RETRY_DELAY = 5  # delay (in seconds) between retries
 
 logger = logging.getLogger(__name__)
 
@@ -16,9 +20,20 @@ class Messaging:
     def connect(self):
         """Establish a connection to the message broker."""
         credentials = pika.PlainCredentials(self.user, self.password)
-        self.connection = pika.BlockingConnection(pika.ConnectionParameters(host=self.host, credentials=credentials))
-        self.channel = self.connection.channel()
-        logger.info("Connected to the RabbitMQ server")
+
+        for retry in range(1, MAX_RETRIES + 1):
+            try:
+                self.connection = pika.BlockingConnection(pika.ConnectionParameters(host=self.host, credentials=credentials))
+                self.channel = self.connection.channel()
+                logger.info(f"Connected to the RabbitMQ server at {self.host}")
+                break  # Exit the loop if connection is successful
+            except pika.exceptions.AMQPConnectionError:
+                if retry < MAX_RETRIES:
+                    logger.warning(f"Connection attempt {retry} failed. Retrying in {RETRY_DELAY} seconds...")
+                    time.sleep(RETRY_DELAY)
+                else:
+                    logger.error("Max retries reached. Could not connect to RabbitMQ.")
+                    raise
 
     def setup_queues(self, *queues):
         """Declare necessary queues."""

@@ -19,7 +19,8 @@ class ApplicationProcessor:
         app_status = self.browser.fetch(self.url, app_details)
         if app_status:
             logger.info(f"Successfully fetched status for application number {app_details['number']}")
-            self.messaging.send_message("StatusUpdateQueue", {"chat_id": app_details["chat_id"], "status": app_status})
+            app_details["status"] = app_status
+            self.messaging.send_message("StatusUpdateQueue", app_details)
             ch.basic_ack(delivery_tag=method.delivery_tag)  # Acknowledge the message
             logger.debug("Message was pushed to StateUpdateQueue")
         else:

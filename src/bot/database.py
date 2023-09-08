@@ -98,7 +98,7 @@ class Database:
 
         # Fetch rows where the current time minus last_checked is more than the refresh period.
         query = """
-            SELECT chat_id, application_number, application_suffix, application_type, application_year
+            SELECT chat_id, application_number, application_suffix, application_type, application_year, last_updated
             FROM Applications
             WHERE EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - COALESCE(last_updated, TIMESTAMP '1970-01-01'))) > $1
         """
