@@ -1,6 +1,11 @@
 import json
 import aio_pika
+import asyncio
 import logging
+from aiormq.exceptions import AMQPConnectionError
+
+MAX_RETRIES = 5  # maximum number of connection retries
+RETRY_DELAY = 5  # delay (in seconds) between retries
 
 logger = logging.getLogger(__name__)
 
@@ -21,14 +26,24 @@ class RabbitMQ:
 
     async def connect(self):
         """Establishes a connection to RabbitMQ and initializes the channel and queue."""
-        self.connection = await aio_pika.connect_robust(
-            f"amqp://{self.user}:{self.password}@{self.host}",
-            loop=self.loop,
-        )
-        self.channel = await self.connection.channel()
-        self.queue = await self.channel.declare_queue("StatusUpdateQueue", durable=True)
-        self.default_exchange = self.channel.default_exchange
-        logger.info("Connected to RabbitMQ")
+        for retry in range(1, MAX_RETRIES + 1):
+            try:
+                self.connection = await aio_pika.connect_robust(
+                    f"amqp://{self.user}:{self.password}@{self.host}",
+                    loop=self.loop,
+                )
+                self.channel = await self.connection.channel()
+                self.queue = await self.channel.declare_queue("StatusUpdateQueue", durable=True)
+                self.default_exchange = self.channel.default_exchange
+                logger.info("Connected to RabbitMQ")
+                break  # Exit the loop if connection is successful
+            except AMQPConnectionError:
+                if retry < MAX_RETRIES:
+                    logger.warning(f"Connection attempt {retry} failed. Retrying in {RETRY_DELAY} seconds...")
+                    await asyncio.sleep(RETRY_DELAY)
+                else:
+                    logger.error("Max retries reached. Could not connect to RabbitMQ.")
+                    raise
 
     async def on_message(self, message: aio_pika.IncomingMessage):
         """Async function to handle messages from StatusUpdateQueue"""
