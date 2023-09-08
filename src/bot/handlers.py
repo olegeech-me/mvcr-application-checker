@@ -18,10 +18,20 @@ Example: /subscribe 12345 0 TP 2023
 logger = logging.getLogger(__name__)
 
 
+# Return user information string
+def user_info(update: Update):
+    """Returns a string with user information"""
+    chatid = update.effective_chat.id
+    username = update.effective_chat.username
+    first_name = update.effective_chat.first_name
+    last_name = update.effective_chat.last_name
+    return f"chat_id: {chatid}, username: {username}, first_name: {first_name}, last_name: {last_name}"
+
+
 # Handler for the /start command
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Sends a message with three inline buttons attached"""
-    logging.info(f"Received /start command from {update.message.chat_id}")
+    logging.info(f"Received /start command from {user_info(update)}")
     keyboard = [
         [InlineKeyboardButton("Subscribe", callback_data="subscribe")],
         [InlineKeyboardButton("Unsubscribe", callback_data="unsubscribe")],
@@ -62,7 +72,7 @@ async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Handler for /status command
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Returns current status of the application"""
-    logger.info(f"Received /status command from {update.effective_chat.id}")
+    logger.info(f"Received /status command from {user_info(update)}")
 
     if await db.check_subscription_in_db(update.message.chat_id):
         app_status = await db.get_application_status_timestamp(update.message.chat_id)
@@ -74,7 +84,7 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Handler for /unsubscribe command
 async def unsubscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Unsubscribes user from application status updates"""
-    logger.info(f"Received /unsubscribe command from {update.effective_chat.id}")
+    logger.info(f"Received /unsubscribe command from {user_info(update)}")
 
     if await db.check_subscription_in_db(update.message.chat_id):
         await db.remove_from_db(update.message.chat_id)
@@ -87,7 +97,7 @@ async def unsubscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Subscribes user for application status updates"""
     app_data = context.args
-    logger.info(f"Received /subscribe command with args {app_data} from {update.effective_chat.id}")
+    logger.info(f"Received /subscribe command with args {app_data} from {user_info(update)}")
 
     if await db.check_subscription_in_db(update.message.chat_id):
         await update.message.reply_text("You are already subscribed")

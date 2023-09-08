@@ -33,7 +33,7 @@ class ApplicationMonitor:
         if not applications_to_update:
             logger.info("No applications need status refresh")
         else:
-            logger.info(f"{len(applications_to_update)} applications need status refresh")
+            logger.info(f"{len(applications_to_update)} application(s) need status refresh")
 
         for app in applications_to_update:
             message = {
