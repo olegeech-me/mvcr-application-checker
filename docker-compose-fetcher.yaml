@@ -1,12 +1,19 @@
 version: "3.7"
 services:
   fetcher:
+    container_name: fetcher
     build:
       context: .
       dockerfile: Dockerfile_fetcher
     privileged: true
     volumes:
-      - ./output:/code/output
+      - fetcher_data:/code/output
+      - ./ssl/ca.crt:/etc/ssl/ca.crt:ro
+      - ./ssl/client.crt:/etc/ssl/client.crt:ro
+      - ./ssl/client.key:/etc/ssl/client.key:ro
     env_file:
       - ./fetcher.env
     restart: always
+
+volumes:
+  fetcher_data:

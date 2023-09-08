@@ -1,13 +1,12 @@
 """
 Read requests from the message queue, collect application status, post status update message
-
-Ideas borrowed from https://github.com/fernflower/trvalypobytexamchecker/blob/main/src/fetcher/a2exams_fetcher.py
-
 """
+
 import logging
 import signal
 
 from fetcher.config import URL, RABBIT_HOST, RABBIT_USER, RABBIT_PASSWORD
+from fetcher.config import RABBIT_SSL_CACERTFILE, RABBIT_SSL_CERTFILE, RABBIT_SSL_KEYFILE
 from fetcher.browser import Browser
 from fetcher.messaging import Messaging
 from fetcher.application_processor import ApplicationProcessor
@@ -17,6 +16,17 @@ from fetcher.application_processor import ApplicationProcessor
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+
+
+def rabbit_ssl_params():
+    if all([RABBIT_SSL_CACERTFILE, RABBIT_SSL_CERTFILE, RABBIT_SSL_KEYFILE]):
+        return {
+            "cafile": RABBIT_SSL_CACERTFILE,
+            "certfile": RABBIT_SSL_CERTFILE,
+            "keyfile": RABBIT_SSL_KEYFILE,
+        }
+    else:
+        return None
 
 
 def main():
@@ -30,7 +40,7 @@ def main():
     signal.signal(signal.SIGTERM, lambda s, f: processor.shutdown())
 
     # Connect to RabbitMQ & set up
-    messaging_instance.connect()
+    messaging_instance.connect(ssl_params=rabbit_ssl_params())
     messaging_instance.setup_queues("ApplicationFetchQueue", "StatusUpdateQueue")
 
     # Start processing requests

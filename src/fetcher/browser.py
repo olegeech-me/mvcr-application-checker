@@ -1,3 +1,9 @@
+"""
+Use selenium browser to interact with website
+
+Ideas borrowed from https://github.com/fernflower/trvalypobytexamchecker/blob/main/src/fetcher/a2exams_fetcher.py
+"""
+
 import logging
 import time
 import random

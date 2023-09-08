@@ -2,6 +2,7 @@ import pika
 import time
 import json
 import logging
+import ssl
 
 MAX_RETRIES = 25  # maximum number of connection retries
 RETRY_DELAY = 5  # delay (in seconds) between retries
@@ -14,16 +15,39 @@ class Messaging:
         self.host = host
         self.user = user
         self.password = password
+        self.port = 5672
         self.connection = None
         self.channel = None
 
-    def connect(self):
+    def _create_ssl_context(self, ssl_params):
+        logger.error(f"ssl_params: {ssl_params}")
+        context = ssl.create_default_context(cafile=ssl_params["cafile"])
+        context.load_cert_chain(certfile=ssl_params["certfile"], keyfile=ssl_params["keyfile"])
+        context.verify_mode = ssl.CERT_REQUIRED
+        return context
+
+    def connect(self, ssl_params=None):
         """Establish a connection to the message broker."""
         credentials = pika.PlainCredentials(self.user, self.password)
 
+        if ssl_params:
+            ssl_context = self._create_ssl_context(ssl_params)
+            ssl_options = pika.SSLOptions(ssl_context, self.host)
+            self.port = 5671
+        else:
+            ssl_options = None
+
+        conn_params = pika.ConnectionParameters(
+            credentials=credentials,
+            host=self.host,
+            port=self.port,
+            ssl_options=ssl_options,
+        )
+
         for retry in range(1, MAX_RETRIES + 1):
             try:
-                self.connection = pika.BlockingConnection(pika.ConnectionParameters(host=self.host, credentials=credentials))
+                logger.info(f"Connecting to {self.host} ...")
+                self.connection = pika.BlockingConnection(conn_params)
                 self.channel = self.connection.channel()
                 logger.info(f"Connected to the RabbitMQ server at {self.host}")
                 break  # Exit the loop if connection is successful
