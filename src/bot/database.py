@@ -1,29 +1,45 @@
 import asyncpg
 import logging
 import pytz
+import time
 
+MAX_RETRIES = 10  # maximum number of connection retries
+RETRY_DELAY = 3  # delay (in seconds) between retries
 
 logger = logging.getLogger(__name__)
 
 
 class Database:
-    def __init__(self, dbname, user, password, host, port, loop):
+    def __init__(self, dbname, user, password, host, port, loop, retries=MAX_RETRIES, delay=RETRY_DELAY):
         self.dbname = dbname
         self.user = user
         self.password = password
         self.host = host
         self.port = port
         self.loop = loop
-        self.pool = loop.run_until_complete(
-            asyncpg.create_pool(
-                database=dbname,
-                user=user,
-                password=password,
-                host=host,
-                port=port,
-            )
-        )
-        logger.info("Connected to the db")
+
+        while retries < MAX_RETRIES:
+            try:
+                self.pool = loop.run_until_complete(
+                    asyncpg.create_pool(
+                        database=dbname,
+                        user=user,
+                        password=password,
+                        host=host,
+                        port=port,
+                    )
+                )
+                logger.info("Connected to the db")
+                break
+            except Exception as e:
+                retries += 1
+                logger.error(f"Failed to connect to the database. Attempt {retries}/{MAX_RETRIES}. Error: {e}")
+                if retries < MAX_RETRIES:
+                    time.sleep(delay)
+                    delay *= 2  # Double the delay for next retry
+                else:
+                    logger.error("Max retries reached. Unable to connect to the database")
+                    raise
 
     async def add_to_db(self, chat_id, application_number, application_suffix, application_type, application_year):
         logger.info(f"Adding chatID {chat_id} with application number {application_number} to DB")
