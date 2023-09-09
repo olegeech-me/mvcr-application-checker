@@ -1,8 +1,9 @@
-import pika
-import time
+import aio_pika
+import asyncio
 import json
 import logging
 import ssl
+from aiormq.exceptions import AMQPConnectionError
 
 MAX_RETRIES = 25  # maximum number of connection retries
 RETRY_DELAY = 5  # delay (in seconds) between retries
@@ -26,64 +27,56 @@ class Messaging:
         context.verify_mode = ssl.CERT_REQUIRED
         return context
 
-    def connect(self, ssl_params=None):
-        """Establish a connection to the message broker."""
-        credentials = pika.PlainCredentials(self.user, self.password)
+    async def connect(self, ssl_params=None):
+        """Establish a connection to the message broker"""
 
         if ssl_params:
             ssl_context = self._create_ssl_context(ssl_params)
-            ssl_options = pika.SSLOptions(ssl_context, self.host)
             self.port = ssl_params["ssl_port"]
         else:
-            ssl_options = None
+            ssl_context = None
 
-        conn_params = pika.ConnectionParameters(
-            credentials=credentials,
-            host=self.host,
-            port=self.port,
-            ssl_options=ssl_options,
-        )
+        scheme = "amqps" if ssl_params else "amqp"
+        conn_url = f"{scheme}://{self.user}:{self.password}@{self.host}:{self.port}/"
 
         for retry in range(1, MAX_RETRIES + 1):
             try:
                 logger.info(f"Connecting to {self.host} ...")
-                self.connection = pika.BlockingConnection(conn_params)
-                self.channel = self.connection.channel()
+                self.connection = await aio_pika.connect_robust(conn_url, ssl_context=ssl_context)
+                self.channel = await self.connection.channel()
                 logger.info(f"Connected to the RabbitMQ server at {self.host}")
                 break  # Exit the loop if connection is successful
-            except pika.exceptions.AMQPConnectionError:
+            except AMQPConnectionError:
                 if retry < MAX_RETRIES:
                     logger.warning(f"Connection attempt {retry} failed. Retrying in {RETRY_DELAY} seconds...")
-                    time.sleep(RETRY_DELAY)
+                    await asyncio.sleep(RETRY_DELAY)
                 else:
                     logger.error("Max retries reached. Could not connect to RabbitMQ.")
                     raise
 
-    def setup_queues(self, *queues):
-        """Declare necessary queues."""
-        for queue in queues:
-            self.channel.queue_declare(queue=queue, durable=True)
+    async def setup_queues(self, *queues):
+        """Declare necessary queues"""
+        for queue_name in queues:
+            await self.channel.declare_queue(queue_name, durable=True)
 
-    def send_message(self, queue_name, message_body):
-        """Send a message to the specified queue."""
-        if not self.channel:
-            raise Exception("No active channel. Make sure to connect first.")
-        self.channel.basic_publish(exchange="", routing_key=queue_name, body=json.dumps(message_body))
+    async def publish_message(self, queue_name, message_body):
+        """Publish a message to the specified queue"""
+        await self.channel.default_exchange.publish(
+            aio_pika.Message(body=json.dumps(message_body).encode()),
+            routing_key=queue_name
+        )
         logger.info(f"Successfully published message to {queue_name}")
 
-    def consume_messages(self, queue_name, callback_func):
-        """Consume messages from the specified queue."""
-        if not self.channel:
-            raise Exception("No active channel. Make sure to connect first.")
-        self.channel.basic_consume(queue=queue_name, on_message_callback=callback_func, auto_ack=False)
-        logger.info(f"Subscribing for updates at {queue_name}")
-        self.channel.start_consuming()
+    async def consume_messages(self, queue_name, callback_func):
+        """Consume messages from the specified queue"""
+        queue = await self.channel.declare_queue(queue_name, durable=True)
+        await queue.consume(callback_func)
 
-    def close(self):
-        """Close the connection."""
+    async def close(self):
+        """Close the connection"""
         if self.channel:
             logger.info("Closing RabbitMQ channel...")
-            self.channel.close()
+            await self.channel.close()
         if self.connection:
             logger.info("Closing RabbitMQ connection...")
-            self.connection.close()
+            await self.connection.close()

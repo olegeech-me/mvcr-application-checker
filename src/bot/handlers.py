@@ -93,8 +93,23 @@ async def unsubscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("You are not subscribed")
 
 
+# FIXME intermittent bug: sometimes the bot doesn't respond to the /subscribe command
+#  and the following error is logged:
+#
+# 2023-09-09 13:01:27,620 - bot.handlers - INFO - Received /subscribe command with args ['17949', '4', 'TP', '2023'] from chat_id: 435453594, username: olegeech, first_name: Oleg, last_name: Basov
+# 2023-09-09 13:01:27,621 - telegram.ext.Application - ERROR - No error handlers are registered, logging exception.
+# Traceback (most recent call last):
+#   File "/usr/local/lib/python3.10/site-packages/telegram/ext/_application.py", line 1184, in process_update
+#     await coroutine
+#   File "/usr/local/lib/python3.10/site-packages/telegram/ext/_basehandler.py", line 141, in handle_update
+#     return await self.callback(update, context)
+#   File "/code/src/bot/handlers.py", line 102, in subscribe_command
+#     if await db.check_subscription_in_db(update.message.chat_id):
+# AttributeError: 'NoneType' object has no attribute 'chat_id'
+
 # Handler for /subscribe command
 async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
     """Subscribes user for application status updates"""
     app_data = context.args
     logger.info(f"Received /subscribe command with args {app_data} from {user_info(update)}")

@@ -5,7 +5,7 @@ Ideas borrowed from https://github.com/fernflower/trvalypobytexamchecker/blob/ma
 """
 
 import logging
-import time
+import asyncio
 import random
 import os
 from pyvirtualdisplay import Display
@@ -103,7 +103,7 @@ class Browser:
         submit_button = self.browser.find_element(By.CSS_SELECTOR, 'button[type="submit"]')
         self.browser.execute_script("arguments[0].click();", submit_button)
 
-    def _do_fetch_with_browser(self, url, app_details):
+    async def _do_fetch_with_browser(self, url, app_details):
         def _has_recaptcha(browser):
             # captcha = browser.find_elements(
             #    By.CSS_SELECTOR, "iframe[name^='a-'][src^='https://www.google.com/recaptcha/api2/anchor?']"
@@ -151,18 +151,18 @@ class Browser:
 
         return application_status_text
 
-    def fetch(self, url, app_details):
+    async def fetch(self, url, app_details):
         """
         Fetches page with retries
         """
-        res = self._do_fetch_with_browser(url=url, app_details=app_details)
+        res = await self._do_fetch_with_browser(url=url, app_details=app_details)
         attempts_left = self.retries
         while attempts_left and not res:
             attempts_left -= 1
             retry_in = int(RETRY_INTERVAL / 3 + random.randint(1, int(2 * RETRY_INTERVAL / 3)))
             logger.info(f"Looks like connection error, will retry {url} again later in {retry_in}")
-            time.sleep(retry_in)
-            res = self._do_fetch_with_browser(url=url, app_details=app_details)
+            await asyncio.sleep(retry_in)
+            res = await self._do_fetch_with_browser(url=url, app_details=app_details)
         return res
 
     def close(self):
