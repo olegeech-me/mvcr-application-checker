@@ -29,11 +29,6 @@ RUN echo "===> Installing system dependencies..." && \
     ln -s /opt/firefox/firefox /usr/bin/firefox && \
     rm $FIREFOX_SETUP && \
     \
-    \
-    echo "===> Installing python dependencies..." && \
-    pip3 install selenium==3.141.0 pyvirtualdisplay==2.2 && \
-    \
-    \
     echo "===> Remove what is not needed anymore..." && \
     rm -rf /var/lib/apt/lists/*
 
