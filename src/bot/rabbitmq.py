@@ -114,7 +114,7 @@ class RabbitMQ:
 
         await self.default_exchange.publish(aio_pika.Message(body=json.dumps(message).encode("utf-8")), routing_key=routing_key)
         self.mark_message_as_published(unique_id)
-        logger.info(f"Request to fetch update has been sent for {unique_id}")
+        logger.info(f"Message {unique_id} has been published to {routing_key}")
 
     async def close(self):
         if self.connection:
