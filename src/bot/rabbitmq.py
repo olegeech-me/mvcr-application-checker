@@ -80,6 +80,10 @@ class RabbitMQ:
             if chat_id and received_status:
                 # Fetch the current status from the database
                 current_status = await self.db.get_application_status(chat_id)
+                
+                if not current_status:
+                    logger.error(f"Failed to get current status from db for user {chat_id}")
+                    return
 
                 if current_status == received_status:
                     logger.info(f"Status didn't change for user {chat_id} application")
