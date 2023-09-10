@@ -69,8 +69,7 @@ class Database:
     async def update_db_status(self, chat_id, current_status):
         logger.info(f"Updating chatID {chat_id} current status in DB")
         query = (
-            "UPDATE Applications SET current_status = $1, "
-            "status_changed = True, last_updated = CURRENT_TIMESTAMP WHERE chat_id = $2"
+            "UPDATE Applications SET current_status = $1, last_updated = CURRENT_TIMESTAMP WHERE chat_id = $2"
         )
         params = (current_status, chat_id)
         try:
