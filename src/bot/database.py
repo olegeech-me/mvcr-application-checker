@@ -50,12 +50,15 @@ class Database:
         params = (chat_id, application_number, application_suffix, application_type, application_year)
         try:
             await self.conn.execute(query, *params)
+            return True
         except asyncpg.UniqueViolationError:
             logger.error(f"Attempt to insert duplicate chat ID {chat_id} and application number {application_number}")
+            return False
         except Exception as e:
             logger.error(
                 f"Error while inserting into DB for chat ID: {chat_id} for application number {application_number}. Error: {e}"
             )
+            return False
 
     async def update_db_status(self, chat_id, current_status):
         logger.info(f"Updating chatID {chat_id} current status in DB")
@@ -66,16 +69,20 @@ class Database:
         params = (current_status, chat_id)
         try:
             await self.conn.execute(query, *params)
+            return True
         except Exception as e:
             logger.error(f"Error while updating DB for chat ID: {chat_id}. Error: {e}")
+            return False
 
     async def remove_from_db(self, chat_id):
         logger.info(f"Removing chatID {chat_id} from DB")
         query = "DELETE FROM Applications WHERE chat_id = $1"
         try:
             await self.conn.execute(query, chat_id)
+            return True
         except Exception as e:
             logger.error(f"Error while updating DB for chat ID: {chat_id}. Error: {e}")
+            return False
 
     async def get_application_status(self, chat_id):
         query = "SELECT current_status FROM Applications WHERE chat_id = $1;"

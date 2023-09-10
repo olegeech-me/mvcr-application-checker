@@ -144,14 +144,14 @@ async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             }
             logger.info(f"Received application details {message}")
             # add data to the db
-            await db.add_to_db(update.message.chat_id, number, suffix, type.upper(), int(year))
-
-            # publish request for fetchers
-            await rabbit.publish_message(message)
-
-            await update.message.reply_text(
-                f"You have been subscribed for application <b>OAM-{number}-{suffix}/{type.upper()}-{year}</b> updates.",
-            )
+            if await db.add_to_db(update.message.chat_id, number, suffix, type.upper(), int(year)):
+                # publish request for fetchers
+                await rabbit.publish_message(message)
+                await update.message.reply_text(
+                    f"You have been subscribed for application <b>OAM-{number}-{suffix}/{type.upper()}-{year}</b> updates.",
+                )
+            else:
+                await update.message.reply_text("Failed to subscribe. Please try again later")
         else:
             await update.message.reply_text(subscribe_helper_text)
     except Exception as e:

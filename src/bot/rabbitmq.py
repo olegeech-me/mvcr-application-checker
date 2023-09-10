@@ -80,27 +80,39 @@ class RabbitMQ:
             if chat_id and received_status:
                 # Fetch the current status from the database
                 current_status = await self.db.get_application_status(chat_id)
-                
+
                 if not current_status:
                     logger.error(f"Failed to get current status from db for user {chat_id}")
+                    return
+
+                # FIXME olegeech: should be fixed on the fetcher side
+                # sometimes the fetcher returns a status for a different application
+                # with the one trailing number off
+                # e.g. 1234 instead of 12345
+                # this is a temporary workaround
+                if msg_data["number"] not in msg_data["status"]:
+                    logger.warning(
+                        f"Application number in status {msg_data['status']} doesn't match application number {msg_data['number']}"
+                    )
                     return
 
                 if current_status == received_status:
                     logger.info(f"Status didn't change for user {chat_id} application")
                     await self.db.update_timestamp(chat_id)
                     return
-                logger.info(f"Status of application has changed, notifying user {chat_id}")
-                # If status differs, update application status in the DB
-                await self.db.update_db_status(chat_id, received_status)
 
-                # Construct the notification text
-                notification_text = f"Your application status has been updated: {received_status}"
-                # Notify the user
-                try:
-                    await self.bot.updater.bot.send_message(chat_id=chat_id, text=notification_text)
-                    logger.info(f"Sent status update to chatID {chat_id}")
-                except Exception as e:
-                    logger.error(f"Failed to send status update to {chat_id}: {e}")
+                logger.info(f"Status of application has changed, notifying user {chat_id}")
+
+                # If status differs, update application status in the DB
+                if await self.db.update_db_status(chat_id, received_status):
+                    # Construct the notification text
+                    notification_text = f"Your application status has been updated: {received_status}"
+                    # Notify the user
+                    try:
+                        await self.bot.updater.bot.send_message(chat_id=chat_id, text=notification_text)
+                        logger.info(f"Sent status update to chatID {chat_id}")
+                    except Exception as e:
+                        logger.error(f"Failed to send status update to {chat_id}: {e}")
 
     async def consume_messages(self):
         """Consumes messages from the queue and handles them using on_message."""
