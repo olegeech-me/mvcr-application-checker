@@ -46,7 +46,8 @@ class Database:
         logger.info(f"Adding chatID {chat_id} with application number {application_number} to DB")
         query = (
             "INSERT INTO Applications "
-            "(chat_id, application_number, application_suffix, application_type, application_year, current_status) "
+            "(chat_id, application_number, application_suffix, application_type, application_year, current_status, "
+            "username, first_name, last_name) "
             "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"
         )
         params = (
