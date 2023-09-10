@@ -25,7 +25,15 @@ def user_info(update: Update):
     username = update.effective_chat.username
     first_name = update.effective_chat.first_name
     last_name = update.effective_chat.last_name
-    return f"chat_id: {chatid}, username: {username}, first_name: {first_name}, last_name: {last_name}"
+    info_pieces = [f"chat_id: {chatid}"]
+    if username:
+        info_pieces.append(f"username: {username}")
+    if first_name:
+        info_pieces.append(f"first_name: {first_name}")
+    if last_name:
+        info_pieces.append(f"last_name: {last_name}")
+
+    return ", ".join(info_pieces)
 
 
 # Handler for the /start command
@@ -142,7 +150,9 @@ async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             }
             logger.info(f"Received application details {message}")
             # add data to the db
-            if await db.add_to_db(update.message.chat_id, number, suffix, type.upper(), int(year)):
+            if await db.add_to_db(
+                    update.message.chat_id, number, suffix, type.upper(), int(year),
+                    update.message.chat.username, update.message.chat.first_name, update.message.chat.last_name):
                 # publish request for fetchers
                 await rabbit.publish_message(message)
                 await update.message.reply_text(

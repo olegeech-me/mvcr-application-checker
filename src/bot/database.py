@@ -40,14 +40,19 @@ class Database:
                     logger.error("Max retries reached. Unable to connect to the database")
                     raise
 
-    async def add_to_db(self, chat_id, application_number, application_suffix, application_type, application_year):
+    async def add_to_db(
+            self, chat_id, application_number, application_suffix, application_type, application_year,
+            username=None, first_name=None, last_name=None):
         logger.info(f"Adding chatID {chat_id} with application number {application_number} to DB")
         query = (
             "INSERT INTO Applications "
             "(chat_id, application_number, application_suffix, application_type, application_year, current_status) "
-            "VALUES ($1, $2, $3, $4, $5, $6)"
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"
         )
-        params = (chat_id, application_number, application_suffix, application_type, application_year, "Unknown")
+        params = (
+            chat_id, application_number, application_suffix, application_type, application_year,
+            "Unknown", username, first_name, last_name
+        )
         try:
             await self.conn.execute(query, *params)
             return True
