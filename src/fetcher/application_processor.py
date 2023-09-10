@@ -52,7 +52,7 @@ class ApplicationProcessor:
             logger.info(f"Refreshed status for application number {app_details['number']}")
             app_details["status"] = app_status
             await message.ack()
-            await self.messaging.send_message("StatusUpdateQueue", app_details)
+            await self.messaging.publish_message("StatusUpdateQueue", app_details)
             logger.debug(f"Message was pushed to StateUpdateQueue {app_details['number']}")
         else:
             logger.error(f"Failed to refresh status for application number {app_details['number']}")
