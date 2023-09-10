@@ -46,8 +46,9 @@ class Messaging:
                 self.channel = await self.connection.channel()
                 logger.info(f"Connected to the RabbitMQ server at {self.host}")
                 break  # Exit the loop if connection is successful
-            except AMQPConnectionError:
+            except AMQPConnectionError as e:
                 if retry < MAX_RETRIES:
+                    logger.warning(f"Error: {e}")
                     logger.warning(f"Connection attempt {retry} failed. Retrying in {RETRY_DELAY} seconds...")
                     await asyncio.sleep(RETRY_DELAY)
                 else:
