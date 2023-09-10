@@ -22,8 +22,8 @@ class ApplicationMonitor:
             await self.check_for_updates()
             try:
                 await asyncio.wait_for(
-                    self.shutdown_event.wait(), timeout=60
-                )  # wait for 60 seconds or until shutdown_event is set
+                    self.shutdown_event.wait(), timeout=300
+                )  # run scheduler every 5 minutes
             except asyncio.TimeoutError:
                 pass
 
