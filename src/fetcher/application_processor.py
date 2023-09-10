@@ -47,6 +47,11 @@ class ApplicationProcessor:
         app_details = json.loads(message.body.decode())
         logger.info(f"Received refresh request: {app_details}")
 
+        # Sleep between 5 to 15 minutes to avoid getting blocked
+        sleep_time = random.randint(300, 900)
+        logger.info(f"Sleeping for {sleep_time} seconds before processing next refresh request")
+        await asyncio.sleep(sleep_time)
+
         app_status = await self.browser.fetch(self.url, app_details)
         if app_status:
             logger.info(f"Refreshed status for application number {app_details['number']}")
@@ -57,11 +62,6 @@ class ApplicationProcessor:
         else:
             logger.error(f"Failed to refresh status for application number {app_details['number']}")
             await message.nack()
-
-        # Sleep between 5 to 15 minutes to avoid getting blocked
-        sleep_time = random.randint(300, 900)
-        logger.info(f"Sleeping for {sleep_time} seconds before processing next refresh request")
-        await asyncio.sleep(sleep_time)
 
     async def shutdown(self):
         if self.current_message:
