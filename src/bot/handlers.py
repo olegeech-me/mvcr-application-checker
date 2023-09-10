@@ -32,7 +32,7 @@ def user_info(update: Update):
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Sends a message with three inline buttons attached"""
     logging.info(f"Received /start command from {user_info(update)}")
-    await update.message.reply_text("Thank you for using the MVCR application status bot!")
+    await update.message.reply_text("Thank you for using the MVČR application status bot!")
     keyboard = [
         [InlineKeyboardButton("Subscribe", callback_data="subscribe")],
     ]
