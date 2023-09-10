@@ -5,7 +5,7 @@ from bot.loader import rabbit, db
 
 
 subscribe_helper_text = """
-Please run command /subscribe with the following arguments
+Please run command /subscribe with the following arguments:
 - application number (usually 4 to 5 digits)
 - application suffix (put 0, if you don't have it)
 - application type (TP,DP,MK, etc...)
@@ -32,9 +32,12 @@ def user_info(update: Update):
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Sends a message with three inline buttons attached"""
     logging.info(f"Received /start command from {user_info(update)}")
+    await update.message.reply_text(
+        "Thank you for using the MVCR application status bot! "
+        "Please hit the button below to subscribe for your application status updates."
+    )
     keyboard = [
         [InlineKeyboardButton("Subscribe", callback_data="subscribe")],
-        [InlineKeyboardButton("Unsubscribe", callback_data="unsubscribe")],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text("Please choose:", reply_markup=reply_markup)
@@ -50,12 +53,6 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text("You are already subscribed.")
         else:
             await query.edit_message_text(subscribe_helper_text)
-    elif query.data == "unsubscribe":
-        if await db.check_subscription_in_db(query.message.chat_id):
-            await db.remove_from_db(query.message.chat_id)
-            await query.edit_message_text("You have unsubscribed.")
-        else:
-            await query.edit_message_text("You are not subscribed.")
 
 
 # Handler for the /help command
@@ -96,7 +93,8 @@ async def unsubscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 # FIXME intermittent bug: sometimes the bot doesn't respond to the /subscribe command
 #  and the following error is logged:
 #
-# 2023-09-09 13:01:27,620 - bot.handlers - INFO - Received /subscribe command with args ['17949', '4', 'TP', '2023'] from chat_id: 435453594, username: olegeech, first_name: Oleg, last_name: Basov
+# 2023-09-09 13:01:27,620 - bot.handlers - INFO - Received /subscribe command with args ['17949', '4', 'TP', '2023']
+# from chat_id: 435453594, username: olegeech, first_name: Oleg, last_name: Basov
 # 2023-09-09 13:01:27,621 - telegram.ext.Application - ERROR - No error handlers are registered, logging exception.
 # Traceback (most recent call last):
 #   File "/usr/local/lib/python3.10/site-packages/telegram/ext/_application.py", line 1184, in process_update

@@ -124,7 +124,7 @@ class RabbitMQ:
         """Publishes a message to fetchers queue, ensuring not to publish duplicates"""
         unique_id = self.generate_unique_id(message)
         if self.is_message_published(unique_id):
-            logger.warning(f"Message {unique_id} has already been published. Skipping.")
+            logger.debug(f"Message {unique_id} has already been published. Skipping.")
             return
         if not self.default_exchange:
             raise Exception("Cannot publish message: default exchange is not initialized.")
