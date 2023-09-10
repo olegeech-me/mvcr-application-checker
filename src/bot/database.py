@@ -44,10 +44,10 @@ class Database:
         logger.info(f"Adding chatID {chat_id} with application number {application_number} to DB")
         query = (
             "INSERT INTO Applications "
-            "(chat_id, application_number, application_suffix, application_type, application_year) "
-            "VALUES ($1, $2, $3, $4, $5)"
+            "(chat_id, application_number, application_suffix, application_type, application_year, current_status) "
+            "VALUES ($1, $2, $3, $4, $5, $6)"
         )
-        params = (chat_id, application_number, application_suffix, application_type, application_year)
+        params = (chat_id, application_number, application_suffix, application_type, application_year, "Unknown")
         try:
             await self.conn.execute(query, *params)
             return True
