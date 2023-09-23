@@ -16,14 +16,14 @@ class ApplicationProcessor:
         self.current_message = None
 
     async def fetch_callback(self, message):
-        self.current_message = message.delivery_tag
+        self.current_message = message
         try:
             await self.process_fetch_request(message)
         finally:
             self.current_message = None
 
     async def refresh_callback(self, message):
-        self.current_message = message.delivery_tag
+        self.current_message = message
         try:
             await self.process_refresh_request(message)
         finally:
@@ -66,7 +66,7 @@ class ApplicationProcessor:
 
     async def shutdown(self):
         if self.current_message:
-            logger.info(f"Shuting down: NACK'ing message with delivery_tag: {self.current_message}")
+            logger.info(f"Shuting down: NACK'ing message with delivery_tag: {self.current_message.delivery_tag}")
             await self.current_message.nack()
         logger.info("Shutting down rabbit connection ...")
         await self.messaging.close()
