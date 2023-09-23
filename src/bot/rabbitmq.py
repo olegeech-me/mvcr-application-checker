@@ -7,6 +7,7 @@ from aiormq.exceptions import AMQPConnectionError
 
 MAX_RETRIES = 5  # maximum number of connection retries
 RETRY_DELAY = 5  # delay (in seconds) between retries
+FINAL_STATUSES = ["bylo <b>povoleno</b>", "pokud bylo vaše řízení povoleno", "nebylo"]
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +67,10 @@ class RabbitMQ:
             self.published_messages.remove(unique_id)
             logger.info(f"Reply received for message ID {unique_id}")
 
+    def is_resolved(self, status):
+        """Check if the application was resolved to its final status"""
+        return any(phrase in status for phrase in FINAL_STATUSES)
+
     async def on_message(self, message: aio_pika.IncomingMessage):
         """Async function to handle messages from StatusUpdateQueue"""
         async with message.process():
@@ -101,12 +106,19 @@ class RabbitMQ:
                     await self.db.update_timestamp(chat_id)
                     return
 
+                is_resolved = self.is_resolved(received_status)
+
                 logger.info(f"Status of application has changed, notifying user {chat_id}")
 
                 # If status differs, update application status in the DB
-                if await self.db.update_db_status(chat_id, received_status):
+                if await self.db.update_db_status(chat_id, received_status, is_resolved):
                     # Construct the notification text
-                    notification_text = f"Your application status has been updated: {received_status}"
+                    if is_resolved:
+                        notification_text = f"Your application has been resolved: {received_status}"
+                        logger.info(f"Application for user {chat_id} has been resolved to {received_status}")
+                    else:
+                        notification_text = f"Your application status has been updated: {received_status}"
+
                     # Notify the user
                     try:
                         await self.bot.updater.bot.send_message(chat_id=chat_id, text=notification_text)

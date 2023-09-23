@@ -29,7 +29,7 @@ class Database:
                     host=self.host,
                     port=self.port,
                 )
-                logger.info("Connected to the db")
+                logger.info("Connected to the DB")
                 break
             except Exception as e:
                 logger.error(f"Failed to connect to the database. Attempt {attempt}/{max_retries}. Error: {e}")
@@ -81,10 +81,10 @@ class Database:
             )
             return False
 
-    async def update_db_status(self, chat_id, current_status):
+    async def update_db_status(self, chat_id, current_status, is_resolved):
         logger.info(f"Updating chatID {chat_id} current status in DB")
-        query = "UPDATE Applications SET current_status = $1, last_updated = CURRENT_TIMESTAMP WHERE chat_id = $2"
-        params = (current_status, chat_id)
+        query = "UPDATE Applications SET current_status = $1, last_updated = CURRENT_TIMESTAMP, is_resolved=$2 WHERE chat_id = $3"
+        params = (current_status, is_resolved, chat_id)
         try:
             await self.conn.execute(query, *params)
             return True
@@ -146,6 +146,7 @@ class Database:
             SELECT chat_id, application_number, application_suffix, application_type, application_year, last_updated
             FROM Applications
             WHERE EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - COALESCE(last_updated, TIMESTAMP '1970-01-01'))) > $1
+            AND is_resolved = FALSE
         """
 
         try:

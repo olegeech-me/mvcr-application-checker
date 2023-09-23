@@ -9,5 +9,6 @@ CREATE TABLE IF NOT EXISTS Applications (
     application_type VARCHAR(255) NOT NULL,
     application_year INT NOT NULL,
     current_status VARCHAR(255),
-    last_updated TIMESTAMP
+    last_updated TIMESTAMP,
+    is_resolved BOOLEAN NOT NULL DEFAULT FALSE
 );
