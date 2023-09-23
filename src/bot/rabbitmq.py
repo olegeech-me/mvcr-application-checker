@@ -90,7 +90,6 @@ class RabbitMQ:
                 # sometimes the fetcher returns a status for a different application
                 # with the one trailing number off
                 # e.g. 1234 instead of 12345
-                # this is a temporary workaround
                 if msg_data["number"] not in msg_data["status"]:
                     logger.warning(
                         f"Application number in status {msg_data['status']} doesn't match application number {msg_data['number']}"
@@ -124,7 +123,7 @@ class RabbitMQ:
         """Publishes a message to fetchers queue, ensuring not to publish duplicates"""
         unique_id = self.generate_unique_id(message)
         if self.is_message_published(unique_id):
-            logger.debug(f"Message {unique_id} has already been published. Skipping.")
+            logger.info(f"Message {unique_id} has already been published. Skipping.")
             return
         if not self.default_exchange:
             raise Exception("Cannot publish message: default exchange is not initialized.")

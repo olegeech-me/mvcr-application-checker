@@ -1,7 +1,7 @@
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 import logging
-from bot.loader import rabbit, db
+from bot.loader import rabbit, db, ADMIN_CHAT_ID
 
 
 subscribe_helper_text = """
@@ -18,7 +18,12 @@ Example: /subscribe 12345 0 TP 2023
 logger = logging.getLogger(__name__)
 
 
-# Return user information string
+def _is_admin(chat_id: int) -> bool:
+    """Check if the user's chat_id is an admin's chat_id."""
+    logger.info(f"Effective chat_id: '{chat_id}', Allowed admin id: '{ADMIN_CHAT_ID}'")
+    return int(chat_id) == int(ADMIN_CHAT_ID)
+
+
 def user_info(update: Update):
     """Returns a string with user information"""
     chatid = update.effective_chat.id
@@ -36,9 +41,31 @@ def user_info(update: Update):
     return ", ".join(info_pieces)
 
 
+# handler for /admin_stats
+async def admin_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Return total number of subscribed users"""
+    logging.info(f"Received /admin_stats command from {user_info(update)}")
+    if not _is_admin(update.effective_chat.id):
+        await update.message.reply_text("Unauthorized. This command is only for admins.")
+        return
+
+    user_count = await db.get_subscribed_user_count()
+    if user_count is not None:
+        await update.message.reply_text(f"Total users subscribed: {user_count}")
+    else:
+        await update.message.reply_text("Error retrieving statistics.")
+
+
+# handler for /admin_restart_fetcher
+
+# hander for /admin_restart_bot
+
+# handler for /admin_oldest_refresh
+
+
 # Handler for the /start command
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Sends a message with three inline buttons attached"""
+    """Sends a message with inline buttons attached"""
     logging.info(f"Received /start command from {user_info(update)}")
     await update.message.reply_text("Thank you for using the MVČR application status bot!")
     keyboard = [
@@ -46,8 +73,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(
-        "Please hit the button below to subscribe for your application status updates.",
-        reply_markup=reply_markup
+        "Please hit the button below to subscribe for your application status updates.", reply_markup=reply_markup
     )
 
 
@@ -113,9 +139,9 @@ async def unsubscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 #     if await db.check_subscription_in_db(update.message.chat_id):
 # AttributeError: 'NoneType' object has no attribute 'chat_id'
 
+
 # Handler for /subscribe command
 async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
     """Subscribes user for application status updates"""
     app_data = context.args
     logger.info(f"Received /subscribe command with args {app_data} from {user_info(update)}")
@@ -151,8 +177,15 @@ async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.info(f"Received application details {message}")
             # add data to the db
             if await db.add_to_db(
-                    update.message.chat_id, number, suffix, type.upper(), int(year),
-                    update.message.chat.username, update.message.chat.first_name, update.message.chat.last_name):
+                update.message.chat_id,
+                number,
+                suffix,
+                type.upper(),
+                int(year),
+                update.message.chat.username,
+                update.message.chat.first_name,
+                update.message.chat.last_name,
+            ):
                 # publish request for fetchers
                 await rabbit.publish_message(message)
                 await update.message.reply_text(

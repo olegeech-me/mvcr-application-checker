@@ -3,6 +3,7 @@ import logging
 import sys
 import asyncio
 import random
+from fetcher.config import JITTER_SECONDS
 
 logger = logging.getLogger(__name__)
 
@@ -47,9 +48,9 @@ class ApplicationProcessor:
         app_details = json.loads(message.body.decode())
         logger.info(f"Received refresh request: {app_details}")
 
-        # Sleep between 5 to 15 minutes to avoid getting blocked
-        sleep_time = random.randint(300, 900)
-        logger.info(f"Sleeping for {sleep_time} seconds before processing next refresh request")
+        # Sleep between 60 to JITTER_SECONDS to avoid getting blocked
+        sleep_time = random.randint(60, JITTER_SECONDS)
+        logger.info(f"Sleeping for {sleep_time} seconds before processing {app_details['number']} refresh request")
         await asyncio.sleep(sleep_time)
 
         app_status = await self.browser.fetch(self.url, app_details)

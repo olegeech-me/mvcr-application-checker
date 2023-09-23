@@ -41,8 +41,16 @@ class Database:
                     raise
 
     async def add_to_db(
-            self, chat_id, application_number, application_suffix, application_type, application_year,
-            username=None, first_name=None, last_name=None):
+        self,
+        chat_id,
+        application_number,
+        application_suffix,
+        application_type,
+        application_year,
+        username=None,
+        first_name=None,
+        last_name=None,
+    ):
         logger.info(f"Adding chatID {chat_id} with application number {application_number} to DB")
         query = (
             "INSERT INTO Applications "
@@ -51,8 +59,15 @@ class Database:
             "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"
         )
         params = (
-            chat_id, application_number, application_suffix, application_type, application_year,
-            "Unknown", username, first_name, last_name
+            chat_id,
+            application_number,
+            application_suffix,
+            application_type,
+            application_year,
+            "Unknown",
+            username,
+            first_name,
+            last_name,
         )
         try:
             await self.conn.execute(query, *params)
@@ -68,9 +83,7 @@ class Database:
 
     async def update_db_status(self, chat_id, current_status):
         logger.info(f"Updating chatID {chat_id} current status in DB")
-        query = (
-            "UPDATE Applications SET current_status = $1, last_updated = CURRENT_TIMESTAMP WHERE chat_id = $2"
-        )
+        query = "UPDATE Applications SET current_status = $1, last_updated = CURRENT_TIMESTAMP WHERE chat_id = $2"
         params = (current_status, chat_id)
         try:
             await self.conn.execute(query, *params)
@@ -148,6 +161,16 @@ class Database:
             await self.conn.execute(query, chat_id)
         except Exception as e:
             logger.error(f"Error while updating timestamp for chat ID: {chat_id}. Error: {e}")
+
+    async def get_subscribed_user_count(self):
+        """Return the count of unique users subscribed"""
+        query = "SELECT COUNT(DISTINCT chat_id) FROM Applications;"
+        try:
+            count = await self.conn.fetchval(query)
+            return count
+        except Exception as e:
+            logger.error(f"Error while fetching subscribed user count. Error: {e}")
+            return None
 
     async def close(self):
         logger.info("Shutting down DB connection")

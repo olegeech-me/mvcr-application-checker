@@ -4,17 +4,21 @@ import asyncio
 import logging
 import signal
 
-from bot.loader import loop, bot, db, rabbit
-from bot.handlers import start_command, button, help_command, unknown, status_command, unsubscribe_command, subscribe_command
+from bot.loader import loop, bot, db, rabbit, LOG_LEVEL
+from bot.handlers import start_command, button, help_command, unknown, status_command
+from bot.handlers import unsubscribe_command, subscribe_command, admin_stats_command
 from bot import monitor
 
 MAX_RETRIES = 15  # maximum number bot of connection retries
 RETRY_DELAY = 5  # delay (in seconds) between retries
 
 # Set up logging
-logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
+log_level_int = eval(f"logging.{LOG_LEVEL}")
+logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=log_level_int)
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(log_level_int)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
 
 # Instantiate application scheduler
 app_monitor = monitor.ApplicationMonitor(db=db, rabbit=rabbit)
@@ -52,6 +56,7 @@ async def main():
     bot.add_handler(CommandHandler("status", status_command, has_args=False))
     bot.add_handler(CommandHandler("subscribe", subscribe_command))
     bot.add_handler(CommandHandler("unsubscribe", unsubscribe_command, has_args=False))
+    bot.add_handler(CommandHandler("admin_stats", admin_stats_command, has_args=False))
     bot.add_handler(CommandHandler("help", help_command, has_args=False))
     unknown_handler = MessageHandler(filters.COMMAND, unknown)
     bot.add_handler(unknown_handler)
