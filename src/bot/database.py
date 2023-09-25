@@ -126,7 +126,7 @@ class Database:
                 return "No data found."
         except Exception as e:
             logger.error(f"Error while fetching status from DB for chat ID: {chat_id}. Error: {e}")
-            return "Error fetching data"
+            return "Current status is empty. Please wait some time and try again."
 
     async def check_subscription_in_db(self, chat_id):
         query = "SELECT EXISTS(SELECT chat_id FROM Applications WHERE chat_id=$1)"

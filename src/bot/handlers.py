@@ -43,6 +43,14 @@ def user_info(update: Update):
     return ", ".join(info_pieces)
 
 
+def get_effective_message(update: Update):
+    """
+    Returns the effective message from the update, regardless of whether it's
+    a new or edited message.
+    """
+    return update.edited_message or update.message
+
+
 # handler for /admin_stats
 async def admin_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Return total number of subscribed users"""
@@ -135,76 +143,62 @@ async def unsubscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("You are not subscribed")
 
 
-# FIXME intermittent bug: sometimes the bot doesn't respond to the /subscribe command
-#  and the following error is logged:
-#
-# 2023-09-09 13:01:27,620 - bot.handlers - INFO - Received /subscribe command with args ['17949', '4', 'TP', '2023']
-# from chat_id: 435453594, username: olegeech, first_name: Oleg, last_name: Basov
-# 2023-09-09 13:01:27,621 - telegram.ext.Application - ERROR - No error handlers are registered, logging exception.
-# Traceback (most recent call last):
-#   File "/usr/local/lib/python3.10/site-packages/telegram/ext/_application.py", line 1184, in process_update
-#     await coroutine
-#   File "/usr/local/lib/python3.10/site-packages/telegram/ext/_basehandler.py", line 141, in handle_update
-#     return await self.callback(update, context)
-#   File "/code/src/bot/handlers.py", line 102, in subscribe_command
-#     if await db.check_subscription_in_db(update.message.chat_id):
-# AttributeError: 'NoneType' object has no attribute 'chat_id'
-
-
 # Handler for /subscribe command
 async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Subscribes user for application status updates"""
     app_data = context.args
     logger.info(f"Received /subscribe command with args {app_data} from {user_info(update)}")
 
-    if await db.check_subscription_in_db(update.message.chat_id):
-        await update.message.reply_text("You are already subscribed")
+    message = get_effective_message(update)
+
+    if await db.check_subscription_in_db(message.chat_id):
+        await message.reply_text("You are already subscribed")
         return
     try:
         if len(app_data) == 4:
             number, suffix, type, year = context.args
             # Input sanitization
             if not number.isdigit():
-                await update.message.reply_text("Invalid application number.")
+                await message.reply_text("Invalid application number.")
                 return
             if not suffix.isdigit():
-                await update.message.reply_text("Invalid suffix. It should be a number.")
+                await message.reply_text("Invalid suffix. It should be a number.")
                 return
             if len(type) != 2:
-                await update.message.reply_text("Invalid type. It should be two letters (e.g. TP, DP, MK and so on)")
+                await message.reply_text("Invalid type. It should be two letters (e.g. TP, DP, MK and so on)")
                 return
             if not year.isdigit() or len(year) != 4:
-                await update.message.reply_text("Invalid year. It should be 4 digits.")
+                await message.reply_text("Invalid year. It should be 4 digits.")
                 return
 
-            message = {
-                "chat_id": update.message.chat_id,
+            request = {
+                "chat_id": message.chat_id,
                 "number": number,
                 "suffix": suffix,
                 "type": type.upper(),
                 "year": year,
                 "last_updated": "0",
             }
-            logger.info(f"Received application details {message}")
+            logger.info(f"Received application details {request}")
             # add data to the db
             if await db.add_to_db(
-                update.message.chat_id,
+                message.chat_id,
                 number,
                 suffix,
                 type.upper(),
                 int(year),
-                update.message.chat.username,
-                update.message.chat.first_name,
-                update.message.chat.last_name,
+                message.chat.username,
+                message.chat.first_name,
+                message.chat.last_name,
             ):
                 # publish request for fetchers
-                await rabbit.publish_message(message)
-                await update.message.reply_text(
+                await rabbit.publish_message(request)
+                await message.reply_text(
                     f"You have been subscribed for application <b>OAM-{number}-{suffix}/{type.upper()}-{year}</b> updates.",
                 )
             else:
-                await update.message.reply_text("Failed to subscribe. Please try again later")
+                await message.reply_text("Failed to subscribe. Please try again later")
         else:
-            await update.message.reply_text(subscribe_helper_text)
+            await message.reply_text(subscribe_helper_text)
     except Exception as e:
-        await update.message.reply_text(f"An error occurred: {e}")
+        await message.reply_text(f"An error occurred: {e}")
