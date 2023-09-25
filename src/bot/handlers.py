@@ -1,8 +1,10 @@
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 import logging
+import time
 from bot.loader import rabbit, db, ADMIN_CHAT_ID
 
+BUTTON_WAIT_SECONDS = 5
 
 subscribe_helper_text = """
 Please run command /subscribe with the following arguments:
@@ -80,6 +82,15 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Handler for button clicks
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    current_time = time.time()
+
+    # ignore impatient users spamming buttons
+    if "last_button_press" in context.user_data and current_time - context.user_data["last_button_press"] < BUTTON_WAIT_SECONDS:
+        await query.answer()
+        logger.debug(f"Impatient user ignored: {user_info(update)}")
+        return
+
+    context.user_data["last_button_press"] = current_time
     await query.answer()
 
     if query.data == "subscribe":
