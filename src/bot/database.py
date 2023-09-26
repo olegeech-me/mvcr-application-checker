@@ -102,6 +102,21 @@ class Database:
             logger.error(f"Error while updating DB for chat ID: {chat_id}. Error: {e}")
             return False
 
+    async def get_user_data_from_db(self, chat_id):
+        """Fetch all user data for a given chat_id."""
+        query = """
+            SELECT * FROM Applications WHERE chat_id = $1;
+        """
+        try:
+            row = await self.conn.fetchrow(query, chat_id)
+            if row is None:
+                logger.info(f"No data found for chat_id {chat_id}")
+                return None
+            return dict(row)  # Convert the record to a dictionary
+        except Exception as e:
+            logger.error(f"Error while fetching user data for chat ID: {chat_id}. Error: {e}")
+            return None
+
     async def get_application_status(self, chat_id):
         query = "SELECT current_status FROM Applications WHERE chat_id = $1;"
         try:

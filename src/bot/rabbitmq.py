@@ -101,25 +101,35 @@ class RabbitMQ:
                     )
                     return
 
-                if current_status == received_status:
+                # check if it's force_refresh response
+                force_refresh = msg_data.get("force_refresh", False)
+
+                if current_status == received_status and not force_refresh:
                     logger.info(f"Status didn't change for user {chat_id} application")
                     await self.db.update_timestamp(chat_id)
                     return
 
                 is_resolved = self.is_resolved(received_status)
 
-                logger.info(f"Status of application has changed, notifying user {chat_id}")
+                if force_refresh:
+                    logger.info(f"Received force refresh response, notifying user {chat_id}")
+                else:
+                    logger.info(f"Status of application has changed, notifying user {chat_id}")
 
-                # If status differs, update application status in the DB
+                # update application status in the DB
                 if await self.db.update_db_status(chat_id, received_status, is_resolved):
-                    # Construct the notification text
+                    # construct the notification text
                     if is_resolved:
                         notification_text = f"Your application has been resolved: {received_status}"
                         logger.info(f"Application for user {chat_id} has been resolved to {received_status}")
-                    else:
+
+                    # handle force refresh cases
+                    if not is_resolved and force_refresh:
+                        notification_text = f"Current application status is: {received_status}"
+                    elif not is_resolved and not force_refresh:
                         notification_text = f"Your application status has been updated: {received_status}"
 
-                    # Notify the user
+                    # notify the user
                     try:
                         await self.bot.updater.bot.send_message(chat_id=chat_id, text=notification_text)
                         logger.info(f"Sent status update to chatID {chat_id}")

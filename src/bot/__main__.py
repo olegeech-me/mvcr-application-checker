@@ -6,7 +6,7 @@ import signal
 
 from bot.loader import loop, bot, db, rabbit, LOG_LEVEL
 from bot.handlers import start_command, button, help_command, unknown, status_command
-from bot.handlers import unsubscribe_command, subscribe_command, admin_stats_command
+from bot.handlers import unsubscribe_command, subscribe_command, admin_stats_command, force_refresh_command
 from bot import monitor
 
 MAX_RETRIES = 15  # maximum number bot of connection retries
@@ -56,6 +56,7 @@ async def main():
     bot.add_handler(CommandHandler("status", status_command, has_args=False))
     bot.add_handler(CommandHandler("subscribe", subscribe_command))
     bot.add_handler(CommandHandler("unsubscribe", unsubscribe_command, has_args=False))
+    bot.add_handler(CommandHandler("force_refresh", force_refresh_command, has_args=False))
     bot.add_handler(CommandHandler("admin_stats", admin_stats_command, has_args=False))
     bot.add_handler(CommandHandler("help", help_command, has_args=False))
     unknown_handler = MessageHandler(filters.COMMAND, unknown)
