@@ -36,6 +36,10 @@ mvcr-application-checker
 │   │   ├── loader.py             # Loader utilities
 │   │   ├── monitor.py            # Application monitor code
 │   │   └── rabbitmq.py           # RabbitMQ utilities and operations for the bot
+│   │   └── texts                 # Texts for the bot's messages and buttons
+│   │       ├── __init__.py
+│   │       ├── buttons.json
+│   │       └── messages.json
 │   └── fetcher                   # Fetcher module
 │       ├── application_processor.py # Application processing logic
 │       ├── browser.py                # Selenium browser operations
