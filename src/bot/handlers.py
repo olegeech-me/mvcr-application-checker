@@ -138,6 +138,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Handler for the /help command
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Displays info on how to use the bot."""
+    logger.info(f"Received /help command from {user_info(update)}")
     await update.message.reply_text(message_texts["start_text"].format(refresh_period=int(REFRESH_PERIOD / 60)))
 
 
