@@ -95,11 +95,6 @@ async def admin_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("Error retrieving statistics.")
 
 
-# handler for /info command
-#
-# output information on how the bot works
-# including time period settins and stuff
-
 # handler for /admin_restart_fetcher
 
 # hander for /admin_restart_bot
@@ -143,7 +138,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Handler for the /help command
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Displays info on how to use the bot."""
-    await update.message.reply_text("Press bot menu for this list of available commands.")
+    await update.message.reply_text(message_texts["start_text"].format(refresh_period=int(REFRESH_PERIOD / 60)))
 
 
 # Handler for unknown commands
