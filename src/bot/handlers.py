@@ -182,8 +182,6 @@ async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if await db.check_subscription_in_db(message.chat_id):
         await message.reply_text("You are already subscribed")
         return
-    if not await enforce_rate_limit(update, context, "subscribe"):
-        return
     try:
         if len(app_data) == 4:
             number, suffix, type, year = context.args
@@ -199,6 +197,9 @@ async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
             if not year.isdigit() or len(year) != 4:
                 await message.reply_text("Invalid year. It should be 4 digits.")
+                return
+
+            if not await enforce_rate_limit(update, context, "subscribe"):
                 return
 
             request = {
