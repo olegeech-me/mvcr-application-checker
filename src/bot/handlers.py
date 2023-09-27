@@ -262,6 +262,7 @@ async def force_refresh_command(update: Update, context: ContextTypes.DEFAULT_TY
 
             await rabbit.publish_message(request)
             await message.reply_text("Refresh request sent.")
+            await message.reply_text(message_texts["cizi_problem_promo"])
         else:
             await message.reply_text("Failed to retrieve user data. Please try again later.")
     except Exception as e:
