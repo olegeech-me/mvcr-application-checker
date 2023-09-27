@@ -10,10 +10,8 @@ OUTPUT_DIR = os.getenv("OUTPUT_DIR", "output")
 PAGE_LOAD_LIMIT_SECONDS = 20
 # How much time wait when captcha is hit
 CAPTCHA_WAIT_SECONDS = 120
-# The max number of messages a fetcher instance can process before waiting or stopping
-MAX_MESSAGES = 10
-# Time (in seconds) the fetcher should wait after hitting the limit
-WAIT_TIME = 60  # 1 minute
+# The max number of messages a fetcher instance should be consuming at once
+MAX_MESSAGES = int(os.getenv("MAX_MESSAGES", 10))
 # Max time to disperse to refresh requests
 JITTER_SECONDS = int(os.getenv("JITTER_SECONDS", 900))
 # RabbitMQ settings

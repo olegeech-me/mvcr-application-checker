@@ -3,6 +3,7 @@ import asyncio
 import json
 import logging
 import ssl
+from fetcher.config import MAX_MESSAGES
 from aiormq.exceptions import AMQPConnectionError
 
 MAX_RETRIES = 25  # maximum number of connection retries
@@ -44,6 +45,7 @@ class Messaging:
                 logger.info(f"Connecting to {self.host} ...")
                 self.connection = await aio_pika.connect_robust(conn_url, ssl_context=ssl_context)
                 self.channel = await self.connection.channel()
+                await self.channel.set_qos(prefetch_count=MAX_MESSAGES)
                 logger.info(f"Connected to the RabbitMQ server at {self.host}")
                 break  # Exit the loop if connection is successful
             except AMQPConnectionError as e:
@@ -63,8 +65,7 @@ class Messaging:
     async def publish_message(self, queue_name, message_body):
         """Publish a message to the specified queue"""
         await self.channel.default_exchange.publish(
-            aio_pika.Message(body=json.dumps(message_body).encode()),
-            routing_key=queue_name
+            aio_pika.Message(body=json.dumps(message_body).encode()), routing_key=queue_name
         )
         logger.info(f"Successfully published message to {queue_name}")
 
