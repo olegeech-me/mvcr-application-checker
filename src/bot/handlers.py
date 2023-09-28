@@ -69,6 +69,7 @@ async def enforce_rate_limit(update: Update, context: ContextTypes.DEFAULT_TYPE,
     Returns True if the user is allowed to proceed, False otherwise
     """
     chat_id = update.effective_chat.id
+    message = update.message or update.callback_query.message
 
     # Check rate limit
     if not check_and_update_limit(context.user_data, command_name):
@@ -76,7 +77,10 @@ async def enforce_rate_limit(update: Update, context: ContextTypes.DEFAULT_TYPE,
             logger.info(f"Lifting ratelimit for admin, command {command_name}")
             return True
         logger.info(f"Ratelimiting user {chat_id}, command {command_name}")
-        await update.message.reply_text("Sorry, you can only use this command only 2 times a day.")
+        if command_name == "subscribe":
+            await message.edit_reply_markup(reply_markup=None)
+
+        await message.reply_text("Sorry, you can only use this command only 2 times a day.")
         return False
 
     return True
@@ -112,14 +116,11 @@ async def create_subscription(update, app_data):
         ):
             request = create_request(chat.id, app_data)
             await rabbit.publish_message(request)
-            await message.edit_reply_markup(reply_markup=None)
             await message.reply_text(message_texts["dialog_completion"])
         else:
-            await message.edit_reply_markup(reply_markup=None)
             await message.reply_text(message_texts["error_subscribe"])
     except Exception as e:
         logger.error(f"Error creating subscription: {e}")
-        await message.edit_reply_markup(reply_markup=None)
         await message.reply_text(message_texts["error_generic"])
 
 
@@ -165,13 +166,14 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "year": context.user_data["application_year"],
         }
 
+        await query.message.edit_reply_markup(reply_markup=None)
         await create_subscription(update, app_data)
         clean_sub_context(context)
 
     if query.data == "cancel_subscribe":
-        clean_sub_context(context)
         await query.message.edit_reply_markup(reply_markup=None)
         await query.message.reply_text(message_texts["dialog_cancel"])
+        clean_sub_context(context)
 
 
 # Handler for the /start command
@@ -189,8 +191,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Handler for /subscribe command
 async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Subscribes user for application status updates"""
-    app_data = context.args
-    logger.info(f"Received /subscribe command with args {app_data} from {user_info(update)}")
+    logger.info(f"Received /subscribe command from {user_info(update)}")
 
     message = get_effective_message(update)
 
@@ -227,7 +228,7 @@ async def handle_subscription_dialog(update: Update, context: ContextTypes.DEFAU
 
     elif state == "awaiting_type":
         type_ = message.text.strip().upper()
-        if len(type_) != 2:
+        if len(type_) != 2 or not type_.isalpha():
             await message.reply_text(message_texts["error_invalid_type"])
             return
         context.user_data["application_type"] = type_
@@ -256,6 +257,18 @@ async def handle_subscription_dialog(update: Update, context: ContextTypes.DEFAU
             ),
             reply_markup=reply_markup,
         )
+
+
+# Handler for /unsubscribe command
+async def unsubscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Unsubscribes user from application status updates"""
+    logger.info(f"Received /unsubscribe command from {user_info(update)}")
+
+    if await db.check_subscription_in_db(update.message.chat_id):
+        await db.remove_from_db(update.message.chat_id)
+        await update.message.reply_text("You have unsubscribed")
+    else:
+        await update.message.reply_text("You are not subscribed")
 
 
 # Handler for /force_refresh command
@@ -305,18 +318,6 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("You are not subscribed")
 
 
-# Handler for /unsubscribe command
-async def unsubscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Unsubscribes user from application status updates"""
-    logger.info(f"Received /unsubscribe command from {user_info(update)}")
-
-    if await db.check_subscription_in_db(update.message.chat_id):
-        await db.remove_from_db(update.message.chat_id)
-        await update.message.reply_text("You have unsubscribed")
-    else:
-        await update.message.reply_text("You are not subscribed")
-
-
 # Handler for the /help command
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Displays info on how to use the bot."""
@@ -344,8 +345,8 @@ async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=update.effective_chat.id, text="Sorry, I didn't understand that command.")
 
 
+# TODO make suffix optional
+# TODO clean up sub context on new commands?
 # TODO handler for /admin_restart_fetcher
-
 # TODO hander for /admin_restart_bot
-
 # TODO handler for /admin_oldest_refresh
