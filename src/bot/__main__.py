@@ -81,8 +81,10 @@ async def main():
             YEAR: [CallbackQueryHandler(application_dialog_year, pattern="application_dialog_year_*")],
             VALIDATE: [CallbackQueryHandler(application_dialog_validate, pattern="proceed_subscribe|cancel_subscribe")],
         },
-        fallbacks=[CommandHandler("subscribe", subscribe_command, has_args=False),
-                   CommandHandler("start", start_command, has_args=False)],
+        fallbacks=[
+            CommandHandler("subscribe", subscribe_command, has_args=False),
+            CommandHandler("start", start_command, has_args=False),
+        ],
     )
     bot.add_handler(conv_handler)
     bot.add_handler(MessageHandler(filters.COMMAND, unknown))
