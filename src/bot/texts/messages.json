@@ -11,7 +11,7 @@
   "dialog_cancel": "No worries! You can always start over by using the /subscribe command.",
   "error_invalid_number": "Oops! 🙈 That doesn't seem like a valid application number. Let's try again. Remember, it's the <i>4 to 5 digits</i> after \"OAM\".",
   "error_invalid_suffix": "Hmm, that suffix seems off. 🤔 It should be <i>1 or 2 digits</i>. Give it another shot!",
-  "error_invalid_type": "That doesn't look right. The application type is just <i>2 letters</i>, like TP or DP. Can we try that again? 😊",
+  "error_invalid_type": "That doesn't look right. The application type is just <i>2 letters</i>, like TP or DP or whatever you have there 😂. Let's try that again!",
   "error_invalid_year": "Oops! 🙈 That doesn't seem right. Let's try again. Please enter a valid year between 2000 and the current year.",
   "error_subscribe": "😔 Sorry, something went wrong while trying to subscribe you. Please give it another shot in a bit. If the issue persists, feel free to contact developers.",
   "error_generic": "😓 Oops! Something didn't go quite right. Please try again later. If the issue keeps popping up, feel free to contact developers.",
