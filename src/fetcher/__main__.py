@@ -59,9 +59,9 @@ async def main():
     # Keep the loop running until a shutdown signal is received
     while not shutdown_event.is_set():
         try:
-            await asyncio.wait_for(shutdown_event.wait(), timeout=60)
             if processor.waiting_refresh_requests:
-                logger.info(f"Stats: {processor.waiting_refresh_requests} refresh requests are waiting for execution")
+                logger.info(f"{processor.waiting_refresh_requests} refresh request(s) waiting for execution")
+            await asyncio.wait_for(shutdown_event.wait(), timeout=60)
         except asyncio.TimeoutError:
             pass
 
