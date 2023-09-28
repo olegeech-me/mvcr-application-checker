@@ -2,10 +2,11 @@ from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 import logging
 import time
+import datetime
 from bot.loader import rabbit, db, ADMIN_CHAT_ID, REFRESH_PERIOD
 from bot.texts import button_texts, message_texts
 
-BUTTON_WAIT_SECONDS = 5
+BUTTON_WAIT_SECONDS = 3
 FORCE_FETCH_LIMIT_SECONDS = 86400
 ALLOWED_TYPES = ["CD", "DO", "DP", "DV", "MK", "PP", "ST", "TP", "VP", "ZK", "ZM"]
 
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 def _is_admin(chat_id: int) -> bool:
-    """Check if the user's chat_id is an admin's chat_id."""
+    """Check if the user's chat_id is an admin's chat_id"""
     logger.debug(f"Effective chat_id: '{chat_id}', Allowed admin id: '{ADMIN_CHAT_ID}'")
     return int(chat_id) == int(ADMIN_CHAT_ID)
 
@@ -38,7 +39,7 @@ def user_info(update: Update):
 def get_effective_message(update: Update):
     """
     Returns the effective message from the update, regardless of whether it's
-    a new or edited message.
+    a new or edited message
     """
     return update.edited_message or update.message
 
@@ -64,55 +65,70 @@ def check_and_update_limit(user_data, command_name):
 
 async def enforce_rate_limit(update: Update, context: ContextTypes.DEFAULT_TYPE, command_name: str):
     """
-    Enforce rate limits for a given command.
-    Returns True if the user is allowed to proceed, False otherwise.
+    Enforce rate limits for a given command
+    Returns True if the user is allowed to proceed, False otherwise
     """
     chat_id = update.effective_chat.id
-    # No rate limiting for admin
-    if _is_admin(chat_id):
-        return True
 
     # Check rate limit
     if not check_and_update_limit(context.user_data, command_name):
+        if _is_admin(chat_id):
+            logger.info(f"Lifting ratelimit for admin, command {command_name}")
+            return True
         logger.info(f"Ratelimiting user {chat_id}, command {command_name}")
-        await update.message.reply_text("You can only use this command 2 times a day.")
+        await update.message.reply_text("Sorry, you can only use this command only 2 times a day.")
         return False
 
     return True
 
 
-# handler for /admin_stats
-async def admin_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Return total number of subscribed users"""
-    logging.info(f"Received /admin_stats command from {user_info(update)}")
-    if not _is_admin(update.effective_chat.id):
-        await update.message.reply_text("Unauthorized. This command is only for admins.")
-        return
-
-    user_count = await db.get_subscribed_user_count()
-    if user_count is not None:
-        await update.message.reply_text(f"Total users subscribed: {user_count}")
-    else:
-        await update.message.reply_text("Error retrieving statistics.")
+def create_request(chat_id, app_data, force_refresh=False):
+    """Creates a request dictionary for RabbitMQ"""
+    return {
+        "chat_id": chat_id,
+        "number": app_data["number"],
+        "suffix": app_data["suffix"],
+        "type": app_data["type"].upper(),
+        "year": app_data["year"],
+        "force_refresh": force_refresh,
+        "last_updated": "0",
+    }
 
 
-# handler for /admin_restart_fetcher
+async def create_subscription(update, app_data):
+    """Handles the user's subscription request"""
+    chat = update.effective_chat
+    message = update.callback_query.message
+    try:
+        if await db.add_to_db(
+            chat.id,
+            app_data["number"],
+            app_data["suffix"],
+            app_data["type"],
+            int(app_data["year"]),
+            chat.username,
+            chat.first_name,
+            chat.last_name,
+        ):
+            request = create_request(chat.id, app_data)
+            await rabbit.publish_message(request)
+            await message.edit_reply_markup(reply_markup=None)
+            await message.reply_text(message_texts["dialog_completion"])
+        else:
+            await message.edit_reply_markup(reply_markup=None)
+            await message.reply_text(message_texts["error_subscribe"])
+    except Exception as e:
+        logger.error(f"Error creating subscription: {e}")
+        await message.edit_reply_markup(reply_markup=None)
+        await message.reply_text(message_texts["error_generic"])
 
-# hander for /admin_restart_bot
 
-# handler for /admin_oldest_refresh
+def clean_sub_context(context):
+    """Wipes temporary subscription data from user_data context"""
+    keys_to_delete = ["subscription_state", "application_number", "application_suffix", "application_type", "application_year"]
 
-
-# Handler for the /start command
-async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Sends a message with inline buttons attached"""
-    logging.info(f"Received /start command from {user_info(update)}")
-    await update.message.reply_text(message_texts["start_text"].format(refresh_period=int(REFRESH_PERIOD / 60)))
-    keyboard = [
-        [InlineKeyboardButton(button_texts["subscribe_button"], callback_data="subscribe")],
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(message_texts["subscribe_intro"], reply_markup=reply_markup)
+    for key in keys_to_delete:
+        context.user_data.pop(key, None)
 
 
 # Handler for button clicks
@@ -123,7 +139,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ignore impatient users spamming buttons
     if "last_button_press" in context.user_data and current_time - context.user_data["last_button_press"] < BUTTON_WAIT_SECONDS:
         await query.answer()
-        logger.debug(f"Impatient user ignored: {user_info(update)}")
+        logger.info(f"Impatient user ignored: {user_info(update)}")
         return
 
     context.user_data["last_button_press"] = current_time
@@ -133,19 +149,148 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if await db.check_subscription_in_db(query.message.chat_id):
             await query.edit_message_text("You are already subscribed.")
         else:
-            await query.edit_message_text(message_texts["subscribe_helper"])
+            await query.edit_message_text(message_texts["dialog_app_number"])
+            context.user_data["subscription_state"] = "awaiting_number"
+
+    if query.data == "proceed_subscribe":
+        # check if we are not over daily limit
+        if not await enforce_rate_limit(update, context, "subscribe"):
+            clean_sub_context(context)
+            return
+
+        app_data = {
+            "number": context.user_data["application_number"],
+            "suffix": context.user_data["application_suffix"],
+            "type": context.user_data["application_type"],
+            "year": context.user_data["application_year"],
+        }
+
+        await create_subscription(update, app_data)
+        clean_sub_context(context)
+
+    if query.data == "cancel_subscribe":
+        clean_sub_context(context)
+        await query.message.edit_reply_markup(reply_markup=None)
+        await query.message.reply_text(message_texts["dialog_cancel"])
 
 
-# Handler for the /help command
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Displays info on how to use the bot."""
-    logger.info(f"Received /help command from {user_info(update)}")
+# Handler for the /start command
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Shows initial message and asks to subscribe"""
+    logging.info(f"Received /start command from {user_info(update)}")
     await update.message.reply_text(message_texts["start_text"].format(refresh_period=int(REFRESH_PERIOD / 60)))
+    keyboard = [
+        [InlineKeyboardButton(button_texts["subscribe_button"], callback_data="subscribe")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text(message_texts["subscribe_intro"], reply_markup=reply_markup)
 
 
-# Handler for unknown commands
-async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await context.bot.send_message(chat_id=update.effective_chat.id, text="Sorry, I didn't understand that command.")
+# Handler for /subscribe command
+async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Subscribes user for application status updates"""
+    app_data = context.args
+    logger.info(f"Received /subscribe command with args {app_data} from {user_info(update)}")
+
+    message = get_effective_message(update)
+
+    if await db.check_subscription_in_db(message.chat_id):
+        await message.reply_text("You are already subscribed")
+        return
+    else:
+        await update.message.reply_text(message_texts["dialog_app_number"])
+        context.user_data["subscription_state"] = "awaiting_number"
+
+
+# Handler for subscription dialog
+async def handle_subscription_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message = get_effective_message(update)
+    state = context.user_data.get("subscription_state")
+
+    if state == "awaiting_number":
+        number = message.text.strip()
+        if not number.isdigit() or not (4 <= len(number) <= 5):
+            await message.reply_text(message_texts["error_invalid_number"])
+            return
+        context.user_data["application_number"] = number
+        context.user_data["subscription_state"] = "awaiting_suffix"
+        await message.reply_text(message_texts["dialog_suffix"])
+
+    elif state == "awaiting_suffix":
+        suffix = message.text.strip()
+        if not suffix.isdigit() or not (1 <= len(suffix) <= 2):
+            await message.reply_text(message_texts["error_invalid_suffix"])
+            return
+        context.user_data["application_suffix"] = suffix
+        context.user_data["subscription_state"] = "awaiting_type"
+        await message.reply_text(message_texts["dialog_type"])
+
+    elif state == "awaiting_type":
+        type_ = message.text.strip().upper()
+        if len(type_) != 2:
+            await message.reply_text(message_texts["error_invalid_type"])
+            return
+        context.user_data["application_type"] = type_
+        context.user_data["subscription_state"] = "awaiting_year"
+        await message.reply_text(message_texts["dialog_year"])
+
+    elif state == "awaiting_year":
+        year = message.text.strip()
+        current_year = datetime.datetime.now().year
+        if not year.isdigit() or not (2000 <= int(year) <= current_year):  # Assuming 2000 is the earliest valid year.
+            await message.reply_text(message_texts["error_invalid_year"])
+            return
+        context.user_data["application_year"] = year
+
+        keyboard = [
+            [InlineKeyboardButton(button_texts["subscribe_correct"], callback_data="proceed_subscribe")],
+            [InlineKeyboardButton(button_texts["subscribe_incorrect"], callback_data="cancel_subscribe")],
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text(
+            message_texts["dialog_confirmation"].format(
+                number=context.user_data["application_number"],
+                suffix=context.user_data["application_suffix"],
+                type=context.user_data["application_type"],
+                year=year,
+            ),
+            reply_markup=reply_markup,
+        )
+
+
+# Handler for /force_refresh command
+async def force_refresh_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Force refresh application status."""
+    logger.info(f"Received /force_refresh command from {user_info(update)}")
+    message = get_effective_message(update)
+
+    if not await db.check_subscription_in_db(message.chat_id):
+        await message.reply_text("You are not subscribed.")
+        return
+    if not await enforce_rate_limit(update, context, "force_refresh"):
+        return
+    try:
+        user_data = await db.get_user_data_from_db(message.chat_id)
+
+        if user_data:
+            app_data = {
+                "number": user_data["application_number"],
+                "suffix": user_data["application_suffix"],
+                "type": user_data["application_type"].upper(),
+                "year": user_data["application_year"],
+            }
+            request = create_request(message.chat_id, app_data, True)
+
+            logger.info(f"Publishing force refresh for {request}")
+
+            await rabbit.publish_message(request)
+            await message.reply_text("Refresh request sent.")
+            await message.reply_text(message_texts["cizi_problem_promo"])
+        else:
+            await message.reply_text("Failed to retrieve user data. Please try again later.")
+    except Exception as e:
+        logger.error(f"Error creating force refresh request: {e}")
+        await message.reply_text(message_texts["error_generic"])
 
 
 # Handler for /status command
@@ -172,100 +317,35 @@ async def unsubscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("You are not subscribed")
 
 
-# Handler for /subscribe command
-async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Subscribes user for application status updates"""
-    app_data = context.args
-    logger.info(f"Received /subscribe command with args {app_data} from {user_info(update)}")
+# Handler for the /help command
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Displays info on how to use the bot."""
+    logger.info(f"Received /help command from {user_info(update)}")
+    await update.message.reply_text(message_texts["start_text"].format(refresh_period=int(REFRESH_PERIOD / 60)))
 
-    message = get_effective_message(update)
 
-    if await db.check_subscription_in_db(message.chat_id):
-        await message.reply_text("You are already subscribed")
+# handler for /admin_stats
+async def admin_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Return total number of subscribed users"""
+    logging.info(f"Received /admin_stats command from {user_info(update)}")
+    if not _is_admin(update.effective_chat.id):
+        await update.message.reply_text("Unauthorized. This command is only for admins.")
         return
-    try:
-        if len(app_data) == 4:
-            number, suffix, type, year = context.args
-            # Input sanitization
-            if not number.isdigit():
-                await message.reply_text("Invalid application number.")
-                return
-            if not suffix.isdigit():
-                await message.reply_text("Invalid suffix. It should be a number.")
-                return
-            if len(type) != 2 or (type.upper() not in ALLOWED_TYPES):
-                await message.reply_text(f"Invalid type. It should be two letters: {','.join(ALLOWED_TYPES)}")
-                return
-            if not year.isdigit() or len(year) != 4:
-                await message.reply_text("Invalid year. It should be 4 digits.")
-                return
 
-            if not await enforce_rate_limit(update, context, "subscribe"):
-                return
-
-            request = {
-                "chat_id": message.chat_id,
-                "number": number,
-                "suffix": suffix,
-                "type": type.upper(),
-                "year": year,
-                "last_updated": "0",
-            }
-            logger.info(f"Received application details {request}")
-            # add data to the db
-            if await db.add_to_db(
-                message.chat_id,
-                number,
-                suffix,
-                type.upper(),
-                int(year),
-                message.chat.username,
-                message.chat.first_name,
-                message.chat.last_name,
-            ):
-                # publish request for fetchers
-                await rabbit.publish_message(request)
-                await message.reply_text(
-                    f"You have been subscribed for application <b>OAM-{number}-{suffix}/{type.upper()}-{year}</b> updates.",
-                )
-            else:
-                await message.reply_text("Failed to subscribe. Please try again later")
-        else:
-            await message.reply_text(message_texts["subscribe_helper"])
-    except Exception as e:
-        await message.reply_text(f"An error occurred: {e}")
+    user_count = await db.get_subscribed_user_count()
+    if user_count is not None:
+        await update.message.reply_text(f"Total users subscribed: {user_count}")
+    else:
+        await update.message.reply_text("Error retrieving statistics.")
 
 
-# Handler for /force_refresh command
-async def force_refresh_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Force refresh application status."""
-    logger.info(f"Received /force_refresh command from {user_info(update)}")
-    message = get_effective_message(update)
+# Handler for unknown commands
+async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await context.bot.send_message(chat_id=update.effective_chat.id, text="Sorry, I didn't understand that command.")
 
-    if not await db.check_subscription_in_db(message.chat_id):
-        await message.reply_text("You are not subscribed.")
-        return
-    if not await enforce_rate_limit(update, context, "force_refresh"):
-        return
-    try:
-        user_data = await db.get_user_data_from_db(message.chat_id)
 
-        if user_data:
-            request = {
-                "chat_id": message.chat_id,
-                "number": user_data["application_number"],
-                "suffix": user_data["application_suffix"],
-                "type": user_data["application_type"].upper(),
-                "year": user_data["application_year"],
-                "force_refresh": True,
-                "last_updated": "0",
-            }
-            logger.info(f"Publishing force refresh for {request}")
+# TODO handler for /admin_restart_fetcher
 
-            await rabbit.publish_message(request)
-            await message.reply_text("Refresh request sent.")
-            await message.reply_text(message_texts["cizi_problem_promo"])
-        else:
-            await message.reply_text("Failed to retrieve user data. Please try again later.")
-    except Exception as e:
-        await message.reply_text(f"An error occurred: {e}")
+# TODO hander for /admin_restart_bot
+
+# TODO handler for /admin_oldest_refresh
