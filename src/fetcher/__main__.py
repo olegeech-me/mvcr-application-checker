@@ -61,7 +61,7 @@ async def main():
         try:
             if processor.waiting_refresh_requests:
                 logger.info(f"{processor.waiting_refresh_requests} refresh request(s) waiting for execution")
-            await asyncio.wait_for(shutdown_event.wait(), timeout=60)
+            await asyncio.wait_for(shutdown_event.wait(), timeout=300)
         except asyncio.TimeoutError:
             pass
 
