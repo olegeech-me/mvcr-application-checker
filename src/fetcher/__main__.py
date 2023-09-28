@@ -53,15 +53,16 @@ async def main():
     # Start processing requests in the background
     asyncio.gather(
         messaging_instance.consume_messages("ApplicationFetchQueue", processor.fetch_callback),
-        messaging_instance.consume_messages("RefreshStatusQueue", processor.refresh_callback)
+        messaging_instance.consume_messages("RefreshStatusQueue", processor.refresh_callback),
     )
 
     # Keep the loop running until a shutdown signal is received
     while not shutdown_event.is_set():
         try:
             await asyncio.wait_for(shutdown_event.wait(), timeout=60)
+            if processor.waiting_refresh_requests:
+                logger.info(f"Stats: {processor.waiting_refresh_requests} refresh requests are waiting for execution")
         except asyncio.TimeoutError:
-            # Here, you can optionally log something or perform other periodic tasks
             pass
 
     await processor.shutdown()

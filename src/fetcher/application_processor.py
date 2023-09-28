@@ -14,6 +14,7 @@ class ApplicationProcessor:
         self.browser = browser
         self.url = url
         self.current_message = None
+        self.waiting_refresh_requests = 0
 
     async def fetch_callback(self, message):
         self.current_message = message
@@ -51,7 +52,10 @@ class ApplicationProcessor:
         # Sleep between 60 to JITTER_SECONDS to avoid getting blocked
         sleep_time = random.randint(60, JITTER_SECONDS)
         logger.info(f"Sleeping for {sleep_time} seconds before processing {app_details['number']} refresh request")
+
+        self.waiting_refresh_requests += 1
         await asyncio.sleep(sleep_time)
+        self.waiting_refresh_requests -= 1
 
         app_status = await self.browser.fetch(self.url, app_details)
         if app_status:
