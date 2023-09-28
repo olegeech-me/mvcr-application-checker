@@ -1,3 +1,5 @@
 {
-  "subscribe_button": "📩 Subscribe"
+  "subscribe_button": "📩 Subscribe",
+  "subscribe_correct": "✅ Yes, the data is correct",
+  "subscribe_incorrect": "❌ No, the data is incorrect"
 }
