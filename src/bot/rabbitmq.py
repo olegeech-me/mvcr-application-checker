@@ -120,14 +120,14 @@ class RabbitMQ:
                 if await self.db.update_db_status(chat_id, received_status, is_resolved):
                     # construct the notification text
                     if is_resolved:
-                        notification_text = f"Your application has been resolved!\n{received_status}"
+                        notification_text = f"Your application has been resolved!\n\n{received_status}"
                         logger.info(f"Application for user {chat_id} has been resolved to {received_status}")
 
                     # handle force refresh cases
                     if not is_resolved and force_refresh:
                         notification_text = f"Current application status is: {received_status}"
                     elif not is_resolved and not force_refresh:
-                        notification_text = f"Your application status has been updated!\n{received_status}"
+                        notification_text = f"Your application status has been updated!\n\n{received_status}"
 
                     # notify the user
                     try:
