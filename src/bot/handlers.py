@@ -80,7 +80,7 @@ async def enforce_rate_limit(update: Update, context: ContextTypes.DEFAULT_TYPE,
         if command_name == "subscribe":
             await message.edit_reply_markup(reply_markup=None)
 
-        await message.reply_text("Sorry, you can only use this command only 2 times a day.")
+        await message.reply_text("Sorry, you can only use this command 2 times a day.")
         return False
 
     return True
@@ -166,6 +166,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "year": context.user_data["application_year"],
         }
 
+        logger.info(f"Received application details: {app_data} from {user_info(update)}")
         await query.message.edit_reply_markup(reply_markup=None)
         await create_subscription(update, app_data)
         clean_sub_context(context)
@@ -209,6 +210,7 @@ async def handle_subscription_dialog(update: Update, context: ContextTypes.DEFAU
     state = context.user_data.get("subscription_state")
 
     if state == "awaiting_number":
+        logger.info(f"User sends number: {user_info(update)}")
         number = message.text.strip()
         if not number.isdigit() or not (4 <= len(number) <= 5):
             await message.reply_text(message_texts["error_invalid_number"])
@@ -218,6 +220,7 @@ async def handle_subscription_dialog(update: Update, context: ContextTypes.DEFAU
         await message.reply_text(message_texts["dialog_suffix"])
 
     elif state == "awaiting_suffix":
+        logger.info(f"User sends suffix: {user_info(update)}")
         suffix = message.text.strip()
         if not suffix.isdigit() or not (1 <= len(suffix) <= 2):
             await message.reply_text(message_texts["error_invalid_suffix"])
@@ -227,6 +230,7 @@ async def handle_subscription_dialog(update: Update, context: ContextTypes.DEFAU
         await message.reply_text(message_texts["dialog_type"])
 
     elif state == "awaiting_type":
+        logger.info(f"User sends type: {user_info(update)}")
         type_ = message.text.strip().upper()
         if len(type_) != 2 or (type_ not in ALLOWED_TYPES):
             await message.reply_text(message_texts["error_invalid_type"].format(allowed_types=", ".join(ALLOWED_TYPES)))
@@ -236,6 +240,7 @@ async def handle_subscription_dialog(update: Update, context: ContextTypes.DEFAU
         await message.reply_text(message_texts["dialog_year"])
 
     elif state == "awaiting_year":
+        logger.info(f"User sends year: {user_info(update)}")
         year = message.text.strip()
         current_year = datetime.datetime.now().year
         if not year.isdigit() or not (2000 <= int(year) <= current_year):  # Assuming 2000 is the earliest valid year.
@@ -248,8 +253,14 @@ async def handle_subscription_dialog(update: Update, context: ContextTypes.DEFAU
             [InlineKeyboardButton(button_texts["subscribe_incorrect"], callback_data="cancel_subscribe")],
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
+        # Choose the appropriate message based on the suffix value
+        confirmation_msg = (
+            message_texts["dialog_confirmation_no_suffix"]
+            if context.user_data["application_suffix"] == "0"
+            else message_texts["dialog_confirmation"]
+        )
         await update.message.reply_text(
-            message_texts["dialog_confirmation"].format(
+            confirmation_msg.format(
                 number=context.user_data["application_number"],
                 suffix=context.user_data["application_suffix"],
                 type=context.user_data["application_type"],
