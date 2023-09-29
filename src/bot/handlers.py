@@ -229,7 +229,7 @@ async def handle_subscription_dialog(update: Update, context: ContextTypes.DEFAU
     elif state == "awaiting_type":
         type_ = message.text.strip().upper()
         if len(type_) != 2 or (type_ not in ALLOWED_TYPES):
-            await message.reply_text(message_texts["error_invalid_type"])
+            await message.reply_text(message_texts["error_invalid_type"].format(allowed_types=", ".join(ALLOWED_TYPES)))
             return
         context.user_data["application_type"] = type_
         context.user_data["subscription_state"] = "awaiting_year"
