@@ -7,6 +7,7 @@ from bot.texts import button_texts, message_texts
 
 BUTTON_WAIT_SECONDS = 5
 FORCE_FETCH_LIMIT_SECONDS = 86400
+ALLOWED_TYPES = ["CD", "DO", "DP", "DV", "MK", "PP", "ST", "TP", "VP", "ZK", "ZM"]
 
 logger = logging.getLogger(__name__)
 
@@ -192,8 +193,8 @@ async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not suffix.isdigit():
                 await message.reply_text("Invalid suffix. It should be a number.")
                 return
-            if len(type) != 2:
-                await message.reply_text("Invalid type. It should be two letters (e.g. TP, DP, MK and so on)")
+            if len(type) != 2 or (type.upper() not in ALLOWED_TYPES):
+                await message.reply_text(f"Invalid type. It should be two letters: {','.join(ALLOWED_TYPES)}")
                 return
             if not year.isdigit() or len(year) != 4:
                 await message.reply_text("Invalid year. It should be 4 digits.")
