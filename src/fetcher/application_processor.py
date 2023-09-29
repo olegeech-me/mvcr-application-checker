@@ -3,7 +3,7 @@ import logging
 import sys
 import asyncio
 import random
-from fetcher.config import JITTER_SECONDS
+from fetcher.config import JITTER_SECONDS, MAX_RETRIES
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +17,8 @@ class ApplicationProcessor:
         self.waiting_refresh_requests = 0
 
     async def fetch_callback(self, message):
+        """Callback function triggered when a fetch request message is received"""
+
         self.current_message = message
         try:
             await self.process_fetch_request(message)
@@ -24,13 +26,44 @@ class ApplicationProcessor:
             self.current_message = None
 
     async def refresh_callback(self, message):
+        """Callback function triggered when a refresh request message is received"""
         self.current_message = message
         try:
             await self.process_refresh_request(message)
         finally:
             self.current_message = None
 
+    async def _manage_failed_request(self, message, queue_name):
+        """Handles failed request messages, implementing a retry mechanism or sending a failure message"""
+
+        app_details = json.loads(message.body.decode("utf-8"))
+        retry_count = message.headers.get("x-retry-count", 0) + 1
+
+        if retry_count > MAX_RETRIES:
+            logger.error(f"Message exceeded max retries: {message.body}")
+            app_string = "OAM-{}-{}/{}-{}".format(
+                app_details["number"],
+                app_details["suffix"],
+                app_details["type"],
+                app_details["year"],
+            )
+            app_details["status"] = (
+                f"😥Unfortunately, we couldn't get the status of <b>{app_string}</b> application. "
+                "Please ensure your application details are correct and try unsubscribing and then subscribing again. "
+                "If the issue persists, you can reach out to developers."
+            )
+            await self.messaging.publish_message("StatusUpdateQueue", app_details)
+            await message.ack()
+        else:
+            logger.info(f"Rescheduling message, x-retry-count: {retry_count}")
+            await self.messaging.publish_message(
+                queue_name, json.loads(message.body.decode("utf-8")), headers={"x-retry-count": retry_count}
+            )
+            await message.ack()
+
     async def process_fetch_request(self, message):
+        """Process a fetch request to retrieve the status of an application"""
+
         app_details = json.loads(message.body.decode("utf-8"))
         logger.info(f"Received fetch request: {app_details}")
 
@@ -43,14 +76,16 @@ class ApplicationProcessor:
             logger.debug(f"Message was pushed to StateUpdateQueue {app_details['number']}")
         else:
             logger.error(f"Failed to fetch status for application number {app_details['number']}")
-            await message.nack()
+            await self._manage_failed_request(message, "ApplicationFetchQueue")
 
     async def process_refresh_request(self, message):
+        """Process a refresh request to update the status of an application"""
+
         app_details = json.loads(message.body.decode())
         logger.info(f"Received refresh request: {app_details}")
 
-        # Sleep between 60 to JITTER_SECONDS to avoid getting blocked
-        sleep_time = random.randint(60, JITTER_SECONDS)
+        # Sleep between 5 to JITTER_SECONDS to avoid getting blocked
+        sleep_time = random.randint(5, JITTER_SECONDS)
         logger.info(f"Sleeping for {sleep_time} seconds before processing {app_details['number']} refresh request")
 
         self.waiting_refresh_requests += 1
@@ -66,7 +101,7 @@ class ApplicationProcessor:
             logger.debug(f"Message was pushed to StateUpdateQueue {app_details['number']}")
         else:
             logger.error(f"Failed to refresh status for application number {app_details['number']}")
-            await message.nack()
+            await self._manage_failed_request(message, "RefreshStatusQueue")
 
     async def shutdown(self):
         if self.current_message:
