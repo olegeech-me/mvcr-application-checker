@@ -40,7 +40,7 @@ class ApplicationProcessor:
         retry_count = message.headers.get("x-retry-count", 0) + 1
 
         if retry_count > MAX_RETRIES:
-            logger.error(f"Message exceeded max retries: {message.body}")
+            logger.error(f"Message exceeded max retries: {app_details}")
             app_string = "OAM-{}-{}/{}-{}".format(
                 app_details["number"],
                 app_details["suffix"],
