@@ -8,6 +8,7 @@ from bot.texts import button_texts, message_texts
 
 BUTTON_WAIT_SECONDS = 3
 FORCE_FETCH_LIMIT_SECONDS = 86400
+ALLOWED_TYPES = ["CD", "DO", "DP", "DV", "MK", "PP", "ST", "TP", "VP", "ZK", "ZM"]
 
 logger = logging.getLogger(__name__)
 
@@ -227,7 +228,7 @@ async def handle_subscription_dialog(update: Update, context: ContextTypes.DEFAU
 
     elif state == "awaiting_type":
         type_ = message.text.strip().upper()
-        if len(type_) != 2 or not type_.isalpha():
+        if len(type_) != 2 or (type_ not in ALLOWED_TYPES):
             await message.reply_text(message_texts["error_invalid_type"])
             return
         context.user_data["application_type"] = type_
