@@ -7,7 +7,7 @@ from aiormq.exceptions import AMQPConnectionError
 
 MAX_RETRIES = 5  # maximum number of connection retries
 RETRY_DELAY = 5  # delay (in seconds) between retries
-FINAL_STATUSES = ["bylo <b>povoleno</b>", "pokud bylo vaše řízení povoleno", "nebylo", "nepovoleno"]
+FINAL_STATUSES = ["bylo <b>povoleno</b>", "pokud bylo vaše řízení povoleno", "nebylo", "nepovoleno", "we couldn't get the status"]
 
 logger = logging.getLogger(__name__)
 

@@ -12,6 +12,8 @@ PAGE_LOAD_LIMIT_SECONDS = 20
 CAPTCHA_WAIT_SECONDS = 120
 # The max number of messages a fetcher instance should be consuming at once
 MAX_MESSAGES = int(os.getenv("MAX_MESSAGES", 10))
+# The max number of message processing attempts
+MAX_RETRIES = int(os.getenv("MAX_RETRIES", 10))
 # Max time to disperse to refresh requests
 JITTER_SECONDS = int(os.getenv("JITTER_SECONDS", 900))
 # RabbitMQ settings

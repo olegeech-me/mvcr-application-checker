@@ -62,11 +62,10 @@ class Messaging:
         for queue_name in queues:
             await self.channel.declare_queue(queue_name, durable=True)
 
-    async def publish_message(self, queue_name, message_body):
+    async def publish_message(self, queue_name, message_body, headers=None):
         """Publish a message to the specified queue"""
-        await self.channel.default_exchange.publish(
-            aio_pika.Message(body=json.dumps(message_body).encode()), routing_key=queue_name
-        )
+        message = aio_pika.Message(body=json.dumps(message_body).encode(), headers=headers)
+        await self.channel.default_exchange.publish(message, routing_key=queue_name)
         logger.info(f"Successfully published message to {queue_name}")
 
     async def consume_messages(self, queue_name, callback_func):
