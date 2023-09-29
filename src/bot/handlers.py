@@ -1,14 +1,18 @@
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
-from telegram.ext import ContextTypes
+from telegram.ext import ContextTypes, ConversationHandler
 import logging
 import time
 import datetime
 from bot.loader import rabbit, db, ADMIN_CHAT_ID, REFRESH_PERIOD
 from bot.texts import button_texts, message_texts
 
-BUTTON_WAIT_SECONDS = 3
+BUTTON_WAIT_SECONDS = 1
 FORCE_FETCH_LIMIT_SECONDS = 86400
 ALLOWED_TYPES = ["CD", "DO", "DP", "DV", "MK", "PP", "ST", "TP", "VP", "ZK", "ZM"]
+POPULAR_ALLOWED_TYPES = ["MK", "ZK", "DP", "TP", "DO"]
+ALLOWED_YEARS = [y for y in range(datetime.datetime.today().year - 3, datetime.datetime.today().year + 1)]
+
+START, NUMBER, TYPE, YEAR, VALIDATE = range(5)
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +21,19 @@ def _is_admin(chat_id: int) -> bool:
     """Check if the user's chat_id is an admin's chat_id"""
     logger.debug(f"Effective chat_id: '{chat_id}', Allowed admin id: '{ADMIN_CHAT_ID}'")
     return int(chat_id) == int(ADMIN_CHAT_ID)
+
+
+async def _is_button_click_abused(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    current_time = time.time()
+    # ignore impatient users spamming buttons
+    if ("last_button_press" in context.user_data and
+        current_time - context.user_data["last_button_press"] < BUTTON_WAIT_SECONDS):
+        await query.answer()
+        logger.info(f"Impatient user ignored: {user_info(update)}")
+        return True
+    context.user_data["last_button_press"] = current_time
+    return False
 
 
 def user_info(update: Update):
@@ -126,32 +143,102 @@ async def create_subscription(update, app_data):
 
 def clean_sub_context(context):
     """Wipes temporary subscription data from user_data context"""
-    keys_to_delete = ["subscription_state", "application_number", "application_suffix", "application_type", "application_year"]
+    keys_to_delete = ["application_number", "application_suffix", "application_type", "application_year"]
 
     for key in keys_to_delete:
         context.user_data.pop(key, None)
 
 
-# Handler for button clicks
-async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    current_time = time.time()
-
-    # ignore impatient users spamming buttons
-    if "last_button_press" in context.user_data and current_time - context.user_data["last_button_press"] < BUTTON_WAIT_SECONDS:
-        await query.answer()
-        logger.info(f"Impatient user ignored: {user_info(update)}")
+async def application_dialog_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message = get_effective_message(update)
+    logger.info(f"User sends number: {user_info(update)}")
+    number = message.text.strip()
+    if not number.isdigit() or not (4 <= len(number) <= 5):
+        await message.reply_text(message_texts["error_invalid_number"])
         return
+    context.user_data["application_number"] = number
+    # NOTE(fernflower) Let's hardcode it for now as it's not used in the POST anyway
+    context.user_data["application_suffix"] = "0"
+    keyboard = [
+            [InlineKeyboardButton(app_type, callback_data=f"application_dialog_type_{app_type}") for app_type in
+             POPULAR_ALLOWED_TYPES],
+            [InlineKeyboardButton(app_type, callback_data=f"application_dialog_type_{app_type}") for app_type in
+             sorted(set(ALLOWED_TYPES) - set(POPULAR_ALLOWED_TYPES))]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("Please choose your application type", reply_markup=reply_markup)
+    return TYPE
 
-    context.user_data["last_button_press"] = current_time
+
+async def application_dialog_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if await _is_button_click_abused(update, context):
+        return
     await query.answer()
 
-    if query.data == "subscribe":
-        if await db.check_subscription_in_db(query.message.chat_id):
-            await query.edit_message_text("You are already subscribed.")
-        else:
-            await query.edit_message_text(message_texts["dialog_app_number"])
-            context.user_data["subscription_state"] = "awaiting_number"
+    app_type_callback_str = "application_dialog_type"
+    # Process application type
+    button_id, app_type = query.data.split(f"{app_type_callback_str}_")
+    if app_type in ALLOWED_TYPES:
+        # XXX FIXME(fernflower) Later switch to i18n message
+        await query.edit_message_text(f"Type {app_type} has been selected")
+        context.user_data["application_type"] = app_type
+    else:
+        logger.warn("Unsupported application type %s", app_type)
+        # XXX FIXME(fernflower) Later switch to i18n message
+        await query.edit_message_text(f"Unsupported application type {app_type}")
+    # Show keyboard for application year selection
+    keyboard = [
+            [InlineKeyboardButton(str(year), callback_data=f"application_dialog_year_{year}")
+             for year in ALLOWED_YEARS]
+            ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text("Please choose year", reply_markup=reply_markup)
+    return YEAR
+
+
+async def application_dialog_year(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if await _is_button_click_abused(update, context):
+        return
+    await query.answer()
+
+    app_year_callback_str = "application_dialog_year"
+    try:
+        year = int(query.data.split(f"{app_year_callback_str}_")[-1])
+    except ValueError:
+        logger.error("Something went horribly wrong during year parsing from %s", query.data)
+        return
+    await query.edit_message_text(f"Year {year} has been selected")
+    context.user_data["application_year"] = year
+    # Ask user if the entered data is correct
+    keyboard = [
+        [InlineKeyboardButton(button_texts["subscribe_correct"], callback_data="proceed_subscribe")],
+        [InlineKeyboardButton(button_texts["subscribe_incorrect"], callback_data="cancel_subscribe")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    # Choose the appropriate message based on the suffix value
+    confirmation_msg = (
+        message_texts["dialog_confirmation_no_suffix"]
+        if context.user_data["application_suffix"] == "0"
+        else message_texts["dialog_confirmation"]
+    )
+    await query.edit_message_text(
+        confirmation_msg.format(
+            number=context.user_data["application_number"],
+            suffix=context.user_data["application_suffix"],
+            type=context.user_data["application_type"],
+            year=year,
+        ),
+        reply_markup=reply_markup,
+    )
+    return VALIDATE
+
+
+async def application_dialog_validate(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if await _is_button_click_abused(update, context):
+        return
+    await query.answer()
 
     if query.data == "proceed_subscribe":
         # check if we are not over daily limit
@@ -175,6 +262,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.edit_reply_markup(reply_markup=None)
         await query.message.reply_text(message_texts["dialog_cancel"])
         clean_sub_context(context)
+    return ConversationHandler.END
 
 
 # Handler for the /start command
@@ -187,11 +275,18 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(message_texts["subscribe_intro"], reply_markup=reply_markup)
+    return START
 
 
 # Handler for /subscribe command
 async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Subscribes user for application status updates"""
+    """
+    Subscribes user for application status updates.
+
+    If the command has no arguments, then an interactive dialog is started.
+    [TBD] If an argument is passed then an attempt to parse it will be made and upon success it will be treated as
+    application number.
+    """
     logger.info(f"Received /subscribe command from {user_info(update)}")
 
     message = get_effective_message(update)
@@ -201,73 +296,23 @@ async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     else:
         await update.message.reply_text(message_texts["dialog_app_number"])
-        context.user_data["subscription_state"] = "awaiting_number"
+    return NUMBER
 
 
-# Handler for subscription dialog
-async def handle_subscription_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    message = get_effective_message(update)
-    state = context.user_data.get("subscription_state")
+# Callback function for user-pressed-subscribe-button-event
+async def subscribe_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if await _is_button_click_abused(update, context):
+        return
+    await query.answer()
 
-    if state == "awaiting_number":
-        logger.info(f"User sends number: {user_info(update)}")
-        number = message.text.strip()
-        if not number.isdigit() or not (4 <= len(number) <= 5):
-            await message.reply_text(message_texts["error_invalid_number"])
-            return
-        context.user_data["application_number"] = number
-        context.user_data["subscription_state"] = "awaiting_suffix"
-        await message.reply_text(message_texts["dialog_suffix"])
-
-    elif state == "awaiting_suffix":
-        logger.info(f"User sends suffix: {user_info(update)}")
-        suffix = message.text.strip()
-        if not suffix.isdigit() or not (1 <= len(suffix) <= 2):
-            await message.reply_text(message_texts["error_invalid_suffix"])
-            return
-        context.user_data["application_suffix"] = suffix
-        context.user_data["subscription_state"] = "awaiting_type"
-        await message.reply_text(message_texts["dialog_type"])
-
-    elif state == "awaiting_type":
-        logger.info(f"User sends type: {user_info(update)}")
-        type_ = message.text.strip().upper()
-        if len(type_) != 2 or (type_ not in ALLOWED_TYPES):
-            await message.reply_text(message_texts["error_invalid_type"].format(allowed_types=", ".join(ALLOWED_TYPES)))
-            return
-        context.user_data["application_type"] = type_
-        context.user_data["subscription_state"] = "awaiting_year"
-        await message.reply_text(message_texts["dialog_year"])
-
-    elif state == "awaiting_year":
-        logger.info(f"User sends year: {user_info(update)}")
-        year = message.text.strip()
-        current_year = datetime.datetime.now().year
-        if not year.isdigit() or not (2000 <= int(year) <= current_year):  # Assuming 2000 is the earliest valid year.
-            await message.reply_text(message_texts["error_invalid_year"])
-            return
-        context.user_data["application_year"] = year
-
-        keyboard = [
-            [InlineKeyboardButton(button_texts["subscribe_correct"], callback_data="proceed_subscribe")],
-            [InlineKeyboardButton(button_texts["subscribe_incorrect"], callback_data="cancel_subscribe")],
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        # Choose the appropriate message based on the suffix value
-        confirmation_msg = (
-            message_texts["dialog_confirmation_no_suffix"]
-            if context.user_data["application_suffix"] == "0"
-            else message_texts["dialog_confirmation"]
-        )
-        await update.message.reply_text(
-            confirmation_msg.format(
-                number=context.user_data["application_number"],
-                suffix=context.user_data["application_suffix"],
-                type=context.user_data["application_type"],
-                year=year,
-            ),
-            reply_markup=reply_markup,
-        )
+    assert query.data == "subscribe"
+    if query.data == "subscribe":
+        if await db.check_subscription_in_db(query.message.chat_id):
+            await query.edit_message_text("You are already subscribed.")
+        else:
+            await query.edit_message_text(message_texts["dialog_app_number"])
+            return NUMBER
 
 
 # Handler for /unsubscribe command
