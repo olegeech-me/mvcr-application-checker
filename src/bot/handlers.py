@@ -3,7 +3,7 @@ import logging
 import re
 import time
 
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from telegram.ext import ContextTypes, ConversationHandler
 from bot.loader import rabbit, db, ADMIN_CHAT_ID, REFRESH_PERIOD
 from bot.texts import button_texts, message_texts
@@ -150,6 +150,47 @@ def clean_sub_context(context):
         context.user_data.pop(key, None)
 
 
+async def _show_app_number_final_confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Ask user if the entered data is correct
+    keyboard = [
+        [InlineKeyboardButton(button_texts["subscribe_correct"], callback_data="proceed_subscribe")],
+        [InlineKeyboardButton(button_texts["subscribe_incorrect"], callback_data="cancel_subscribe")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    # Choose the appropriate message based on the suffix value
+    confirmation_msg = (
+        message_texts["dialog_confirmation_no_suffix"]
+        if context.user_data["application_suffix"] == "0"
+        else message_texts["dialog_confirmation"]
+    )
+    msg = confirmation_msg.format(number=context.user_data["application_number"],
+                                  suffix=context.user_data["application_suffix"],
+                                  type=context.user_data["application_type"],
+                                  year=context.user_data["application_year"])
+    # Note(fernflower) Let's unify update for message and callback_queries: if callback_query is not set then it's
+    # a message update
+    if update.callback_query:
+        await update.callback_query.edit_message_text(msg, reply_markup=reply_markup)
+    else:
+        await update.message.reply_text(msg, reply_markup=reply_markup)
+    return VALIDATE
+
+
+def _parse_application_number_full(num_str: str):
+    """
+    Parses supplied application number OAM-13077/ZK-2020.
+    Application number may or may not contain OAM prefix or integer suffix.
+    FULL_REGEX = (OAM-){0,1}[0-9]{4,5}(-[0-9]+){0,1}/[A-Z]{2}-[0-9]{4}
+    This function returns a tuple (number, suffix, type, year) in case of success or None otherwise.
+    """
+    num_str = num_str.replace(' ','').upper()
+    num_regex = r"^(OAM-){0,1}([0-9]{4,5})(-[0-9]+){0,1}/([A-Z]{2})-([0-9]{4})$"
+    matched = re.match(num_regex, num_str)
+    if not matched:
+        return
+    return matched[2], (matched[3] or "0").lstrip('-'), matched[4], matched[5]
+
+
 def _parse_application_number(num_str: str):
     """
     Parses number part of supplied application number OAM-13077/ZK-2020.
@@ -158,7 +199,7 @@ def _parse_application_number(num_str: str):
     This function returns a tuple (number, suffix) in case of success or None otherwise.
     """
     num_str = num_str.replace(' ','').upper()
-    num_regex = r"(OAM-){0,1}([0-9]{4,5})(-[0-9]+){0,1}"
+    num_regex = r"^(OAM-){0,1}([0-9]{4,5})(-[0-9]+){0,1}$"
     matched = re.match(num_regex, num_str)
     if not matched:
         return
@@ -166,8 +207,29 @@ def _parse_application_number(num_str: str):
 
 
 async def application_dialog_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Gets full application number to work with.
+    Two ways of operation are supported:
+    * User submits just the number part of the application (useful for mobile device). In this case an interactive
+      dialog is triggered and the ConversationHandler will walk the user through the steps of specifying type and year
+    * User submits full application number in 1111/TP-2022 form (useful for copy-paste from official documents). If
+      it is parsed successfully there is no need for the interactive dialog, so it's skipped.
+    """
     message = get_effective_message(update)
+    number_str = message.text.strip()
     logger.info(f"User sends number: {user_info(update)}")
+    # NOTE(fernflower) Attempt to parse full application number as is
+    number_parsed = _parse_application_number_full(number_str)
+    if number_parsed:
+        context.user_data["application_number"] = number_parsed[0]
+        context.user_data["application_suffix"] = number_parsed[1]
+        context.user_data["application_type"] = number_parsed[2]
+        context.user_data["application_year"] = number_parsed[3]
+        # go straight to verification step
+        await _show_app_number_final_confirmation(update, context)
+        return VALIDATE
+    # NOTE(fernflower) Okay, full match failed, let's try partial match just for number part (no type and year) and
+    # get the rest via interactive dialog
     number_parsed = _parse_application_number(message.text.strip())
     if not number_parsed:
         await message.reply_text(message_texts["error_invalid_number"])
@@ -227,27 +289,7 @@ async def application_dialog_year(update: Update, context: ContextTypes.DEFAULT_
         return
     await query.edit_message_text(f"Year {year} has been selected")
     context.user_data["application_year"] = year
-    # Ask user if the entered data is correct
-    keyboard = [
-        [InlineKeyboardButton(button_texts["subscribe_correct"], callback_data="proceed_subscribe")],
-        [InlineKeyboardButton(button_texts["subscribe_incorrect"], callback_data="cancel_subscribe")],
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    # Choose the appropriate message based on the suffix value
-    confirmation_msg = (
-        message_texts["dialog_confirmation_no_suffix"]
-        if context.user_data["application_suffix"] == "0"
-        else message_texts["dialog_confirmation"]
-    )
-    await query.edit_message_text(
-        confirmation_msg.format(
-            number=context.user_data["application_number"],
-            suffix=context.user_data["application_suffix"],
-            type=context.user_data["application_type"],
-            year=year,
-        ),
-        reply_markup=reply_markup,
-    )
+    await _show_app_number_final_confirmation(update, context)
     return VALIDATE
 
 
