@@ -22,6 +22,7 @@ class Messaging:
         self.channel = None
 
     def _create_ssl_context(self, ssl_params):
+        """Create an SSL context based on provided parameters"""
         logger.info(f"Rabbit connection ssl_params: {ssl_params}")
         context = ssl.create_default_context(cafile=ssl_params["cafile"])
         context.load_cert_chain(certfile=ssl_params["certfile"], keyfile=ssl_params["keyfile"])

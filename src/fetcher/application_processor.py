@@ -15,6 +15,23 @@ class ApplicationProcessor:
         self.url = url
         self.current_message = None
         self.waiting_refresh_requests = 0
+        self.processing_apps = set()
+        self.lock = asyncio.Lock()
+
+    async def is_processing(self, app_number):
+        """Check if an application number is currently being processed."""
+        async with self.lock:
+            return app_number in self.processing_apps
+
+    async def start_processing(self, app_number):
+        """Mark an application number as currently being processed."""
+        async with self.lock:
+            self.processing_apps.add(app_number)
+
+    async def end_processing(self, app_number):
+        """Mark an application number as done processing."""
+        async with self.lock:
+            self.processing_apps.remove(app_number)
 
     async def fetch_callback(self, message):
         """Callback function triggered when a fetch request message is received"""
@@ -67,6 +84,13 @@ class ApplicationProcessor:
         app_details = json.loads(message.body.decode("utf-8"))
         logger.info(f"Received fetch request: {app_details}")
 
+        if await self.is_processing(app_details["number"]):
+            logger.info(
+                f"Skipping fetch request for application number {app_details['number']} as it's currently being processed"
+            )
+            return
+        await self.start_processing(app_details["number"])
+
         app_status = await self.browser.fetch(self.url, app_details)
         if app_status:
             logger.info(f"Fetched status for application number {app_details['number']}")
@@ -78,11 +102,20 @@ class ApplicationProcessor:
             logger.error(f"Failed to fetch status for application number {app_details['number']}")
             await self._manage_failed_request(message, "ApplicationFetchQueue")
 
+        await self.end_processing(app_details["number"])
+
     async def process_refresh_request(self, message):
         """Process a refresh request to update the status of an application"""
 
         app_details = json.loads(message.body.decode())
         logger.info(f"Received refresh request: {app_details}")
+
+        if await self.is_processing(app_details["number"]):
+            logger.info(
+                f"Skipping refresh request for application number {app_details['number']} as it's currently being processed"
+            )
+            return
+        await self.start_processing(app_details["number"])
 
         # Sleep between 5 to JITTER_SECONDS to avoid getting blocked
         sleep_time = random.randint(5, JITTER_SECONDS)
@@ -102,6 +135,8 @@ class ApplicationProcessor:
         else:
             logger.error(f"Failed to refresh status for application number {app_details['number']}")
             await self._manage_failed_request(message, "RefreshStatusQueue")
+
+        await self.end_processing(app_details["number"])
 
     async def shutdown(self):
         if self.current_message:
