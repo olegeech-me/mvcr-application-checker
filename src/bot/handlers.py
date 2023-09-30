@@ -1,8 +1,10 @@
+import datetime
+import logging
+import re
+import time
+
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes, ConversationHandler
-import logging
-import time
-import datetime
 from bot.loader import rabbit, db, ADMIN_CHAT_ID, REFRESH_PERIOD
 from bot.texts import button_texts, message_texts
 
@@ -148,16 +150,30 @@ def clean_sub_context(context):
         context.user_data.pop(key, None)
 
 
+def _parse_application_number(num_str: str):
+    """
+    Parses number part of supplied application number OAM-13077/ZK-2020.
+    Application number may or may not contain OAM prefix or integer suffix.
+    FULL_REGEX = (OAM-){0,1}[0-9]{4,5}(-[0-9]+){0,1}/[A-Z]{2}-[0-9]{4}
+    This function returns a tuple (number, suffix) in case of success or None otherwise.
+    """
+    num_str = num_str.replace(' ','').upper()
+    num_regex = r"(OAM-){0,1}([0-9]{4,5})(-[0-9]+){0,1}"
+    matched = re.match(num_regex, num_str)
+    if not matched:
+        return
+    return matched[2], (matched[3] or "0").lstrip('-')
+
+
 async def application_dialog_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = get_effective_message(update)
     logger.info(f"User sends number: {user_info(update)}")
-    number = message.text.strip()
-    if not number.isdigit() or not (4 <= len(number) <= 5):
+    number_parsed = _parse_application_number(message.text.strip())
+    if not number_parsed:
         await message.reply_text(message_texts["error_invalid_number"])
         return
-    context.user_data["application_number"] = number
-    # NOTE(fernflower) Let's hardcode it for now as it's not used in the POST anyway
-    context.user_data["application_suffix"] = "0"
+    context.user_data["application_number"] = number_parsed[0]
+    context.user_data["application_suffix"] = number_parsed[1]
     keyboard = [
         [
             InlineKeyboardButton(app_type, callback_data=f"application_dialog_type_{app_type}")
