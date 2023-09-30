@@ -9,7 +9,7 @@ from bot.texts import button_texts, message_texts
 BUTTON_WAIT_SECONDS = 1
 FORCE_FETCH_LIMIT_SECONDS = 86400
 ALLOWED_TYPES = ["CD", "DO", "DP", "DV", "MK", "PP", "ST", "TP", "VP", "ZK", "ZM"]
-POPULAR_ALLOWED_TYPES = ["MK", "ZK", "DP", "TP", "DO"]
+POPULAR_ALLOWED_TYPES = ["DP", "TP", "ZM", "MK", "DO"]
 ALLOWED_YEARS = [y for y in range(datetime.datetime.today().year - 3, datetime.datetime.today().year + 1)]
 
 START, NUMBER, TYPE, YEAR, VALIDATE = range(5)
@@ -27,8 +27,7 @@ async def _is_button_click_abused(update: Update, context: ContextTypes.DEFAULT_
     query = update.callback_query
     current_time = time.time()
     # ignore impatient users spamming buttons
-    if ("last_button_press" in context.user_data and
-        current_time - context.user_data["last_button_press"] < BUTTON_WAIT_SECONDS):
+    if "last_button_press" in context.user_data and current_time - context.user_data["last_button_press"] < BUTTON_WAIT_SECONDS:
         await query.answer()
         logger.info(f"Impatient user ignored: {user_info(update)}")
         return True
@@ -160,12 +159,17 @@ async def application_dialog_number(update: Update, context: ContextTypes.DEFAUL
     # NOTE(fernflower) Let's hardcode it for now as it's not used in the POST anyway
     context.user_data["application_suffix"] = "0"
     keyboard = [
-            [InlineKeyboardButton(app_type, callback_data=f"application_dialog_type_{app_type}") for app_type in
-             POPULAR_ALLOWED_TYPES],
-            [InlineKeyboardButton(app_type, callback_data=f"application_dialog_type_{app_type}") for app_type in
-             sorted(set(ALLOWED_TYPES) - set(POPULAR_ALLOWED_TYPES))]]
+        [
+            InlineKeyboardButton(app_type, callback_data=f"application_dialog_type_{app_type}")
+            for app_type in POPULAR_ALLOWED_TYPES
+        ],
+        [
+            InlineKeyboardButton(app_type, callback_data=f"application_dialog_type_{app_type}")
+            for app_type in sorted(set(ALLOWED_TYPES) - set(POPULAR_ALLOWED_TYPES))
+        ],
+    ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("Please choose your application type", reply_markup=reply_markup)
+    await update.message.reply_text(message_texts["dialog_type"], reply_markup=reply_markup)
     return TYPE
 
 
@@ -187,12 +191,9 @@ async def application_dialog_type(update: Update, context: ContextTypes.DEFAULT_
         # XXX FIXME(fernflower) Later switch to i18n message
         await query.edit_message_text(f"Unsupported application type {app_type}")
     # Show keyboard for application year selection
-    keyboard = [
-            [InlineKeyboardButton(str(year), callback_data=f"application_dialog_year_{year}")
-             for year in ALLOWED_YEARS]
-            ]
+    keyboard = [[InlineKeyboardButton(str(year), callback_data=f"application_dialog_year_{year}") for year in ALLOWED_YEARS]]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await query.edit_message_text("Please choose year", reply_markup=reply_markup)
+    await query.edit_message_text(message_texts["dialog_year"], reply_markup=reply_markup)
     return YEAR
 
 
