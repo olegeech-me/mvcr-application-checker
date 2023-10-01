@@ -119,7 +119,7 @@ class RabbitMQ:
 
                 # update application status in the DB
                 if await self.db.update_db_status(chat_id, received_status, is_resolved):
-                    lang = self.db.get_user_language(chat_id)
+                    lang = await self.db.get_user_language(chat_id)
                     # construct the notification text
                     if is_resolved:
                         notification_text = f"{message_texts[lang]['application_resolved']}\n\n{received_status}"

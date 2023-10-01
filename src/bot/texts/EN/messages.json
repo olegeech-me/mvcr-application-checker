@@ -4,6 +4,7 @@
   "already_subscribed": "You are already subscribed.",
   "not_subscribed": "You are not subscribed",
   "just_subscribed": "You have subscribed",
+  "unsubscribe": "You have unsubscribed",
   "refresh_sent": "Refresh request sent.",
   "failed_to_refresh": "Failed to retrieve user data. Please try again later.",
   "ratelimit_exceeded": "Sorry, you can only use this command 2 times a day.",

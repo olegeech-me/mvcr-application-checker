@@ -53,13 +53,14 @@ class Database:
         username=None,
         first_name=None,
         last_name=None,
+        lang="EN",
     ):
         logger.info(f"Adding chatID {chat_id} with application number {application_number} to DB")
         query = (
             "INSERT INTO Applications "
             "(chat_id, application_number, application_suffix, application_type, application_year, current_status, "
-            "username, first_name, last_name) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"
+            "username, first_name, last_name, language) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)"
         )
         params = (
             chat_id,
@@ -71,6 +72,7 @@ class Database:
             username,
             first_name,
             last_name,
+            lang,
         )
         async with self.pool.acquire() as conn:
             try:
@@ -222,6 +224,7 @@ class Database:
         logger.info(f"Updating chatID {chat_id} current status in DB")
         query = "UPDATE Applications SET language = $1 WHERE chat_id = $2"
         params = (lang, chat_id)
+        logger.info(f"Update user {chat_id} language in DB to {lang}")
         async with self.pool.acquire() as conn:
             try:
                 await conn.execute(query, *params)

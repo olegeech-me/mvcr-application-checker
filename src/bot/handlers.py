@@ -148,6 +148,7 @@ async def create_subscription(update, app_data, lang="EN"):
             chat.username,
             chat.first_name,
             chat.last_name,
+            lang,
         ):
             request = create_request(chat.id, app_data)
             await rabbit.publish_message(request)
@@ -171,8 +172,8 @@ async def _show_app_number_final_confirmation(update: Update, context: ContextTy
     # Ask user if the entered data is correct
     lang = await _get_user_language(update, context)
     keyboard = [
-        [InlineKeyboardButton(button_texts["subscribe_correct"], callback_data="proceed_subscribe")],
-        [InlineKeyboardButton(button_texts["subscribe_incorrect"], callback_data="cancel_subscribe")],
+        [InlineKeyboardButton(button_texts[lang]["subscribe_correct"], callback_data="proceed_subscribe")],
+        [InlineKeyboardButton(button_texts[lang]["subscribe_incorrect"], callback_data="cancel_subscribe")],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     # Choose the appropriate message based on the suffix value
@@ -489,6 +490,8 @@ async def admin_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 # Handler for /lang command
 async def lang_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler for /lang command to set language preference"""
+    logging.info(f"Received /lang command from {user_info(update)}")
+
     keyboard = [[InlineKeyboardButton(lang, callback_data=f"set_lang_{lang}")] for lang in LANGUAGE_LIST]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text("Select your language / Выберете язык:", reply_markup=reply_markup)
@@ -497,20 +500,22 @@ async def lang_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Callback function for language selection"""
     query = update.callback_query
-    selected_lang = query.data.split("set_lang_")[1]
     chat_id = update.effective_chat.id
 
-    if selected_lang in LANGUAGE_LIST:
-        # Store language in user_data for the session
-        context.user_data["lang"] = selected_lang
+    selected_lang_with_emoji = query.data.split("set_lang_")[1]
 
-        # If user has subscription, update preference in DB
-        if await db.check_subscription_in_db(chat_id):
-            await db.set_user_language(chat_id, selected_lang)
+    # Extract the clean key without emoji
+    selected_lang = selected_lang_with_emoji.split()[0]
 
-        await query.edit_message_text(f"Language set to {selected_lang}.")
-    else:
-        await query.edit_message_text("Invalid language selection.")
+    # Store language in user_data for the session
+    context.user_data["lang"] = selected_lang
+
+    # If user has subscription, update preference in DB
+    if await db.check_subscription_in_db(chat_id):
+        logger.info("updating db lang")
+        await db.set_user_language(chat_id, selected_lang)
+
+    await query.edit_message_text(f"Language set to {selected_lang_with_emoji}.")
 
 
 # Handler for unknown commands
