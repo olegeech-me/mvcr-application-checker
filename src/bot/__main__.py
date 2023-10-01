@@ -4,7 +4,7 @@ import asyncio
 import logging
 import signal
 
-from bot.loader import loop, bot, db, rabbit, LOG_LEVEL
+from bot.loader import init, loop, LOG_LEVEL
 from bot.handlers import start_command, help_command, unknown, status_command
 from bot.handlers import unsubscribe_command, subscribe_command, admin_stats_command
 from bot.handlers import force_refresh_command, subscribe_button
@@ -31,6 +31,8 @@ logger = logging.getLogger(__name__)
 logger.setLevel(log_level_int)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
+# Get instances of bot, database and rabbitmq
+bot, db, rabbit = init()
 
 # Instantiate application scheduler
 app_monitor = monitor.ApplicationMonitor(db=db, rabbit=rabbit)
