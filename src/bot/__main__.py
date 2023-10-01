@@ -64,31 +64,32 @@ async def main():
     signal.signal(signal.SIGINT, lambda s, f: asyncio.create_task(shutdown()))
     signal.signal(signal.SIGTERM, lambda s, f: asyncio.create_task(shutdown()))
 
+    # Define conversatinal handler for user-friendly application dialog
+    conv_handler = ConversationHandler(
+        allow_reentry=True,
+        entry_points=[
+            CommandHandler("subscribe", subscribe_command),
+            CommandHandler("start", start_command, has_args=False),
+        ],
+        states={
+            START: [CallbackQueryHandler(subscribe_button),
+                    CommandHandler("subscribe", subscribe_command, has_args=True)],
+            NUMBER: [MessageHandler(filters.TEXT, application_dialog_number),
+                     CommandHandler("unsubscribe", unsubscribe_command, has_args=False)],
+            TYPE: [CallbackQueryHandler(application_dialog_type, pattern="application_dialog_type_*")],
+            YEAR: [CallbackQueryHandler(application_dialog_year, pattern="application_dialog_year_*")],
+            VALIDATE: [CallbackQueryHandler(application_dialog_validate, pattern="proceed_subscribe|cancel_subscribe")],
+        },
+        fallbacks=[CommandHandler("subscribe", subscribe_command),
+                   CommandHandler("start", start_command, has_args=False)],
+    )
+    bot.add_handler(conv_handler)
     # Register command and message handlers
     bot.add_handler(CommandHandler("status", status_command, has_args=False))
     bot.add_handler(CommandHandler("unsubscribe", unsubscribe_command, has_args=False))
     bot.add_handler(CommandHandler("force_refresh", force_refresh_command, has_args=False))
     bot.add_handler(CommandHandler("admin_stats", admin_stats_command, has_args=False))
     bot.add_handler(CommandHandler("help", help_command, has_args=False))
-    # Define conversatinal handler for user-friendly application dialog
-    conv_handler = ConversationHandler(
-        entry_points=[
-            CommandHandler("subscribe", subscribe_command, has_args=False),
-            CommandHandler("start", start_command, has_args=False),
-        ],
-        states={
-            START: [CallbackQueryHandler(subscribe_button)],
-            NUMBER: [MessageHandler(filters.TEXT, application_dialog_number)],
-            TYPE: [CallbackQueryHandler(application_dialog_type, pattern="application_dialog_type_*")],
-            YEAR: [CallbackQueryHandler(application_dialog_year, pattern="application_dialog_year_*")],
-            VALIDATE: [CallbackQueryHandler(application_dialog_validate, pattern="proceed_subscribe|cancel_subscribe")],
-        },
-        fallbacks=[
-            CommandHandler("subscribe", subscribe_command, has_args=False),
-            CommandHandler("start", start_command, has_args=False),
-        ],
-    )
-    bot.add_handler(conv_handler)
     bot.add_handler(MessageHandler(filters.COMMAND, unknown))
 
     # Run the bot
