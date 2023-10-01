@@ -5,8 +5,9 @@ import time
 
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes, ConversationHandler
-from bot.loader import rabbit, db, ADMIN_CHAT_ID, REFRESH_PERIOD
+from bot.loader import init_db, init_rabbit, ADMIN_CHAT_ID, REFRESH_PERIOD
 from bot.texts import button_texts, message_texts
+
 
 BUTTON_WAIT_SECONDS = 1
 FORCE_FETCH_LIMIT_SECONDS = 86400
@@ -17,6 +18,10 @@ ALLOWED_YEARS = [y for y in range(datetime.datetime.today().year - 3, datetime.d
 START, NUMBER, TYPE, YEAR, VALIDATE = range(5)
 
 logger = logging.getLogger(__name__)
+
+# Get instances of bot, database and rabbitmq
+db = init_db()
+rabbit = init_rabbit()
 
 
 def _is_admin(chat_id: int) -> bool:

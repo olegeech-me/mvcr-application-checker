@@ -28,21 +28,41 @@ asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 loop = asyncio.get_event_loop()
 defaults = Defaults(parse_mode=ParseMode.HTML)
 
+# globals to store bot, db and rabbit instances which will be populated after a call to init function
+BOT = None
+DB = None
+RABBIT = None
+
 # Init bot, db and rabbit
-bot = Application.builder().token(TOKEN).defaults(defaults).build()
-db = database.Database(
-    dbname=DB_NAME,
-    user=DB_USER,
-    password=DB_PASSWORD,
-    host=DB_HOST,
-    port=DB_PORT,
-    loop=loop,
-)
-rabbit = rabbitmq.RabbitMQ(
-    host=RABBIT_HOST,
-    user=RABBIT_USER,
-    password=RABBIT_PASSWORD,
-    bot=bot,
-    db=db,
-    loop=loop,
-)
+def init_bot():
+    global BOT
+    BOT = BOT or Application.builder().token(TOKEN).defaults(defaults).build()
+    return BOT
+
+
+def init_db():
+    global DB
+    DB = DB or database.Database(dbname=DB_NAME,
+                                 user=DB_USER,
+                                 password=DB_PASSWORD,
+                                 host=DB_HOST,
+                                 port=DB_PORT,
+                                 loop=loop,
+                                 )
+    return DB
+
+
+def init_rabbit():
+    global RABBIT
+    RABBIT = RABBIT or rabbitmq.RabbitMQ(host=RABBIT_HOST,
+                                         user=RABBIT_USER,
+                                         password=RABBIT_PASSWORD,
+                                         bot=BOT,
+                                         db=DB,
+                                         loop=loop,
+                                         )
+    return RABBIT
+
+
+def init():
+    return init_bot(), init_db(), init_rabbit()
