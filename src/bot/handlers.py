@@ -410,7 +410,7 @@ async def unsubscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     if await db.check_subscription_in_db(update.message.chat_id):
         await db.remove_from_db(update.message.chat_id)
-        await update.message.reply_text(message_texts[lang]["just_subscribed"])
+        await update.message.reply_text(message_texts[lang]["unsubscribe"])
     else:
         await update.message.reply_text(message_texts[lang]["not_subscribed"])
 
