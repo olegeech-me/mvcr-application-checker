@@ -135,7 +135,7 @@ class Database:
                 logger.error(f"Error while fetching application status for chat ID: {chat_id}. Error: {e}")
                 return None
 
-    async def get_application_status_timestamp(self, chat_id):
+    async def get_application_status_timestamp(self, chat_id, lang="EN"):
         query = "SELECT current_status, last_updated FROM Applications WHERE chat_id = $1;"
         async with self.pool.acquire() as conn:
             try:
@@ -146,16 +146,16 @@ class Database:
                     last_updated_prague = last_updated_utc.astimezone(pytz.timezone("Europe/Prague"))
                     timestamp = last_updated_prague.strftime("%H:%M:%S %d-%m-%Y")
 
-                    status_str = message_texts["current_status_timestamp"].format(
+                    status_str = message_texts[lang]["current_status_timestamp"].format(
                         status=current_status,
                         timestamp=timestamp,
                     )
                     return status_str
                 else:
-                    return message_texts["current_status_empty"]
+                    return message_texts[lang]["current_status_empty"]
             except Exception as e:
                 logger.error(f"Error while fetching status from DB for chat ID: {chat_id}. Error: {e}")
-                return message_texts["error_generic"]
+                return message_texts[lang]["error_generic"]
 
     async def check_subscription_in_db(self, chat_id):
         query = "SELECT EXISTS(SELECT chat_id FROM Applications WHERE chat_id=$1)"
@@ -205,6 +205,30 @@ class Database:
             except Exception as e:
                 logger.error(f"Error while fetching subscribed user count. Error: {e}")
                 return None
+
+    async def get_user_language(self, chat_id):
+        query = "SELECT language FROM Applications WHERE chat_id = $1;"
+        async with self.pool.acquire() as conn:
+            # (olegeech) tmp to see how often we need DB to fetch language for each command
+            logger.info(f"Going to DB to fetch language for user: {chat_id}")
+            try:
+                result = await conn.fetchval(query, chat_id)
+                return result
+            except Exception as e:
+                logger.error(f"Error while fetching language for chat ID: {chat_id}. Error: {e}")
+                return None
+
+    async def set_user_language(self, chat_id, lang):
+        logger.info(f"Updating chatID {chat_id} current status in DB")
+        query = "UPDATE Applications SET language = $1 WHERE chat_id = $2"
+        params = (lang, chat_id)
+        async with self.pool.acquire() as conn:
+            try:
+                await conn.execute(query, *params)
+                return True
+            except Exception as e:
+                logger.error(f"Error while updating lang in DB for chat ID: {chat_id}. Error: {e}")
+                return False
 
     async def close(self):
         logger.info("Shutting down DB connection")
