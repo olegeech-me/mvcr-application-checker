@@ -16,7 +16,7 @@ ALLOWED_TYPES = ["CD", "DO", "DP", "DV", "MK", "PP", "ST", "TP", "VP", "ZK", "ZM
 POPULAR_ALLOWED_TYPES = ["DP", "TP", "ZM", "MK", "DO"]
 ALLOWED_YEARS = [y for y in range(datetime.datetime.today().year - 3, datetime.datetime.today().year + 1)]
 
-START, NUMBER, TYPE, YEAR, VALIDATE = range(5)
+LANG, START, NUMBER, TYPE, YEAR, VALIDATE = range(6)
 
 logger = logging.getLogger(__name__)
 
@@ -353,6 +353,14 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logging.info(f"Received /start command from {user_info(update)}")
 
     lang = await _get_user_language(update, context)
+
+    # Prompt the user to select a language if it's the default (assumed they haven't set it yet)
+    if lang == DEFAULT_LANGUAGE:
+        keyboard = [[InlineKeyboardButton(lang, callback_data=f"set_lang_{lang}")] for lang in LANGUAGE_LIST]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text("Select your language / Выберете язык:", reply_markup=reply_markup)
+        return LANG
+
     await update.message.reply_text(message_texts[lang]["start_text"].format(refresh_period=int(REFRESH_PERIOD / 60)))
     keyboard = [
         [InlineKeyboardButton(button_texts[lang]["subscribe_button"], callback_data="subscribe")],
@@ -492,17 +500,17 @@ async def lang_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler for /lang command to set language preference"""
     logging.info(f"Received /lang command from {user_info(update)}")
 
-    keyboard = [[InlineKeyboardButton(lang, callback_data=f"set_lang_{lang}")] for lang in LANGUAGE_LIST]
+    keyboard = [[InlineKeyboardButton(lang, callback_data=f"set_lang_cmd_{lang}")] for lang in LANGUAGE_LIST]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text("Select your language / Выберете язык:", reply_markup=reply_markup)
 
 
-async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Callback function for language selection"""
+async def _set_language(update: Update, context: ContextTypes.DEFAULT_TYPE, cmd_string: str):
+    """Set up user language"""
     query = update.callback_query
     chat_id = update.effective_chat.id
 
-    selected_lang_with_emoji = query.data.split("set_lang_")[1]
+    selected_lang_with_emoji = query.data.split(f"{cmd_string}")[1]
 
     # Extract the clean key without emoji
     selected_lang = selected_lang_with_emoji.split()[0]
@@ -516,6 +524,17 @@ async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await db.set_user_language(chat_id, selected_lang)
 
     await query.edit_message_text(f"Language set to {selected_lang_with_emoji}.")
+
+
+async def set_language_startup(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Callback function for language selection during start up"""
+    await _set_language(update, context, "set_lang_")
+    return START
+
+
+async def set_language_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Callback function for language selection during /lang command"""
+    await _set_language(update, context, "set_lang_cmd_")
 
 
 # Handler for unknown commands
