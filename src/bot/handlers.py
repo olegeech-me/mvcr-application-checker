@@ -360,6 +360,19 @@ async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await message.reply_text(message_texts["already_subscribed"])
         return
     else:
+        # Let's first check if the user has supplied any arguments. If he did - let's treat them as application number
+        # and if the format matches - skip the interactive dialog.
+        if context.args:
+            number_str = "".join(context.args)
+            number_parsed = _parse_application_number_full(number_str)
+            if number_parsed:
+                context.user_data["application_number"] = number_parsed[0]
+                context.user_data["application_suffix"] = number_parsed[1]
+                context.user_data["application_type"] = number_parsed[2]
+                context.user_data["application_year"] = number_parsed[3]
+                # go straight to verification step
+                await _show_app_number_final_confirmation(update, context)
+                return VALIDATE
         await update.message.reply_text(message_texts["dialog_app_number"])
     return NUMBER
 
@@ -390,6 +403,7 @@ async def unsubscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text(message_texts["just_subscribed"])
     else:
         await update.message.reply_text(message_texts["not_subscribed"])
+    return START
 
 
 # Handler for /force_refresh command
