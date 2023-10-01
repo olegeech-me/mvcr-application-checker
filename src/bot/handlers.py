@@ -3,7 +3,7 @@ import logging
 import re
 import time
 
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes, ConversationHandler
 from bot.loader import rabbit, db, ADMIN_CHAT_ID, REFRESH_PERIOD
 from bot.texts import button_texts, message_texts
@@ -163,10 +163,12 @@ async def _show_app_number_final_confirmation(update: Update, context: ContextTy
         if context.user_data["application_suffix"] == "0"
         else message_texts["dialog_confirmation"]
     )
-    msg = confirmation_msg.format(number=context.user_data["application_number"],
-                                  suffix=context.user_data["application_suffix"],
-                                  type=context.user_data["application_type"],
-                                  year=context.user_data["application_year"])
+    msg = confirmation_msg.format(
+        number=context.user_data["application_number"],
+        suffix=context.user_data["application_suffix"],
+        type=context.user_data["application_type"],
+        year=context.user_data["application_year"],
+    )
     # Note(fernflower) Let's unify update for message and callback_queries: if callback_query is not set then it's
     # a message update
     if update.callback_query:
@@ -183,12 +185,12 @@ def _parse_application_number_full(num_str: str):
     FULL_REGEX = (OAM-){0,1}[0-9]{4,5}(-[0-9]+){0,1}/[A-Z]{2}-[0-9]{4}
     This function returns a tuple (number, suffix, type, year) in case of success or None otherwise.
     """
-    num_str = num_str.replace(' ','').upper()
+    num_str = num_str.replace(" ", "").upper()
     num_regex = r"^(OAM-){0,1}([0-9]{4,5})(-[0-9]+){0,1}/([A-Z]{2})-([0-9]{4})$"
     matched = re.match(num_regex, num_str)
     if not matched:
         return
-    return matched[2], (matched[3] or "0").lstrip('-'), matched[4], matched[5]
+    return matched[2], (matched[3] or "0").lstrip("-"), matched[4], matched[5]
 
 
 def _parse_application_number(num_str: str):
@@ -198,12 +200,12 @@ def _parse_application_number(num_str: str):
     FULL_REGEX = (OAM-){0,1}[0-9]{4,5}(-[0-9]+){0,1}/[A-Z]{2}-[0-9]{4}
     This function returns a tuple (number, suffix) in case of success or None otherwise.
     """
-    num_str = num_str.replace(' ','').upper()
+    num_str = num_str.replace(" ", "").upper()
     num_regex = r"^(OAM-){0,1}([0-9]{4,5})(-[0-9]+){0,1}$"
     matched = re.match(num_regex, num_str)
     if not matched:
         return
-    return matched[2], (matched[3] or "0").lstrip('-')
+    return matched[2], (matched[3] or "0").lstrip("-")
 
 
 async def application_dialog_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -217,7 +219,6 @@ async def application_dialog_number(update: Update, context: ContextTypes.DEFAUL
     """
     message = get_effective_message(update)
     number_str = message.text.strip()
-    logger.info(f"User sends number: {user_info(update)}")
     # NOTE(fernflower) Attempt to parse full application number as is
     number_parsed = _parse_application_number_full(number_str)
     if number_parsed:
@@ -460,8 +461,6 @@ async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=update.effective_chat.id, text="Sorry, I didn't understand that command.")
 
 
-# TODO make suffix optional
-# TODO clean up sub context on new commands?
 # TODO handler for /admin_restart_fetcher
 # TODO hander for /admin_restart_bot
 # TODO handler for /admin_oldest_refresh
