@@ -98,7 +98,7 @@ async def enforce_rate_limit(update: Update, context: ContextTypes.DEFAULT_TYPE,
         if command_name == "subscribe":
             await message.edit_reply_markup(reply_markup=None)
 
-        await message.reply_text("Sorry, you can only use this command 2 times a day.")
+        await message.reply_text(message_texts["ratelimit_exceeded"])
         return False
 
     return True
@@ -352,7 +352,7 @@ async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = get_effective_message(update)
 
     if await db.check_subscription_in_db(message.chat_id):
-        await message.reply_text("You are already subscribed")
+        await message.reply_text(message_texts["already_subscribed"])
         return
     else:
         await update.message.reply_text(message_texts["dialog_app_number"])
@@ -369,7 +369,7 @@ async def subscribe_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     assert query.data == "subscribe"
     if query.data == "subscribe":
         if await db.check_subscription_in_db(query.message.chat_id):
-            await query.edit_message_text("You are already subscribed.")
+            await query.edit_message_text(message_texts["already_subscribed"])
         else:
             await query.edit_message_text(message_texts["dialog_app_number"])
             return NUMBER
@@ -382,9 +382,9 @@ async def unsubscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     if await db.check_subscription_in_db(update.message.chat_id):
         await db.remove_from_db(update.message.chat_id)
-        await update.message.reply_text("You have unsubscribed")
+        await update.message.reply_text(message_texts["just_subscribed"])
     else:
-        await update.message.reply_text("You are not subscribed")
+        await update.message.reply_text(message_texts["not_subscribed"])
 
 
 # Handler for /force_refresh command
@@ -394,7 +394,7 @@ async def force_refresh_command(update: Update, context: ContextTypes.DEFAULT_TY
     message = get_effective_message(update)
 
     if not await db.check_subscription_in_db(message.chat_id):
-        await message.reply_text("You are not subscribed.")
+        await message.reply_text(message_texts["not_subscribed"])
         return
     if not await enforce_rate_limit(update, context, "force_refresh"):
         return
@@ -413,10 +413,10 @@ async def force_refresh_command(update: Update, context: ContextTypes.DEFAULT_TY
             logger.info(f"Publishing force refresh for {request}")
 
             await rabbit.publish_message(request)
-            await message.reply_text("Refresh request sent.")
+            await message.reply_text(message_texts["refresh_sent"])
             await message.reply_text(message_texts["cizi_problem_promo"])
         else:
-            await message.reply_text("Failed to retrieve user data. Please try again later.")
+            await message.reply_text(message_texts["failed_to_refresh"])
     except Exception as e:
         logger.error(f"Error creating force refresh request: {e}")
         await message.reply_text(message_texts["error_generic"])
@@ -431,7 +431,7 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         app_status = await db.get_application_status_timestamp(update.message.chat_id)
         await update.message.reply_text(app_status)
     else:
-        await update.message.reply_text("You are not subscribed")
+        await update.message.reply_text(message_texts["not_subscribed"])
 
 
 # Handler for the /help command
@@ -458,7 +458,7 @@ async def admin_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 # Handler for unknown commands
 async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await context.bot.send_message(chat_id=update.effective_chat.id, text="Sorry, I didn't understand that command.")
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=message_texts["unknown_command"])
 
 
 # TODO handler for /admin_restart_fetcher

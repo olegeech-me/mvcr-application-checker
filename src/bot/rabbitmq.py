@@ -4,6 +4,7 @@ import asyncio
 import logging
 import hashlib
 from aiormq.exceptions import AMQPConnectionError
+from bot.texts import message_texts
 
 MAX_RETRIES = 5  # maximum number of connection retries
 RETRY_DELAY = 5  # delay (in seconds) between retries
@@ -120,14 +121,14 @@ class RabbitMQ:
                 if await self.db.update_db_status(chat_id, received_status, is_resolved):
                     # construct the notification text
                     if is_resolved:
-                        notification_text = f"Your application has been resolved!\n\n{received_status}"
+                        notification_text = f"{message_texts['application_resolved']}\n\n{received_status}"
                         logger.info(f"Application for user {chat_id} has been resolved to {received_status}")
 
                     # handle force refresh cases
                     if not is_resolved and force_refresh:
-                        notification_text = f"Current application status is: {received_status}"
+                        notification_text = f"{message_texts['current_status']} {received_status}"
                     elif not is_resolved and not force_refresh:
-                        notification_text = f"Your application status has been updated!\n\n{received_status}"
+                        notification_text = f"{message_texts['application_updated']}\n\n{received_status}"
 
                     # notify the user
                     try:

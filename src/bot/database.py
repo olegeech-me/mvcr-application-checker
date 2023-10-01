@@ -2,6 +2,7 @@ import asyncpg
 import logging
 import pytz
 import asyncio
+from bot.texts import message_texts
 
 MAX_RETRIES = 5  # maximum number of connection retries
 RETRY_DELAY = 2  # delay (in seconds) between retries
@@ -139,18 +140,22 @@ class Database:
         async with self.pool.acquire() as conn:
             try:
                 result = await conn.fetchrow(query, chat_id)
-                if result is not None:
+                if result is not None and result["last_updated"]:
                     current_status = result["current_status"]
                     last_updated_utc = result["last_updated"].replace(tzinfo=pytz.utc)
                     last_updated_prague = last_updated_utc.astimezone(pytz.timezone("Europe/Prague"))
                     timestamp = last_updated_prague.strftime("%H:%M:%S %d-%m-%Y")
 
-                    return f"Current Status: {current_status}\nLast Updated: <b>{timestamp}</b>"
+                    status_str = message_texts["current_status_timestamp"].format(
+                        status=current_status,
+                        timestamp=timestamp,
+                    )
+                    return status_str
                 else:
-                    return "No data found."
+                    return message_texts["current_status_empty"]
             except Exception as e:
                 logger.error(f"Error while fetching status from DB for chat ID: {chat_id}. Error: {e}")
-                return "Current status is empty. Please wait some time and try again."
+                return message_texts["error_generic"]
 
     async def check_subscription_in_db(self, chat_id):
         query = "SELECT EXISTS(SELECT chat_id FROM Applications WHERE chat_id=$1)"
