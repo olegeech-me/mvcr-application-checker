@@ -221,10 +221,9 @@ class Database:
                 return None
 
     async def set_user_language(self, chat_id, lang):
-        logger.info(f"Updating chatID {chat_id} current status in DB")
+        logger.info(f"Update user {chat_id} language in DB to {lang}")
         query = "UPDATE Applications SET language = $1 WHERE chat_id = $2"
         params = (lang, chat_id)
-        logger.info(f"Update user {chat_id} language in DB to {lang}")
         async with self.pool.acquire() as conn:
             try:
                 await conn.execute(query, *params)
