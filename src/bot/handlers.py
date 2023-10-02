@@ -16,7 +16,7 @@ ALLOWED_TYPES = ["CD", "DO", "DP", "DV", "MK", "PP", "ST", "TP", "VP", "ZK", "ZM
 POPULAR_ALLOWED_TYPES = ["DP", "TP", "ZM", "MK", "DO"]
 ALLOWED_YEARS = [y for y in range(datetime.datetime.today().year - 3, datetime.datetime.today().year + 1)]
 
-LANG, START, NUMBER, TYPE, YEAR, VALIDATE = range(6)
+START, NUMBER, TYPE, YEAR, VALIDATE = range(5)
 
 logger = logging.getLogger(__name__)
 
@@ -355,15 +355,10 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = await _get_user_language(update, context)
 
     # Prompt the user to select a language if it's the default (assumed they haven't set it yet)
-    if lang == DEFAULT_LANGUAGE:
-        keyboard = [[InlineKeyboardButton(lang, callback_data=f"set_lang_{lang}")] for lang in LANGUAGE_LIST]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.message.reply_text("Select your language / Выберете язык:", reply_markup=reply_markup)
-        return LANG
-
     await update.message.reply_text(message_texts[lang]["start_text"].format(refresh_period=int(REFRESH_PERIOD / 60)))
     keyboard = [
         [InlineKeyboardButton(button_texts[lang]["subscribe_button"], callback_data="subscribe")],
+        [InlineKeyboardButton(lang, callback_data=f"set_lang_{lang}") for lang in LANGUAGE_LIST],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(message_texts[lang]["subscribe_intro"], reply_markup=reply_markup)
@@ -401,7 +396,6 @@ async def subscribe_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     await query.answer()
 
-    assert query.data == "subscribe"
     if query.data == "subscribe":
         if await db.check_subscription_in_db(query.message.chat_id):
             await query.edit_message_text(message_texts[lang]["already_subscribed"])
@@ -502,7 +496,8 @@ async def lang_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [[InlineKeyboardButton(lang, callback_data=f"set_lang_cmd_{lang}")] for lang in LANGUAGE_LIST]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("Select your language / Выберете язык:", reply_markup=reply_markup)
+    await update.message.reply_text("Select your language / Выберете язык / Zvolte jazyk:", reply_markup=reply_markup)
+    return START
 
 
 async def _set_language(update: Update, context: ContextTypes.DEFAULT_TYPE, cmd_string: str):
@@ -529,6 +524,14 @@ async def _set_language(update: Update, context: ContextTypes.DEFAULT_TYPE, cmd_
 async def set_language_startup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Callback function for language selection during start up"""
     await _set_language(update, context, "set_lang_")
+    # Show subscribe message again
+    query = update.callback_query
+    lang = await _get_user_language(update, context)
+    keyboard = [
+        [InlineKeyboardButton(button_texts[lang]["subscribe_button"], callback_data="subscribe")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(message_texts[lang]["subscribe_intro"], reply_markup=reply_markup)
     return START
 
 
