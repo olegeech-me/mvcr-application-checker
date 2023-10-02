@@ -363,7 +363,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(lang, callback_data=f"set_lang_{lang}") for lang in LANGUAGE_LIST],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await message.reply_text(message_texts[lang]["subscribe_intro"], reply_markup=reply_markup)
+    await update.message.reply_text(message_texts[lang]["subscribe_intro"], reply_markup=reply_markup)
     return START
 
 
@@ -537,7 +537,6 @@ async def set_language_startup(update: Update, context: ContextTypes.DEFAULT_TYP
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(message_texts[lang]["subscribe_intro"], reply_markup=reply_markup)
     return START
-
 
 
 async def set_language_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):

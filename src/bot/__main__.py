@@ -6,7 +6,7 @@ import signal
 
 from bot.loader import loop, bot, db, rabbit, LOG_LEVEL
 from bot.handlers import start_command, help_command, unknown, status_command
-from bot.handlers import unsubscribe_command, subscribe_command, admin_stats_command, info_callback
+from bot.handlers import unsubscribe_command, subscribe_command, admin_stats_command
 from bot.handlers import force_refresh_command, subscribe_button, lang_command, set_language_startup, set_language_cmd
 from bot.handlers import (
     application_dialog_number,
@@ -77,8 +77,10 @@ async def main():
             CommandHandler("start", start_command, has_args=False),
         ],
         states={
-            START: [CallbackQueryHandler(subscribe_button, pattern="subscribe"),
-                    CallbackQueryHandler(set_language_startup, pattern="set_lang_*")],
+            START: [
+                CallbackQueryHandler(subscribe_button, pattern="subscribe"),
+                CallbackQueryHandler(set_language_startup, pattern="set_lang_*"),
+            ],
             NUMBER: [MessageHandler(filters.TEXT, application_dialog_number)],
             TYPE: [CallbackQueryHandler(application_dialog_type, pattern="application_dialog_type_*")],
             YEAR: [CallbackQueryHandler(application_dialog_year, pattern="application_dialog_year_*")],
