@@ -5,8 +5,9 @@ import time
 
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes, ConversationHandler
-from bot.loader import rabbit, db, ADMIN_CHAT_ID, REFRESH_PERIOD
+from bot.loader import init_db, init_rabbit, ADMIN_CHAT_ID, REFRESH_PERIOD
 from bot.texts import button_texts, message_texts
+
 
 BUTTON_WAIT_SECONDS = 1
 FORCE_FETCH_LIMIT_SECONDS = 86400
@@ -21,6 +22,10 @@ START, NUMBER, TYPE, YEAR, VALIDATE = range(5)
 
 
 logger = logging.getLogger(__name__)
+
+# Get instances of bot, database and rabbitmq
+db = init_db()
+rabbit = init_rabbit()
 
 
 async def _get_user_language(update, context):
@@ -385,7 +390,21 @@ async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await message.reply_text(message_texts[lang]["already_subscribed"])
         return
     else:
-        await update.message.reply_text(message_texts[lang]["dialog_app_number"])
+        # Let's first check if the user has supplied any arguments. If he did - let's treat them as application number
+        # and if the format matches - skip the interactive dialog.
+        if context.args:
+            number_str = "".join(context.args)
+            number_parsed = _parse_application_number_full(number_str)
+            if number_parsed:
+                context.user_data["application_number"] = number_parsed[0]
+                context.user_data["application_suffix"] = number_parsed[1]
+                context.user_data["application_type"] = number_parsed[2]
+                context.user_data["application_year"] = number_parsed[3]
+                # go straight to verification step
+                await _show_app_number_final_confirmation(update, context)
+                return VALIDATE
+        await update.message.reply_text(message_texts["dialog_app_number"])
+
     return NUMBER
 
 

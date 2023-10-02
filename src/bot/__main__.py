@@ -4,7 +4,7 @@ import asyncio
 import logging
 import signal
 
-from bot.loader import loop, bot, db, rabbit, LOG_LEVEL
+from bot.loader import init, loop, LOG_LEVEL
 from bot.handlers import start_command, help_command, unknown, status_command
 from bot.handlers import unsubscribe_command, subscribe_command, admin_stats_command
 from bot.handlers import force_refresh_command, subscribe_button, lang_command, set_language_startup, set_language_cmd
@@ -31,6 +31,8 @@ logger = logging.getLogger(__name__)
 logger.setLevel(log_level_int)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
+# Get instances of bot, database and rabbitmq
+bot, db, rabbit = init()
 
 # Instantiate application scheduler
 app_monitor = monitor.ApplicationMonitor(db=db, rabbit=rabbit)
@@ -72,8 +74,9 @@ async def main():
     bot.add_handler(CommandHandler("help", help_command, has_args=False))
     # Define conversatinal handler for user-friendly application dialog
     conv_handler = ConversationHandler(
+        allow_reentry=True,
         entry_points=[
-            CommandHandler("subscribe", subscribe_command, has_args=False),
+            CommandHandler("subscribe", subscribe_command),
             CommandHandler("start", start_command, has_args=False),
         ],
         states={
@@ -86,12 +89,16 @@ async def main():
             YEAR: [CallbackQueryHandler(application_dialog_year, pattern="application_dialog_year_*")],
             VALIDATE: [CallbackQueryHandler(application_dialog_validate, pattern="proceed_subscribe|cancel_subscribe")],
         },
-        fallbacks=[
-            CommandHandler("subscribe", subscribe_command, has_args=False),
-            CommandHandler("start", start_command, has_args=False),
-        ],
+        fallbacks=[CommandHandler("subscribe", subscribe_command),
+                   CommandHandler("start", start_command, has_args=False)],
     )
     bot.add_handler(conv_handler)
+    # Register command and message handlers
+    bot.add_handler(CommandHandler("status", status_command, has_args=False))
+    bot.add_handler(CommandHandler("unsubscribe", unsubscribe_command, has_args=False))
+    bot.add_handler(CommandHandler("force_refresh", force_refresh_command, has_args=False))
+    bot.add_handler(CommandHandler("admin_stats", admin_stats_command, has_args=False))
+    bot.add_handler(CommandHandler("help", help_command, has_args=False))
     bot.add_handler(MessageHandler(filters.COMMAND, unknown))
 
     # Run the bot
