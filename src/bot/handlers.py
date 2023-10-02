@@ -514,11 +514,10 @@ async def _set_language(update: Update, context: ContextTypes.DEFAULT_TYPE, cmd_
 
     # Store language in user_data for the session
     context.user_data["lang"] = selected_lang
-    logger.info(f"Language set to {selected_lang} at {cmd_string} for {user_info(update)}")
+    logger.info(f"Language set to {selected_lang} for {user_info(update)}")
 
     # If user has subscription, update preference in DB
     if await db.check_subscription_in_db(chat_id):
-        logger.info("updating db lang")
         await db.set_user_language(chat_id, selected_lang)
 
     await query.edit_message_text(f"Language set to {selected_lang_with_emoji}.")
@@ -541,7 +540,7 @@ async def set_language_startup(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def set_language_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Callback function for language selection during /lang command"""
-    await _set_language(update, context, "set_lang_cmd_")
+    await _set_language(update, context)
 
 
 # Handler for unknown commands
