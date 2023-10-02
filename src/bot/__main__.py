@@ -92,12 +92,6 @@ async def main():
         fallbacks=[CommandHandler("subscribe", subscribe_command), CommandHandler("start", start_command, has_args=False)],
     )
     bot.add_handler(conv_handler)
-    # Register command and message handlers
-    bot.add_handler(CommandHandler("status", status_command, has_args=False))
-    bot.add_handler(CommandHandler("unsubscribe", unsubscribe_command, has_args=False))
-    bot.add_handler(CommandHandler("force_refresh", force_refresh_command, has_args=False))
-    bot.add_handler(CommandHandler("admin_stats", admin_stats_command, has_args=False))
-    bot.add_handler(CommandHandler("help", help_command, has_args=False))
     bot.add_handler(MessageHandler(filters.COMMAND, unknown))
 
     # Run the bot
