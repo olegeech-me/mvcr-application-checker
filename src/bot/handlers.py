@@ -540,7 +540,7 @@ async def set_language_startup(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def set_language_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Callback function for language selection during /lang command"""
-    await _set_language(update, context)
+    await _set_language(update, context, "set_lang_cmd_")
 
 
 # Handler for unknown commands
