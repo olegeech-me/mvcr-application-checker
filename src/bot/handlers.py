@@ -291,7 +291,6 @@ async def application_dialog_type(update: Update, context: ContextTypes.DEFAULT_
     button_id, app_type = query.data.split(f"{app_type_callback_str}_")
     if app_type in ALLOWED_TYPES:
         # XXX FIXME(fernflower) Later switch to i18n message
-        await query.edit_message_text(f"Type {app_type} has been selected")
         context.user_data["application_type"] = app_type
     else:
         logger.warn("Unsupported application type %s", app_type)
@@ -316,7 +315,6 @@ async def application_dialog_year(update: Update, context: ContextTypes.DEFAULT_
     except ValueError:
         logger.error("Something went horribly wrong during year parsing from %s", query.data)
         return
-    await query.edit_message_text(f"Year {year} has been selected")
     context.user_data["application_year"] = year
     await _show_app_number_final_confirmation(update, context)
     return VALIDATE
