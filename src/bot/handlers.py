@@ -43,7 +43,7 @@ async def _get_user_language(update, context):
     return user_lang
 
 
-def _is_admin(chat_id: int) -> bool:
+def _is_admin(chat_id: str) -> bool:
     """Check if the user's chat_id is an admin's chat_id"""
     logger.debug(f"Effective chat_id: '{chat_id}', Allowed admin id: '{ADMIN_CHAT_ID}'")
     return int(chat_id) == int(ADMIN_CHAT_ID)
