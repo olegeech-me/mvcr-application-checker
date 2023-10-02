@@ -15,6 +15,12 @@ from bot.handlers import (
     _show_app_number_final_confirmation,
     check_and_update_limit,
     create_request,
+    _is_button_click_abused,
+    BUTTON_WAIT_SECONDS,
+    start_command,
+    subscribe_command,
+    enforce_rate_limit,
+    set_language_startup,
 )
 
 
@@ -79,6 +85,21 @@ def test_get_user_language(user_lang_db, user_lang_context, expected_lang):
         assert context.user_data["lang"] == expected_lang
 
 
+@pytest.mark.asyncio
+async def test_set_language_startup():
+    update = Mock()
+    update.callback_query = AsyncMock()
+    context = Mock()
+    context.user_data = {}
+    mock_db = AsyncMock()
+    mock_db.check_subscription_in_db.return_value = True
+
+    update.callback_query.data = "set_lang_EN"
+    with patch("bot.handlers.db", mock_db):
+        await set_language_startup(update, context)
+        assert context.user_data["lang"] == "EN"
+
+
 def test_is_admin():
     assert _is_admin("1234567") is True
     assert _is_admin("123456789") is False
@@ -138,3 +159,76 @@ async def test__show_app_number_final_confirmation():
     with patch("bot.handlers._get_user_language", return_value="EN"):
         await _show_app_number_final_confirmation(update, context)
         assert update.callback_query.edit_message_text.called
+
+
+@pytest.mark.asyncio
+async def test__is_button_click_abused():
+    # Setup a mocked update and context
+    update = Mock()
+    update.callback_query = AsyncMock()
+    context = Mock()
+    context.user_data = {}
+
+    # Should not be considered "abuse" on first click
+    is_abuse = await _is_button_click_abused(update, context)
+    assert not is_abuse
+
+    # Immediate subsequent click should be considered "abuse"
+    is_abuse = await _is_button_click_abused(update, context)
+    assert is_abuse
+
+    # Sleep for duration slightly more than BUTTON_WAIT_SECONDS and try again
+    await asyncio.sleep(BUTTON_WAIT_SECONDS + 0.1)
+    is_abuse = await _is_button_click_abused(update, context)
+    assert not is_abuse
+
+
+@pytest.mark.asyncio
+async def test_start_command():
+    # Mock update and context
+    update = Mock()
+    update.message = AsyncMock()
+    context = Mock()
+
+    with patch("bot.handlers._get_user_language", return_value="EN"):
+        await start_command(update, context)
+        assert update.message.reply_text.called
+
+
+# @pytest.mark.asyncio
+# async def test_subscribe_command_already_subscribed():
+#    # Mock update and context
+#    update = Mock()
+#    update.message = AsyncMock()
+#    context = Mock()
+#    context.args = []
+#    mock_db = AsyncMock()
+#    mock_db.check_subscription_in_db.return_value = True
+#
+#    with patch("bot.handlers.db", mock_db), patch("bot.handlers._get_user_language", return_value="EN"):
+#        await subscribe_command(update, context)
+#        update.message.reply_text.assert_called_with("You are already subscribed.")
+
+
+def test_enforce_rate_limit():
+    update = Mock()
+    update.effective_chat.id = "123456789"
+    update.message = AsyncMock()
+    update.message.reply_text = AsyncMock()
+    update.callback_query = AsyncMock()
+    update.callback_query.message = AsyncMock()
+    update.callback_query.message.reply_text = AsyncMock()
+    context = Mock()
+    context.user_data = {}
+
+    # Testing rate limit for the first time, should return True
+    result = asyncio.run(enforce_rate_limit(update, context, "test_command"))
+    assert result
+
+    # Testing rate limit for the second time, should still return True
+    result = asyncio.run(enforce_rate_limit(update, context, "test_command"))
+    assert result
+
+    # Testing rate limit for the third time, should return False
+    result = asyncio.run(enforce_rate_limit(update, context, "test_command"))
+    assert not result
