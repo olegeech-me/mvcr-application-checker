@@ -1,6 +1,6 @@
 import json
 
-LANGUAGES = ["EN", "RU", "CZ"]
+LANGUAGES = ["EN", "RU", "CZ", "UA"]
 
 
 button_texts = {}
