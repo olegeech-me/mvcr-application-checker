@@ -37,7 +37,8 @@ This project stands as a testament to open-source collaboration and the ongoing 
 
 ## Credits
 
-Big thanks to [Inessa Vasilevskaya](https://github.com/fernflower), her ideas were used to create the fetcher module.
+Big thanks to [Inessa Vasilevskaya](https://github.com/fernflower) for her major contributions to this project.
+Thanks to Fedir "Theo" L. (<https://theodorthegreathe.mojeid.cz/>) for providing Ukraine translations.
 
 ## Development
 

@@ -11,17 +11,36 @@ from bot.texts import button_texts, message_texts
 
 BUTTON_WAIT_SECONDS = 1
 FORCE_FETCH_LIMIT_SECONDS = 86400
+DEFAULT_LANGUAGE = "EN"
+LANGUAGE_LIST = ["EN 🏴󠁧󠁢󠁥󠁮󠁧󠁿|🇺🇸", "RU 🇷🇺", "CZ 🇨🇿", "UA 🇺🇦"]
 ALLOWED_TYPES = ["CD", "DO", "DP", "DV", "MK", "PP", "ST", "TP", "VP", "ZK", "ZM"]
 POPULAR_ALLOWED_TYPES = ["DP", "TP", "ZM", "MK", "DO"]
 ALLOWED_YEARS = [y for y in range(datetime.datetime.today().year - 3, datetime.datetime.today().year + 1)]
 
+
 START, NUMBER, TYPE, YEAR, VALIDATE = range(5)
+
 
 logger = logging.getLogger(__name__)
 
 # Get instances of bot, database and rabbitmq
 db = init_db()
 rabbit = init_rabbit()
+
+
+async def _get_user_language(update, context):
+    """Fetch user language preference."""
+    user_lang = context.user_data.get("lang")
+
+    if not user_lang:
+        user_lang = await db.get_user_language(update.effective_chat.id)
+
+        if not user_lang:
+            user_lang = DEFAULT_LANGUAGE
+
+        context.user_data["lang"] = user_lang
+
+    return user_lang
 
 
 def _is_admin(chat_id: int) -> bool:
@@ -86,7 +105,7 @@ def check_and_update_limit(user_data, command_name):
     return True
 
 
-async def enforce_rate_limit(update: Update, context: ContextTypes.DEFAULT_TYPE, command_name: str):
+async def enforce_rate_limit(update: Update, context: ContextTypes.DEFAULT_TYPE, command_name: str, lang="EN"):
     """
     Enforce rate limits for a given command
     Returns True if the user is allowed to proceed, False otherwise
@@ -103,7 +122,7 @@ async def enforce_rate_limit(update: Update, context: ContextTypes.DEFAULT_TYPE,
         if command_name == "subscribe":
             await message.edit_reply_markup(reply_markup=None)
 
-        await message.reply_text(message_texts["ratelimit_exceeded"])
+        await message.reply_text(message_texts[lang]["ratelimit_exceeded"])
         return False
 
     return True
@@ -122,7 +141,7 @@ def create_request(chat_id, app_data, force_refresh=False):
     }
 
 
-async def create_subscription(update, app_data):
+async def create_subscription(update, app_data, lang="EN"):
     """Handles the user's subscription request"""
     chat = update.effective_chat
     message = update.callback_query.message
@@ -136,15 +155,16 @@ async def create_subscription(update, app_data):
             chat.username,
             chat.first_name,
             chat.last_name,
+            lang,
         ):
             request = create_request(chat.id, app_data)
             await rabbit.publish_message(request)
-            await message.reply_text(message_texts["dialog_completion"])
+            await message.reply_text(message_texts[lang]["dialog_completion"])
         else:
-            await message.reply_text(message_texts["error_subscribe"])
+            await message.reply_text(message_texts[lang]["error_subscribe"])
     except Exception as e:
         logger.error(f"Error creating subscription: {e}")
-        await message.reply_text(message_texts["error_generic"])
+        await message.reply_text(message_texts[lang]["error_generic"])
 
 
 def clean_sub_context(context):
@@ -157,16 +177,17 @@ def clean_sub_context(context):
 
 async def _show_app_number_final_confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Ask user if the entered data is correct
+    lang = await _get_user_language(update, context)
     keyboard = [
-        [InlineKeyboardButton(button_texts["subscribe_correct"], callback_data="proceed_subscribe")],
-        [InlineKeyboardButton(button_texts["subscribe_incorrect"], callback_data="cancel_subscribe")],
+        [InlineKeyboardButton(button_texts[lang]["subscribe_correct"], callback_data="proceed_subscribe")],
+        [InlineKeyboardButton(button_texts[lang]["subscribe_incorrect"], callback_data="cancel_subscribe")],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     # Choose the appropriate message based on the suffix value
     confirmation_msg = (
-        message_texts["dialog_confirmation_no_suffix"]
+        message_texts[lang]["dialog_confirmation_no_suffix"]
         if context.user_data["application_suffix"] == "0"
-        else message_texts["dialog_confirmation"]
+        else message_texts[lang]["dialog_confirmation"]
     )
     msg = confirmation_msg.format(
         number=context.user_data["application_number"],
@@ -223,6 +244,7 @@ async def application_dialog_number(update: Update, context: ContextTypes.DEFAUL
       it is parsed successfully there is no need for the interactive dialog, so it's skipped.
     """
     message = get_effective_message(update)
+    lang = await _get_user_language(update, context)
     number_str = message.text.strip()
     # NOTE(fernflower) Attempt to parse full application number as is
     number_parsed = _parse_application_number_full(number_str)
@@ -238,7 +260,7 @@ async def application_dialog_number(update: Update, context: ContextTypes.DEFAUL
     # get the rest via interactive dialog
     number_parsed = _parse_application_number(message.text.strip())
     if not number_parsed:
-        await message.reply_text(message_texts["error_invalid_number"])
+        await message.reply_text(message_texts[lang]["error_invalid_number"])
         return
     context.user_data["application_number"] = number_parsed[0]
     context.user_data["application_suffix"] = number_parsed[1]
@@ -253,12 +275,13 @@ async def application_dialog_number(update: Update, context: ContextTypes.DEFAUL
         ],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(message_texts["dialog_type"], reply_markup=reply_markup)
+    await update.message.reply_text(message_texts[lang]["dialog_type"], reply_markup=reply_markup)
     return TYPE
 
 
 async def application_dialog_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    lang = await _get_user_language(update, context)
     if await _is_button_click_abused(update, context):
         return
     await query.answer()
@@ -277,7 +300,7 @@ async def application_dialog_type(update: Update, context: ContextTypes.DEFAULT_
     # Show keyboard for application year selection
     keyboard = [[InlineKeyboardButton(str(year), callback_data=f"application_dialog_year_{year}") for year in ALLOWED_YEARS]]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await query.edit_message_text(message_texts["dialog_year"], reply_markup=reply_markup)
+    await query.edit_message_text(message_texts[lang]["dialog_year"], reply_markup=reply_markup)
     return YEAR
 
 
@@ -301,13 +324,14 @@ async def application_dialog_year(update: Update, context: ContextTypes.DEFAULT_
 
 async def application_dialog_validate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    lang = await _get_user_language(update, context)
     if await _is_button_click_abused(update, context):
         return
     await query.answer()
 
     if query.data == "proceed_subscribe":
         # check if we are not over daily limit
-        if not await enforce_rate_limit(update, context, "subscribe"):
+        if not await enforce_rate_limit(update, context, "subscribe", lang=lang):
             clean_sub_context(context)
             return
 
@@ -320,12 +344,12 @@ async def application_dialog_validate(update: Update, context: ContextTypes.DEFA
 
         logger.info(f"Received application details: {app_data} from {user_info(update)}")
         await query.message.edit_reply_markup(reply_markup=None)
-        await create_subscription(update, app_data)
+        await create_subscription(update, app_data, lang=lang)
         clean_sub_context(context)
 
     if query.data == "cancel_subscribe":
         await query.message.edit_reply_markup(reply_markup=None)
-        await query.message.reply_text(message_texts["dialog_cancel"])
+        await query.message.reply_text(message_texts[lang]["dialog_cancel"])
         clean_sub_context(context)
     return ConversationHandler.END
 
@@ -334,12 +358,17 @@ async def application_dialog_validate(update: Update, context: ContextTypes.DEFA
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Shows initial message and asks to subscribe"""
     logging.info(f"Received /start command from {user_info(update)}")
-    await update.message.reply_text(message_texts["start_text"].format(refresh_period=int(REFRESH_PERIOD / 60)))
+
+    lang = await _get_user_language(update, context)
+
+    # Prompt the user to select a language if it's the default (assumed they haven't set it yet)
+    await update.message.reply_text(message_texts[lang]["start_text"].format(refresh_period=int(REFRESH_PERIOD / 60)))
     keyboard = [
-        [InlineKeyboardButton(button_texts["subscribe_button"], callback_data="subscribe")],
+        [InlineKeyboardButton(button_texts[lang]["subscribe_button"], callback_data="subscribe")],
+        [InlineKeyboardButton(lang, callback_data=f"set_lang_{lang}") for lang in LANGUAGE_LIST],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(message_texts["subscribe_intro"], reply_markup=reply_markup)
+    await update.message.reply_text(message_texts[lang]["subscribe_intro"], reply_markup=reply_markup)
     return START
 
 
@@ -354,10 +383,11 @@ async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     logger.info(f"Received /subscribe command from {user_info(update)}")
 
+    lang = await _get_user_language(update, context)
     message = get_effective_message(update)
 
     if await db.check_subscription_in_db(message.chat_id):
-        await message.reply_text(message_texts["already_subscribed"])
+        await message.reply_text(message_texts[lang]["already_subscribed"])
         return
     else:
         # Let's first check if the user has supplied any arguments. If he did - let's treat them as application number
@@ -374,22 +404,24 @@ async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await _show_app_number_final_confirmation(update, context)
                 return VALIDATE
         await update.message.reply_text(message_texts["dialog_app_number"])
+
     return NUMBER
 
 
 # Callback function for user-pressed-subscribe-button-event
 async def subscribe_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    lang = await _get_user_language(update, context)
+
     if await _is_button_click_abused(update, context):
         return
     await query.answer()
 
-    assert query.data == "subscribe"
     if query.data == "subscribe":
         if await db.check_subscription_in_db(query.message.chat_id):
-            await query.edit_message_text(message_texts["already_subscribed"])
+            await query.edit_message_text(message_texts[lang]["already_subscribed"])
         else:
-            await query.edit_message_text(message_texts["dialog_app_number"])
+            await query.edit_message_text(message_texts[lang]["dialog_app_number"])
             return NUMBER
 
 
@@ -397,13 +429,13 @@ async def subscribe_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def unsubscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Unsubscribes user from application status updates"""
     logger.info(f"Received /unsubscribe command from {user_info(update)}")
+    lang = await _get_user_language(update, context)
 
     if await db.check_subscription_in_db(update.message.chat_id):
         await db.remove_from_db(update.message.chat_id)
-        await update.message.reply_text(message_texts["just_subscribed"])
+        await update.message.reply_text(message_texts[lang]["unsubscribe"])
     else:
-        await update.message.reply_text(message_texts["not_subscribed"])
-    return START
+        await update.message.reply_text(message_texts[lang]["not_subscribed"])
 
 
 # Handler for /force_refresh command
@@ -411,11 +443,12 @@ async def force_refresh_command(update: Update, context: ContextTypes.DEFAULT_TY
     """Force refresh application status."""
     logger.info(f"Received /force_refresh command from {user_info(update)}")
     message = get_effective_message(update)
+    lang = await _get_user_language(update, context)
 
     if not await db.check_subscription_in_db(message.chat_id):
-        await message.reply_text(message_texts["not_subscribed"])
+        await message.reply_text(message_texts[lang]["not_subscribed"])
         return
-    if not await enforce_rate_limit(update, context, "force_refresh"):
+    if not await enforce_rate_limit(update, context, "force_refresh", lang=lang):
         return
     try:
         user_data = await db.get_user_data_from_db(message.chat_id)
@@ -432,32 +465,34 @@ async def force_refresh_command(update: Update, context: ContextTypes.DEFAULT_TY
             logger.info(f"Publishing force refresh for {request}")
 
             await rabbit.publish_message(request)
-            await message.reply_text(message_texts["refresh_sent"])
-            await message.reply_text(message_texts["cizi_problem_promo"])
+            await message.reply_text(message_texts[lang]["refresh_sent"])
+            await message.reply_text(message_texts[lang]["cizi_problem_promo"])
         else:
-            await message.reply_text(message_texts["failed_to_refresh"])
+            await message.reply_text(message_texts[lang]["failed_to_refresh"])
     except Exception as e:
         logger.error(f"Error creating force refresh request: {e}")
-        await message.reply_text(message_texts["error_generic"])
+        await message.reply_text(message_texts[lang]["error_generic"])
 
 
 # Handler for /status command
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Returns current status of the application"""
     logger.info(f"Received /status command from {user_info(update)}")
+    lang = await _get_user_language(update, context)
 
     if await db.check_subscription_in_db(update.message.chat_id):
-        app_status = await db.get_application_status_timestamp(update.message.chat_id)
+        app_status = await db.get_application_status_timestamp(update.message.chat_id, lang=lang)
         await update.message.reply_text(app_status)
     else:
-        await update.message.reply_text(message_texts["not_subscribed"])
+        await update.message.reply_text(message_texts[lang]["not_subscribed"])
 
 
 # Handler for the /help command
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Displays info on how to use the bot."""
     logger.info(f"Received /help command from {user_info(update)}")
-    await update.message.reply_text(message_texts["start_text"].format(refresh_period=int(REFRESH_PERIOD / 60)))
+    lang = await _get_user_language(update, context)
+    await update.message.reply_text(message_texts[lang]["start_text"].format(refresh_period=int(REFRESH_PERIOD / 60)))
 
 
 # handler for /admin_stats
@@ -475,11 +510,59 @@ async def admin_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("Error retrieving statistics.")
 
 
+# Handler for /lang command
+async def lang_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for /lang command to set language preference"""
+    logging.info(f"Received /lang command from {user_info(update)}")
+
+    keyboard = [[InlineKeyboardButton(lang, callback_data=f"set_lang_cmd_{lang}")] for lang in LANGUAGE_LIST]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("Select your language / Выберете язык / Zvolte jazyk:", reply_markup=reply_markup)
+    return START
+
+
+async def _set_language(update: Update, context: ContextTypes.DEFAULT_TYPE, cmd_string: str):
+    """Set up user language"""
+    query = update.callback_query
+    chat_id = update.effective_chat.id
+
+    selected_lang_with_emoji = query.data.split(f"{cmd_string}")[1]
+
+    # Extract the clean key without emoji
+    selected_lang = selected_lang_with_emoji.split()[0]
+
+    # Store language in user_data for the session
+    context.user_data["lang"] = selected_lang
+    logger.info(f"Language set to {selected_lang} for {user_info(update)}")
+
+    # If user has subscription, update preference in DB
+    if await db.check_subscription_in_db(chat_id):
+        await db.set_user_language(chat_id, selected_lang)
+
+    await query.edit_message_text(f"Language set to {selected_lang_with_emoji}.")
+
+
+async def set_language_startup(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Callback function for language selection during start up"""
+
+    await _set_language(update, context, "set_lang_")
+    # Show subscribe message again
+    query = update.callback_query
+    lang = await _get_user_language(update, context)
+    keyboard = [
+        [InlineKeyboardButton(button_texts[lang]["subscribe_button"], callback_data="subscribe")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(message_texts[lang]["subscribe_intro"], reply_markup=reply_markup)
+    return START
+
+
+async def set_language_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Callback function for language selection during /lang command"""
+    await _set_language(update, context, "set_lang_cmd_")
+
+
 # Handler for unknown commands
 async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=message_texts["unknown_command"])
-
-
-# TODO handler for /admin_restart_fetcher
-# TODO hander for /admin_restart_bot
-# TODO handler for /admin_oldest_refresh
+    lang = await _get_user_language(update, context)
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=message_texts[lang]["unknown_command"])
