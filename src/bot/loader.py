@@ -39,13 +39,13 @@ class Loader:
 
     @property
     def bot(self):
-        if self._bot is None and RUN_MODE != "TEST":
+        if not self._bot and RUN_MODE != "TEST":
             self._bot = Application.builder().token(TOKEN).defaults(defaults).build()
         return self._bot
 
     @property
     def db(self):
-        if self._db is None and RUN_MODE != "TEST":
+        if not self._db and RUN_MODE != "TEST":
             self._db = database.Database(
                 dbname=DB_NAME,
                 user=DB_USER,
@@ -58,7 +58,7 @@ class Loader:
 
     @property
     def rabbit(self):
-        if self._rabbit is None and RUN_MODE != "TEST":
+        if not self._rabbit and RUN_MODE != "TEST":
             self._rabbit = rabbitmq.RabbitMQ(
                 host=RABBIT_HOST,
                 user=RABBIT_USER,
