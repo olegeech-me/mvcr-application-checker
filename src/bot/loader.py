@@ -33,6 +33,7 @@ BOT = None
 DB = None
 RABBIT = None
 
+
 # Init bot, db and rabbit
 def init_bot():
     global BOT
@@ -42,27 +43,32 @@ def init_bot():
 
 def init_db():
     global DB
-    DB = DB or database.Database(dbname=DB_NAME,
-                                 user=DB_USER,
-                                 password=DB_PASSWORD,
-                                 host=DB_HOST,
-                                 port=DB_PORT,
-                                 loop=loop,
-                                 )
+    DB = DB or database.Database(
+        dbname=DB_NAME,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        host=DB_HOST,
+        port=DB_PORT,
+        loop=loop,
+    )
     return DB
 
 
-def init_rabbit():
+def init_rabbit(bot_instance, db_instance):
     global RABBIT
-    RABBIT = RABBIT or rabbitmq.RabbitMQ(host=RABBIT_HOST,
-                                         user=RABBIT_USER,
-                                         password=RABBIT_PASSWORD,
-                                         bot=BOT,
-                                         db=DB,
-                                         loop=loop,
-                                         )
+    RABBIT = RABBIT or rabbitmq.RabbitMQ(
+        host=RABBIT_HOST,
+        user=RABBIT_USER,
+        password=RABBIT_PASSWORD,
+        bot=bot_instance,
+        db=db_instance,
+        loop=loop,
+    )
     return RABBIT
 
 
 def init():
-    return init_bot(), init_db(), init_rabbit()
+    bot_instance = init_bot()
+    db_instance = init_db()
+    rabbit_instance = init_rabbit(bot_instance, db_instance)
+    return bot_instance, db_instance, rabbit_instance

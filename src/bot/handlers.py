@@ -5,7 +5,7 @@ import time
 
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes, ConversationHandler
-from bot.loader import init_db, init_rabbit, ADMIN_CHAT_ID, REFRESH_PERIOD
+from bot.loader import init, ADMIN_CHAT_ID, REFRESH_PERIOD
 from bot.texts import button_texts, message_texts
 
 
@@ -24,8 +24,7 @@ START, NUMBER, TYPE, YEAR, VALIDATE = range(5)
 logger = logging.getLogger(__name__)
 
 # Get instances of bot, database and rabbitmq
-db = init_db()
-rabbit = init_rabbit()
+_bot, db, rabbit = init()
 
 
 async def _get_user_language(update, context):
@@ -403,7 +402,7 @@ async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # go straight to verification step
                 await _show_app_number_final_confirmation(update, context)
                 return VALIDATE
-        await update.message.reply_text(message_texts["dialog_app_number"])
+        await update.message.reply_text(message_texts[lang]["dialog_app_number"])
 
     return NUMBER
 
