@@ -16,7 +16,9 @@ ALLOWED_TYPES = ["CD", "DO", "DP", "DV", "MK", "PP", "ST", "TP", "VP", "ZK", "ZM
 POPULAR_ALLOWED_TYPES = ["DP", "TP", "ZM", "MK", "DO"]
 ALLOWED_YEARS = [y for y in range(datetime.datetime.today().year - 3, datetime.datetime.today().year + 1)]
 
+
 START, NUMBER, TYPE, YEAR, VALIDATE = range(5)
+
 
 logger = logging.getLogger(__name__)
 
@@ -361,7 +363,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(lang, callback_data=f"set_lang_{lang}") for lang in LANGUAGE_LIST],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(message_texts[lang]["subscribe_intro"], reply_markup=reply_markup)
+    await message.reply_text(message_texts[lang]["subscribe_intro"], reply_markup=reply_markup)
     return START
 
 
@@ -512,6 +514,7 @@ async def _set_language(update: Update, context: ContextTypes.DEFAULT_TYPE, cmd_
 
     # Store language in user_data for the session
     context.user_data["lang"] = selected_lang
+    logger.info(f"Language set to {selected_lang} at {cmd_string} for {user_info(update)}")
 
     # If user has subscription, update preference in DB
     if await db.check_subscription_in_db(chat_id):
@@ -523,6 +526,7 @@ async def _set_language(update: Update, context: ContextTypes.DEFAULT_TYPE, cmd_
 
 async def set_language_startup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Callback function for language selection during start up"""
+
     await _set_language(update, context, "set_lang_")
     # Show subscribe message again
     query = update.callback_query
@@ -533,6 +537,7 @@ async def set_language_startup(update: Update, context: ContextTypes.DEFAULT_TYP
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(message_texts[lang]["subscribe_intro"], reply_markup=reply_markup)
     return START
+
 
 
 async def set_language_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):

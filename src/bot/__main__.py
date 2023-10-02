@@ -6,7 +6,7 @@ import signal
 
 from bot.loader import loop, bot, db, rabbit, LOG_LEVEL
 from bot.handlers import start_command, help_command, unknown, status_command
-from bot.handlers import unsubscribe_command, subscribe_command, admin_stats_command
+from bot.handlers import unsubscribe_command, subscribe_command, admin_stats_command, info_callback
 from bot.handlers import force_refresh_command, subscribe_button, lang_command, set_language_startup, set_language_cmd
 from bot.handlers import (
     application_dialog_number,
@@ -68,7 +68,7 @@ async def main():
     bot.add_handler(CommandHandler("force_refresh", force_refresh_command, has_args=False))
     bot.add_handler(CommandHandler("admin_stats", admin_stats_command, has_args=False))
     bot.add_handler(CommandHandler("lang", lang_command, has_args=False))
-    bot.add_handler(CallbackQueryHandler(set_language_cmd, pattern="set_lang_cmd*"))
+    bot.add_handler(CallbackQueryHandler(set_language_cmd, pattern="set_lang_cmd_*"))
     bot.add_handler(CommandHandler("help", help_command, has_args=False))
     # Define conversatinal handler for user-friendly application dialog
     conv_handler = ConversationHandler(
