@@ -11,5 +11,5 @@ CREATE TABLE IF NOT EXISTS Applications (
     current_status VARCHAR(255),
     last_updated TIMESTAMP,
     is_resolved BOOLEAN NOT NULL DEFAULT FALSE,
-    language VARCHAR(255) NOT NULL DEFAULT 'EN',
+    language VARCHAR(255) NOT NULL DEFAULT 'EN'
 );
