@@ -5,7 +5,7 @@ import time
 
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes, ConversationHandler
-from bot.loader import init, ADMIN_CHAT_ID, REFRESH_PERIOD
+from bot.loader import loader, ADMIN_CHAT_ID, REFRESH_PERIOD
 from bot.texts import button_texts, message_texts
 
 
@@ -23,8 +23,9 @@ START, NUMBER, TYPE, YEAR, VALIDATE = range(5)
 
 logger = logging.getLogger(__name__)
 
-# Get instances of bot, database and rabbitmq
-_bot, db, rabbit = init()
+# Get instances of database and rabbitmq (lazy init)
+db = loader.db
+rabbit = loader.rabbit
 
 
 async def _get_user_language(update, context):

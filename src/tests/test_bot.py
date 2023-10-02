@@ -1,4 +1,7 @@
 import pytest
+import os
+
+os.environ["RUN_MODE"] = "TEST"
 from bot.handlers import _parse_application_number_full, _parse_application_number
 
 
