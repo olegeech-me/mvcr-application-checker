@@ -168,3 +168,7 @@ postgres.env
 # local certs
 ssl/*.key
 ssl/*.crt
+
+# k8s configs
+k8s/fetcher.yaml
+k8s/bot.yaml

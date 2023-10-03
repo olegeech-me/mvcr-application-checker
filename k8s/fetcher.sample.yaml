@@ -1,0 +1,77 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fetcher-cm
+data:
+  URL: "https://frs.gov.cz/informace-o-stavu-rizeni/"
+  RETRY_INTERVAL: "30"
+  PAGE_LOAD_LIMIT_SECONDS: "20"
+  CAPTCHA_WAIT_SECONDS: "120"
+  JITTER_SECONDS: "600"
+  MAX_MESSAGES: "10"
+  MAX_RETRIES: "5"
+  RABBIT_HOST: "rabbit.example.com"
+  RABBIT_USER: "admin"
+  RABBIT_SSL_PORT: "5671"
+  RABBIT_SSL_CACERTFILE: "/etc/ssl/ca.crt"
+  RABBIT_SSL_CERTFILE: "/etc/ssl/client.crt"
+  RABBIT_SSL_KEYFILE: "/etc/ssl/client.key"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: fetcher-secrets
+type: Opaque
+data:
+  # Please base64 encode your SSL files and rabbit password and update below
+  ca.crt: YOUR_BASE64_ENCODED_CA_CRT
+  client.crt: YOUR_BASE64_ENCODED_CLIENT_CRT
+  client.key: YOUR_BASE64_ENCODED_CLIENT_KEY
+  RABBIT_PASSWORD: YOUR_BASE64_ENCODED_RABBIT_PASSWORD
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fetcher-deployment
+  labels:
+    app: fetcher
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fetcher
+  template:
+    metadata:
+      labels:
+        app: fetcher
+    spec:
+      containers:
+      - name: fetcher
+        image: olegeech/mvcr-application-checker:fetcher-latest
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - name: fetcher-data
+          mountPath: /code/output
+        - name: ssl-data
+          mountPath: /etc/ssl/
+          readOnly: true
+        envFrom:
+        - configMapRef:
+            name: fetcher-cm
+        env:
+        - name: RABBIT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: fetcher-secrets
+              key: RABBIT_PASSWORD
+      volumes:
+      - name: fetcher-data
+        emptyDir: {}
+      - name: ssl-data
+        secret:
+          secretName: fetcher-secrets
+
