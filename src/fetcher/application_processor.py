@@ -77,7 +77,7 @@ class ApplicationProcessor:
         request_type = app_details.get("request_type", "fetch")  # stub for dealing with old format messages in queue
         forced = app_details.get("force_refresh")
 
-        log_prefix_elements = [f"[{app_details['number']}]"], f"[{request_type.upper()}]"
+        log_prefix_elements = [f"[{app_details['number']}]", f"[{request_type.upper()}]"]
         if retry_count:
             log_prefix_elements.append(f"[X-RETRY {retry_count}]")
         if forced:
