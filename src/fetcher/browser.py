@@ -27,6 +27,12 @@ class Browser:
         self.display = None
         self.browser = None
         self.retries = retries
+        self.app_details = {}
+
+    def _log(self, log_level, message, *args):
+        """Wrapper around logger to add application number to the log messages."""
+        msg = f"[{self.app_details['number']}] {message}"
+        logger.log(log_level, msg, *args)
 
     def _get_useragent(self):
         ua = fake_useragent.UserAgent(browsers=["firefox"])
@@ -35,11 +41,11 @@ class Browser:
     def _init_browser(self):
         # set user-agent
         useragent = self._get_useragent()
-        logger.info("User-Agent for this request will be %s", useragent)
+        self._log(logging.INFO, "User-Agent for this request will be %s", useragent)
         # configure display & options
         self.display = Display(visible=0, size=(1420, 1080))
         self.display.start()
-        logger.info("Initialized virtual display")
+        self._log(logging.INFO, "Initialized virtual display")
         options = webdriver.firefox.options.Options()
         options.set_preference("intl.accept_languages", "cs-CZ")
         options.set_preference("http.response.timeout", PAGE_LOAD_LIMIT_SECONDS)
@@ -62,7 +68,7 @@ class Browser:
 
     def _submit_form(self, app_details):
         """Submit application details into the form"""
-        logger.debug(f"Submitting application data for {app_details}")
+        self._log(logging.INFO, "Submitting application data %s", app_details)
 
         WebDriverWait(self.browser, PAGE_LOAD_LIMIT_SECONDS).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, ".input__control"))
@@ -122,6 +128,7 @@ class Browser:
                 with open(out_file, "w") as f:
                     f.write(page_source)
 
+        self.app_details = app_details
         browser = self._get_browser()
         application_status_text = None
 
@@ -143,9 +150,10 @@ class Browser:
 
             application_status = browser.find_element_by_class_name("alert__content")
             application_status_text = application_status.get_attribute("innerHTML")
+            self._log(logging.INFO, "Application status fetched")
 
         except (WebDriverException, MaxRetryError) as err:
-            logger.error("An error has occurred during page loading %s", err)
+            self._log(logging.ERROR, "An error has occurred during page loading: %s", err)
             _save_page_source(browser)
             self.close()
 
@@ -160,7 +168,7 @@ class Browser:
         while attempts_left and not res:
             attempts_left -= 1
             retry_in = int(RETRY_INTERVAL / 3 + random.randint(1, int(2 * RETRY_INTERVAL / 3)))
-            logger.info(f"Looks like connection error, will retry {url} again later in {retry_in}")
+            self._log(logging.WARNING, "Fetch failed, retrying %s later in %d seconds", url, retry_in)
             await asyncio.sleep(retry_in)
             res = await self._do_fetch_with_browser(url=url, app_details=app_details)
         return res
