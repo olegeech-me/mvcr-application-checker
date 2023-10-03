@@ -74,7 +74,7 @@ class ApplicationProcessor:
         """Process a fetch or refresh request"""
         app_details = self._get_app_details_from_message(message)
         retry_count = message.headers.get("x-retry-count")
-        request_type = app_details.get("request_type")
+        request_type = app_details.get("request_type", "fetch")  # stub for dealing with old format messages in queue
         forced = app_details.get("force_refresh")
 
         log_prefix_elements = [f"[{app_details['number']}]"], f"[{request_type.upper()}]"
