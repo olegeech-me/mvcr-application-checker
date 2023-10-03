@@ -8,7 +8,7 @@ from bot.texts import message_texts
 
 MAX_RETRIES = 5  # maximum number of connection retries
 RETRY_DELAY = 5  # delay (in seconds) between retries
-FINAL_STATUSES = ["bylo <b>povoleno</b>", "pokud bylo vaše řízení povoleno", "nebylo", "nepovoleno", "we couldn't get the status"]
+FINAL_STATUSES = ["bylo <b>povoleno</b>", "pokud bylo vaše řízení povoleno", "nebylo", "nepovoleno"]
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +72,17 @@ class RabbitMQ:
         """Check if the application was resolved to its final status"""
         return any(phrase in status for phrase in FINAL_STATUSES)
 
+    def _generate_error_message(self, app_details, lang):
+        """Generate an error message for an application number"""
+        if app_details["suffix"] != "0":
+            app_string = "OAM-{}-{}/{}-{}".format(
+                app_details["number"], app_details["suffix"], app_details["type"], app_details["year"]
+            )
+        else:
+            app_string = "OAM-{}/{}-{}".format(app_details["number"], app_details["type"], app_details["year"])
+
+        return message_texts[lang]["application_failed"].format(app_string=app_string)
+
     async def on_message(self, message: aio_pika.IncomingMessage):
         """Async function to handle messages from StatusUpdateQueue"""
         async with message.process():
@@ -79,6 +90,9 @@ class RabbitMQ:
             logger.info(f"Received status update message: {msg_data}")
             chat_id = msg_data.get("chat_id", None)
             received_status = msg_data.get("status", None)
+            force_refresh = msg_data.get("force_refresh", False)
+            failed = msg_data.get("failed", False)
+            request_type = msg_data.get("request_type", None)
 
             # Generate unique ID for the consumed message and remove it from published_messages
             unique_id = self.generate_unique_id(msg_data)
@@ -92,6 +106,13 @@ class RabbitMQ:
                     logger.error(f"Failed to get current status from db for user {chat_id}")
                     return
 
+                if failed and request_type == "refresh":
+                    # Drop failed refresh requests with log message
+                    # But do not update status in DB to avoid mass status rewrite
+                    # in case of issues at fetcher
+                    logger.warning(f"Failed to refresh status for user {chat_id}")
+                    return
+
                 # FIXME olegeech: should be fixed on the fetcher side
                 # sometimes the fetcher returns a status for a different application
                 # with the one trailing number off
@@ -102,15 +123,15 @@ class RabbitMQ:
                     )
                     return
 
-                # check if it's force_refresh response
-                force_refresh = msg_data.get("force_refresh", False)
-
                 if current_status == received_status and not force_refresh:
                     logger.info(f"Status didn't change for user {chat_id} application")
                     await self.db.update_timestamp(chat_id)
                     return
 
-                is_resolved = self.is_resolved(received_status)
+                if failed and request_type == "fetch":
+                    is_resolved = True
+                else:
+                    is_resolved = self.is_resolved(received_status)
 
                 if force_refresh:
                     logger.info(f"Received force refresh response, notifying user {chat_id}")
@@ -120,15 +141,21 @@ class RabbitMQ:
                 # update application status in the DB
                 if await self.db.update_db_status(chat_id, received_status, is_resolved):
                     lang = await self.db.get_user_language(chat_id)
+
+                    # if fetch request failed miserably
+                    if failed and request_type == "fetch":
+                        logger.warning(f"Failed fetch status for user {chat_id}")
+                        notification_text = self._generate_error_message(msg_data, lang)
+
                     # construct the notification text
-                    if is_resolved:
+                    if is_resolved and not failed:
                         notification_text = f"{message_texts[lang]['application_resolved']}\n\n{received_status}"
                         logger.info(f"Application for user {chat_id} has been resolved to {received_status}")
 
                     # handle force refresh cases
-                    if not is_resolved and force_refresh:
+                    if not is_resolved and force_refresh and not failed:
                         notification_text = f"{message_texts[lang]['current_status']} {received_status}"
-                    elif not is_resolved and not force_refresh:
+                    elif not is_resolved and not force_refresh and not failed:
                         notification_text = f"{message_texts[lang]['application_updated']}\n\n{received_status}"
 
                     # notify the user

@@ -40,6 +40,9 @@ class ApplicationMonitor:
                 "suffix": app["application_suffix"],
                 "type": app["application_type"],
                 "year": app["application_year"],
+                "force_refresh": False,
+                "failed": False,
+                "request_type": "refresh",
                 "last_updated": app["last_updated"].isoformat() if app["last_updated"] else "0",
             }
             logger.info(f"Scheduling status update for {app['application_number']} user {app['chat_id']} {app['last_updated']}")

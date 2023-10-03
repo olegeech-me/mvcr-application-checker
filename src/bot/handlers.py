@@ -137,6 +137,8 @@ def create_request(chat_id, app_data, force_refresh=False):
         "type": app_data["type"].upper(),
         "year": app_data["year"],
         "force_refresh": force_refresh,
+        "failed": False,
+        "request_type": "fetch",
         "last_updated": "0",
     }
 
@@ -340,7 +342,7 @@ async def application_dialog_validate(update: Update, context: ContextTypes.DEFA
             "year": context.user_data["application_year"],
         }
 
-        logger.info(f"Received application details: {app_data} from {user_info(update)}")
+        logger.info(f"[SUBSCRIBE] Received application details: {app_data} from {user_info(update)}")
         await query.message.edit_reply_markup(reply_markup=None)
         await create_subscription(update, app_data, lang=lang)
         clean_sub_context(context)
@@ -537,7 +539,7 @@ async def _set_language(update: Update, context: ContextTypes.DEFAULT_TYPE, cmd_
     if await db.check_subscription_in_db(chat_id):
         await db.set_user_language(chat_id, selected_lang)
 
-    await query.edit_message_text(f"Language set to {selected_lang_with_emoji}.")
+    await query.edit_message_text(message_texts[selected_lang]["language_selected"].format(lang=selected_lang_with_emoji))
 
 
 async def set_language_startup(update: Update, context: ContextTypes.DEFAULT_TYPE):
