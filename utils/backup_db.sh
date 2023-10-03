@@ -13,4 +13,4 @@ docker exec postgres pg_dump --user=apptracker_db_admin AppTrackerDB > $BACKUP_F
 
 # Remove backups if there are more than 5
 cd $BACKUP_DIR
-ls -t | grep backup_ | tail -n +6 | xargs rm -f
+ls -t | grep mvcr_ | tail -n +6 | xargs rm -f
