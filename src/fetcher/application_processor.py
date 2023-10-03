@@ -33,14 +33,14 @@ class ApplicationProcessor:
     async def start_processing(self, request_type, app_number):
         """Mark an application number as currently being processed"""
         async with self.lock:
-            logger.info(f"Locking {request_type} request {app_number} for processing")
+            logger.info(f"[{app_number}][{request_type.upper()}] Locking for processing")
             self.processing_apps[request_type].add(app_number)
 
     async def end_processing(self, request_type, app_number):
         """Mark an application number as done processing"""
         async with self.lock:
             if app_number in self.processing_apps[request_type]:
-                logger.info(f"Unlocking {request_type} request {app_number}, processing finished")
+                logger.info(f"[{app_number}][{request_type.upper()}] Unlocking, processing finished")
                 self.processing_apps[request_type].remove(app_number)
 
     def _get_app_details_from_message(self, message):
@@ -77,7 +77,7 @@ class ApplicationProcessor:
         request_type = app_details.get("request_type")
         forced = app_details.get("force_refresh")
 
-        log_prefix_elements = [f"[{request_type.upper()}]", f"[{app_details['number']}]"]
+        log_prefix_elements = [f"[{app_details['number']}]"], f"[{request_type.upper()}]"
         if retry_count:
             log_prefix_elements.append(f"[X-RETRY {retry_count}]")
         if forced:
