@@ -1,7 +1,10 @@
 import pytest
+import pytest_mock
 import os
+import json
 from unittest.mock import Mock, AsyncMock, patch
 import asyncio
+from bot.rabbitmq import RabbitMQ
 
 os.environ["RUN_MODE"] = "TEST"
 os.environ["ADMIN_CHAT_ID"] = "1234567"
@@ -232,3 +235,44 @@ def test_enforce_rate_limit():
     # Testing rate limit for the third time, should return False
     result = asyncio.run(enforce_rate_limit(update, context, "test_command"))
     assert not result
+
+
+# @pytest.fixture
+# def mock_rabbit(mocker):
+#    bot = AsyncMock()
+#    db = AsyncMock()
+#    loop = asyncio.get_event_loop()
+#    mocker.patch("aiormq.Connection", AsyncMock())
+#    rabbit = RabbitMQ("host", "user", "password", bot, db, loop)
+#
+#    # Mocking RabbitMQ connections and channels
+#    rabbit.connection = AsyncMock()
+#    rabbit.channel = AsyncMock()
+#    rabbit.queue = AsyncMock()
+#    rabbit.default_exchange = AsyncMock()
+#
+#    return rabbit
+#
+#
+# @pytest.mark.asyncio
+# async def test_connect_success(mock_rabbit):
+#    await mock_rabbit.connect()
+#    mock_rabbit.channel.declare_queue.assert_called_once_with("StatusUpdateQueue", durable=True)
+#
+#
+# @pytest.mark.asyncio
+# async def test_on_message_no_change(mock_rabbit):
+#    mock_msg = AsyncMock()
+#    mock_msg.body = json.dumps(
+#        {
+#            "chat_id": "123",
+#            "status": "test_status",
+#            "number": "12345",
+#            "last_updated": "now",
+#            "force_refresh": False,
+#        }
+#    ).encode("utf-8")
+#
+#    mock_rabbit.db.get_application_status = AsyncMock(return_value="test_status")
+#    await mock_rabbit.on_message(mock_msg)
+#    mock_rabbit.bot.updater.bot.send_message.assert_not_called()
