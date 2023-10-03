@@ -70,10 +70,13 @@ class ApplicationProcessor:
         """Process a fetch or refresh request"""
         app_details = self._get_app_details_from_message(message)
         retry_count = message.headers.get("x-retry-count")
+        forced = app_details.get("forced_refresh")
 
         log_prefix_elements = [f"[{request_type.upper()}]", f"[{app_details['number']}]"]
         if retry_count:
             log_prefix_elements.append(f"[X-RETRY {retry_count}]")
+        if forced:
+            log_prefix_elements.append("[FORCED]")
         log_prefix = "".join(log_prefix_elements)
         logger.info("%s Received request: %s", log_prefix, app_details)
 
