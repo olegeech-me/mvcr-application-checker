@@ -84,7 +84,7 @@ class ApplicationProcessor:
         app_details = json.loads(message.body.decode("utf-8"))
         logger.info(f"Received fetch request: {app_details}")
 
-        if await self.is_processing(app_details["number"]):
+        if await self.is_processing(app_details["number"]) and not message.headers.get("x-retry-count"):
             logger.info(
                 f"Skipping fetch request for application number {app_details['number']} as it's currently being processed"
             )
@@ -110,7 +110,7 @@ class ApplicationProcessor:
         app_details = json.loads(message.body.decode())
         logger.info(f"Received refresh request: {app_details}")
 
-        if await self.is_processing(app_details["number"]):
+        if await self.is_processing(app_details["number"]) and not message.headers.get("x-retry-count"):
             logger.info(
                 f"Skipping refresh request for application number {app_details['number']} as it's currently being processed"
             )
