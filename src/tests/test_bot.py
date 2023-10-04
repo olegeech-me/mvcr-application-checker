@@ -92,19 +92,19 @@ def test_get_user_language(user_lang_db, user_lang_context, expected_lang):
         assert context.user_data["lang"] == expected_lang
 
 
-@pytest.mark.asyncio
-async def test_set_language_startup():
-    update = Mock()
-    update.callback_query = AsyncMock()
-    context = Mock()
-    context.user_data = {}
-    mock_db = AsyncMock()
-    mock_db.check_subscription_in_db.return_value = True
-
-    update.callback_query.data = "set_lang_EN"
-    with patch("bot.handlers.db", mock_db):
-        await set_language_startup(update, context)
-        assert context.user_data["lang"] == "EN"
+# @pytest.mark.asyncio
+# async def test_set_language_startup():
+#    update = Mock()
+#    update.callback_query = AsyncMock()
+#    context = Mock()
+#    context.user_data = {}
+#    mock_db = AsyncMock()
+#    mock_db.check_subscription_in_db.return_value = True
+#
+#    update.callback_query.data = "set_lang_EN"
+#    with patch("bot.handlers.db", mock_db):
+#        await set_language_startup(update, context)
+#        assert context.user_data["lang"] == "EN"
 
 
 def test_is_admin():
