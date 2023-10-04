@@ -3,7 +3,7 @@ import logging
 import re
 import time
 
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, BotCommand
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, BotCommand, BotCommandScopeChat
 from telegram.ext import ContextTypes, ConversationHandler
 from bot.loader import loader, ADMIN_CHAT_ID, REFRESH_PERIOD
 from bot.texts import button_texts, message_texts, commands_description
@@ -38,7 +38,7 @@ async def _set_menu_commands(update: Update, context: ContextTypes.DEFAULT_TYPE,
         # tmp to debug issues:
         logger.info(f"Adding admin menu commands for chat_id {update.effective_chat.id}, ADMIN_CHAT_ID={ADMIN_CHAT_ID}")
         commands.extend([BotCommand(cmd, commands_description[lang][cmd]) for cmd in ADMIN_COMMANDS])
-    await context.bot.set_my_commands(commands)
+    await context.bot.set_my_commands(commands, BotCommandScopeChat(update.effective_chat.id))
 
 
 async def _get_user_language(update, context):
