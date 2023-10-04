@@ -26,7 +26,8 @@ from bot.handlers import (
     set_language_startup,
 )
 
-
+@patch('bot.handlers.ALLOWED_YEARS', [2020, 2021, 2022, 2023, 2042])
+@patch('bot.handlers.ALLOWED_TYPES', ['MK', 'DO', 'TP'])
 @pytest.mark.parametrize(
     "num_str, app_num, app_suffix, app_type, app_year",
     [
@@ -34,6 +35,8 @@ from bot.handlers import (
         ("4242-5/DO-2020", "4242", "5", "DO", "2020"),
         ("oAM-12345-9/MK-2023", "12345", "9", "MK", "2023"),
         ("BAD-NUMBER/MK-2023", None, None, None, None),
+        ("oam-4242-6/MK-1999", None, None, None, None),
+        ("oam-4242-6/NT-2021", None, None, None, None),
     ],
 )
 def test__parse_application_number_full(num_str, app_num, app_suffix, app_type, app_year):
