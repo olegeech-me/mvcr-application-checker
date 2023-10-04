@@ -32,7 +32,7 @@ rabbit = loader.rabbit
 
 async def _set_menu_commands(update: Update, context: ContextTypes.DEFAULT_TYPE, lang="EN"):
     """Sets available bot menu commands"""
-    logger.info(f"Setting menu commands for {user_info(update)}, language: {lang}")
+    logger.debug(f"Setting menu commands for {user_info(update)}, language: {lang}")
     commands = [BotCommand(cmd, commands_description[lang][cmd]) for cmd in COMMANDS_LIST]
     if _is_admin(update.effective_chat.id):
         logger.debug(f"Adding admin menu commands for chat_id {update.effective_chat.id}, ADMIN_CHAT_ID={ADMIN_CHAT_ID}")
