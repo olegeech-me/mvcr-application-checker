@@ -66,7 +66,7 @@ class RabbitMQ:
         """Discard the message ID if it exists"""
         if unique_id in self.published_messages:
             self.published_messages.remove(unique_id)
-            logger.info(f"Reply received for message ID {unique_id}")
+            logger.debug(f"Reply received for message ID {unique_id}")
 
     def is_resolved(self, status):
         """Check if the application was resolved to its final status"""
@@ -87,7 +87,7 @@ class RabbitMQ:
         """Async function to handle messages from StatusUpdateQueue"""
         async with message.process():
             msg_data = json.loads(message.body.decode("utf-8"))
-            logger.info(f"Received status update message: {msg_data}")
+            logger.debug(f"Received status update message: {msg_data}")
             chat_id = msg_data.get("chat_id", None)
             received_status = msg_data.get("status", None)
             force_refresh = msg_data.get("force_refresh", False)
@@ -110,7 +110,7 @@ class RabbitMQ:
                     # Drop failed refresh requests with log message
                     # But do not update status in DB to avoid mass status rewrite
                     # in case of issues at fetcher
-                    logger.warning(f"Failed to refresh status for user {chat_id}")
+                    logger.warning(f"[REFRESH FAILED] Failed to refresh status for user {chat_id}")
                     return
 
                 # FIXME olegeech: should be fixed on the fetcher side
@@ -119,12 +119,13 @@ class RabbitMQ:
                 # e.g. 1234 instead of 12345
                 if msg_data["number"] not in msg_data["status"]:
                     logger.warning(
-                        f"Application number in status {msg_data['status']} doesn't match application number {msg_data['number']}"
+                        f"[NOMATCH] Application number in status {received_status} "
+                        f"doesn't match application number {msg_data['number']}"
                     )
                     return
 
                 if current_status == received_status and not force_refresh:
-                    logger.info(f"Status didn't change for user {chat_id} application")
+                    logger.debug(f"Status didn't change for user {chat_id} application")
                     await self.db.update_timestamp(chat_id)
                     return
 
@@ -134,9 +135,9 @@ class RabbitMQ:
                     is_resolved = self.is_resolved(received_status)
 
                 if force_refresh:
-                    logger.info(f"Received force refresh response, notifying user {chat_id}")
+                    logger.info(f"[FORCED] Received force refresh response for user {chat_id}, status: {received_status}")
                 else:
-                    logger.info(f"Status of application has changed, notifying user {chat_id}")
+                    logger.info(f"[CHANGED] Application status for user {chat_id} has changed to {received_status}")
 
                 # update application status in the DB
                 if await self.db.update_db_status(chat_id, received_status, is_resolved):
@@ -144,13 +145,13 @@ class RabbitMQ:
 
                     # if fetch request failed miserably
                     if failed and request_type == "fetch":
-                        logger.warning(f"Failed fetch status for user {chat_id}")
+                        logger.warning(f"[FETCH FAILED] Fetch request failed for user {chat_id}")
                         notification_text = self._generate_error_message(msg_data, lang)
 
                     # construct the notification text
                     if is_resolved and not failed:
                         notification_text = f"{message_texts[lang]['application_resolved']}\n\n{received_status}"
-                        logger.info(f"Application for user {chat_id} has been resolved to {received_status}")
+                        logger.info(f"[RESOLVED] Application for user {chat_id} has been resolved to {received_status}")
 
                     # handle force refresh cases
                     if not is_resolved and force_refresh and not failed:
@@ -161,7 +162,7 @@ class RabbitMQ:
                     # notify the user
                     try:
                         await self.bot.updater.bot.send_message(chat_id=chat_id, text=notification_text)
-                        logger.info(f"Sent status update to chatID {chat_id}")
+                        logger.debug(f"Sent status update to chatID {chat_id}")
                     except Exception as e:
                         logger.error(f"Failed to send status update to {chat_id}: {e}")
 
@@ -173,15 +174,16 @@ class RabbitMQ:
     async def publish_message(self, message, routing_key="ApplicationFetchQueue"):
         """Publishes a message to fetchers queue, ensuring not to publish duplicates"""
         unique_id = self.generate_unique_id(message)
+        message_tag = f"chat_id: {message['chat_id']} number: {message['number']} last_updated: {message['last_updated']}"
         if self.is_message_published(unique_id):
-            logger.info(f"Message {unique_id} has already been published. Skipping.")
+            logger.warning(f"Message {unique_id} {message_tag} has already been published. Skipping.")
             return
         if not self.default_exchange:
             raise Exception("Cannot publish message: default exchange is not initialized.")
 
         await self.default_exchange.publish(aio_pika.Message(body=json.dumps(message).encode("utf-8")), routing_key=routing_key)
         self.mark_message_as_published(unique_id)
-        logger.info(f"Message {unique_id} has been published to {routing_key}")
+        logger.debug(f"Message {unique_id} {message_tag} has been published to {routing_key}")
 
     async def close(self):
         if self.connection:

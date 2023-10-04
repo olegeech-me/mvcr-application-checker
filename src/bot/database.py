@@ -89,7 +89,7 @@ class Database:
                 return False
 
     async def update_db_status(self, chat_id, current_status, is_resolved):
-        logger.info(f"Updating chatID {chat_id} current status in DB")
+        logger.debug(f"Updating chatID {chat_id} current status in DB")
         query = "UPDATE Applications SET current_status = $1, last_updated = CURRENT_TIMESTAMP, is_resolved=$2 WHERE chat_id = $3"
         params = (current_status, is_resolved, chat_id)
         async with self.pool.acquire() as conn:
@@ -189,7 +189,7 @@ class Database:
                 return []
 
     async def update_timestamp(self, chat_id):
-        logger.info(f"Updating last_updated timestamp for chatID {chat_id} in DB")
+        logger.debug(f"Updating last_updated timestamp for chatID {chat_id} in DB")
         query = "UPDATE Applications SET last_updated = CURRENT_TIMESTAMP WHERE chat_id = $1"
         async with self.pool.acquire() as conn:
             try:
@@ -211,8 +211,7 @@ class Database:
     async def get_user_language(self, chat_id):
         query = "SELECT language FROM Applications WHERE chat_id = $1;"
         async with self.pool.acquire() as conn:
-            # (olegeech) tmp to see how often we need DB to fetch language for each command
-            logger.info(f"Going to DB to fetch language for user: {chat_id}")
+            logger.debug(f"Going to DB to fetch language for user: {chat_id}")
             try:
                 result = await conn.fetchval(query, chat_id)
                 return result
