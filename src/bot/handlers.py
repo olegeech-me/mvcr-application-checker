@@ -3,14 +3,15 @@ import logging
 import re
 import time
 
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, BotCommand
 from telegram.ext import ContextTypes, ConversationHandler
 from bot.loader import loader, ADMIN_CHAT_ID, REFRESH_PERIOD
-from bot.texts import button_texts, message_texts
-
+from bot.texts import button_texts, message_texts, commands_description
 
 BUTTON_WAIT_SECONDS = 1
 FORCE_FETCH_LIMIT_SECONDS = 86400
+COMMANDS_LIST = ["status", "subscribe", "unsubscribe", "force_refresh", "lang", "start", "help"]
+ADMIN_COMMANDS = ["admin_stats", "admin_broadcast"]
 DEFAULT_LANGUAGE = "EN"
 LANGUAGE_LIST = ["EN 🏴󠁧󠁢󠁥󠁮󠁧󠁿|🇺🇸", "RU 🇷🇺", "CZ 🇨🇿", "UA 🇺🇦"]
 IETF_LANGUAGE_MAP = {"en": "EN", "ru": "RU", "cs": "CZ", "uk": "UA"}
@@ -29,18 +30,25 @@ db = loader.db
 rabbit = loader.rabbit
 
 
+async def _set_menu_commands(update: Update, context: ContextTypes.DEFAULT_TYPE, lang="EN"):
+    """Sets available bot menu commands"""
+    logger.info(f"Setting menu commands for {user_info(update)}, language: {lang}")
+    commands = [BotCommand(cmd, commands_description[lang][cmd]) for cmd in COMMANDS_LIST]
+    if _is_admin(update.effective_chat.id):
+        commands.extend([BotCommand(cmd, commands_description[lang][cmd]) for cmd in ADMIN_COMMANDS])
+    await context.bot.set_my_commands(commands)
+
+
 async def _get_user_language(update, context):
     """Fetch user language preference"""
     user_lang = context.user_data.get("lang")
 
     if not user_lang:
         user_lang = await db.get_user_language(update.effective_chat.id)
-
         if not user_lang:
             # Get the language from user locale and try to match
             # it against supported languages
             user_lang = IETF_LANGUAGE_MAP.get(update.effective_user.language_code) or DEFAULT_LANGUAGE
-
         context.user_data["lang"] = user_lang
 
     return user_lang
@@ -368,10 +376,12 @@ async def _show_startup_message(update: Update, context: ContextTypes.DEFAULT_TY
     If show_language_switch if True then language select menu will be shown as well.
     """
     lang = await _get_user_language(update, context)
+    await _set_menu_commands(update, context, lang)
+
     # Prompt the user to select a language if it's the default (assumed they haven't set it yet)
     start_msg = message_texts[lang]["start_text"].format(refresh_period=int(REFRESH_PERIOD / 60))
     subscribe_msg = message_texts[lang]["subscribe_intro"]
-    msg = f"{start_msg}\n{subscribe_msg}"
+    msg = f"{start_msg}\n\n{subscribe_msg}"
     keyboard = [[InlineKeyboardButton(button_texts[lang]["subscribe_button"], callback_data="subscribe")]]
     if show_language_switch:
         keyboard.append([InlineKeyboardButton(lang, callback_data=f"set_lang_{lang}") for lang in LANGUAGE_LIST])
@@ -558,6 +568,7 @@ async def _set_language(update: Update, context: ContextTypes.DEFAULT_TYPE, cmd_
         await db.set_user_language(chat_id, selected_lang)
 
     await query.edit_message_text(message_texts[selected_lang]["language_selected"].format(lang=selected_lang_with_emoji))
+    return selected_lang
 
 
 async def set_language_startup(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -571,7 +582,8 @@ async def set_language_startup(update: Update, context: ContextTypes.DEFAULT_TYP
 
 async def set_language_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Callback function for language selection during /lang command"""
-    await _set_language(update, context, "set_lang_cmd_")
+    lang = await _set_language(update, context, "set_lang_cmd_")
+    await _set_menu_commands(update, context, lang)
 
 
 async def _get_incorrect_message_text(context: ContextTypes.DEFAULT_TYPE, lang="EN"):

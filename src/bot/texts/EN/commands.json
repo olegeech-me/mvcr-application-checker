@@ -1,0 +1,11 @@
+{
+  "status": "Retrieve current application status",
+  "subscribe": "Subscribe to updates",
+  "unsubscribe": "Unsubscribe from updates",
+  "force_refresh": "Immediately request application status refresh",
+  "lang": "Choose bot language",
+  "start": "Enter the start menu",
+  "help": "Get help with commands",
+  "admin_stats": "Display bot statistics",
+  "admin_broadcast": "Send message to all users"
+}

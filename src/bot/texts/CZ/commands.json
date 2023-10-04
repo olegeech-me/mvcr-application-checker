@@ -1,0 +1,11 @@
+{
+  "status": "Získat aktuální stav žádosti",
+  "subscribe": "Přihlásit se k odběru aktualizací",
+  "unsubscribe": "Odhlásit se z odběru aktualizací",
+  "force_refresh": "Vynutit obnovení stavu žádosti",
+  "lang": "Vybrat jazyk bota",
+  "start": "Vstoupit do hlavního menu",
+  "help": "Získat nápovědu k příkazům",
+  "admin_stats": "Zobrazit statistiky bota",
+  "admin_broadcast": "Poslat zprávu všem uživatelům"
+}
