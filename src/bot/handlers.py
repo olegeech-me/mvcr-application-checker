@@ -567,10 +567,8 @@ async def set_language_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await _set_language(update, context, "set_lang_cmd_")
 
 
-# Handler for unknown text inputs when out of subscribe context
-async def unknown_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    lang = await _get_user_language(update, context)
-
+async def _get_incorrect_message_text(context: ContextTypes.DEFAULT_TYPE, lang="EN"):
+    """Counts how many times user put unkwown input and returns appropriate message"""
     current_incorrect_count = context.user_data.get("incorrect_input_count", 0)
     current_incorrect_count += 1
     if current_incorrect_count >= 3:
@@ -580,10 +578,20 @@ async def unknown_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg = message_texts[lang]["unknown_input"]
         context.user_data["incorrect_input_count"] = current_incorrect_count
 
+    return msg
+
+
+# Handler for unknown text inputs when out of subscribe context
+async def unknown_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = await _get_user_language(update, context)
+    msg = await _get_incorrect_message_text(context, lang=lang)
+
     await context.bot.send_message(chat_id=update.effective_chat.id, text=msg)
 
 
 # Handler for unknown commands
 async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = await _get_user_language(update, context)
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=message_texts[lang]["unknown_command"])
+    msg = await _get_incorrect_message_text(context, lang=lang)
+
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=msg)
