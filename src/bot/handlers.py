@@ -218,6 +218,10 @@ def _parse_application_number_full(num_str: str):
     matched = re.match(num_regex, num_str)
     if not matched:
         return
+    # check that type and number are among allowed
+    if matched[4] not in ALLOWED_TYPES or int(matched[5]) not in ALLOWED_YEARS:
+        logger.info("Application type %s or year %s are unsupported", matched[4], matched[5])
+        return
     return matched[2], (matched[3] or "0").lstrip("-"), matched[4], matched[5]
 
 
