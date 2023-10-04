@@ -5,7 +5,7 @@ import logging
 import signal
 
 from bot.loader import loader, loop, LOG_LEVEL
-from bot.handlers import start_command, help_command, unknown, status_command
+from bot.handlers import start_command, help_command, unknown_text, unknown_command, status_command
 from bot.handlers import unsubscribe_command, subscribe_command, admin_stats_command
 from bot.handlers import force_refresh_command, subscribe_button, lang_command, set_language_startup, set_language_cmd
 from bot.handlers import (
@@ -94,7 +94,8 @@ async def main():
         fallbacks=[CommandHandler("subscribe", subscribe_command), CommandHandler("start", start_command, has_args=False)],
     )
     bot.add_handler(conv_handler)
-    bot.add_handler(MessageHandler(filters.COMMAND, unknown))
+    bot.add_handler(MessageHandler(filters.TEXT, unknown_text))
+    bot.add_handler(MessageHandler(filters.COMMAND, unknown_command))
 
     # Run the bot
     logger.info("Starting telegram bot")

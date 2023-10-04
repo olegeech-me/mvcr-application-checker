@@ -202,7 +202,8 @@ async def _show_app_number_final_confirmation(update: Update, context: ContextTy
     if update.callback_query:
         await update.callback_query.edit_message_text(msg, reply_markup=reply_markup)
     else:
-        await update.message.reply_text(msg, reply_markup=reply_markup)
+        message = get_effective_message(update)
+        await message.reply_text(msg, reply_markup=reply_markup)
     return VALIDATE
 
 
@@ -566,7 +567,23 @@ async def set_language_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await _set_language(update, context, "set_lang_cmd_")
 
 
+# Handler for unknown text inputs when out of subscribe context
+async def unknown_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = await _get_user_language(update, context)
+
+    current_incorrect_count = context.user_data.get("incorrect_input_count", 0)
+    current_incorrect_count += 1
+    if current_incorrect_count >= 3:
+        msg = message_texts[lang]["unknown_input_funny"]
+        context.user_data["incorrect_input_count"] = 0
+    else:
+        msg = message_texts[lang]["unknown_input"]
+        context.user_data["incorrect_input_count"] = current_incorrect_count
+
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=msg)
+
+
 # Handler for unknown commands
-async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = await _get_user_language(update, context)
     await context.bot.send_message(chat_id=update.effective_chat.id, text=message_texts[lang]["unknown_command"])

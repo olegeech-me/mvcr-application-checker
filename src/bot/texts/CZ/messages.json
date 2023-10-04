@@ -26,5 +26,7 @@
   "error_subscribe": "😔 Omlouváme se, došlo k chybě při pokusu o odběr. Zkuste to prosím později. Pokud problém přetrvává, obraťte se na vývojáře.",
   "error_generic": "😓 Oj! Něco se pokazilo. Zkuste to prosím později. Pokud problém přetrvává, obraťte se na vývojáře.",
   "dialog_completion": "Skvělé! 🌟 Vše je připraveno. Budu vás informovat o aktualizacích vaší žádosti!",
-  "unknown_command": "🤔 Omlouváme se, neznám tento příkaz."
+  "unknown_command": "🤔 Omlouváme se, neznám tento příkaz.",
+  "unknown_input": "Chtěl jsi něco?😊 Prosím, klepni na /help pro seznam dostupných příkazů",
+  "unknown_input_funny": "Chtěl jsi něco?😊 Prosím, klepni na /help pro seznam dostupných příkazů ..."
 }
