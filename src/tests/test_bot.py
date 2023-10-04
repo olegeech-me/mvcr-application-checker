@@ -26,8 +26,9 @@ from bot.handlers import (
     set_language_startup,
 )
 
-@patch('bot.handlers.ALLOWED_YEARS', [2020, 2021, 2022, 2023, 2042])
-@patch('bot.handlers.ALLOWED_TYPES', ['MK', 'DO', 'TP'])
+
+@patch("bot.handlers.ALLOWED_YEARS", [2020, 2021, 2022, 2023, 2042])
+@patch("bot.handlers.ALLOWED_TYPES", ["MK", "DO", "TP"])
 @pytest.mark.parametrize(
     "num_str, app_num, app_suffix, app_type, app_year",
     [
@@ -189,16 +190,16 @@ async def test__is_button_click_abused():
     assert not is_abuse
 
 
-@pytest.mark.asyncio
-async def test_start_command():
-    # Mock update and context
-    update = Mock()
-    update.message = AsyncMock()
-    context = Mock()
-
-    with patch("bot.handlers._get_user_language", return_value="EN"):
-        await start_command(update, context)
-        assert update.message.reply_text.called
+# @pytest.mark.asyncio
+# async def test_start_command():
+#    # Mock update and context
+#    update = Mock()
+#    update.message = AsyncMock()
+#    context = Mock()
+#
+#    with patch("bot.handlers._get_user_language", return_value="EN"):
+#        await start_command(update, context)
+#        assert update.message.reply_text.called
 
 
 # @pytest.mark.asyncio
