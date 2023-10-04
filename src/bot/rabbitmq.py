@@ -89,6 +89,7 @@ class RabbitMQ:
             msg_data = json.loads(message.body.decode("utf-8"))
             logger.debug(f"Received status update message: {msg_data}")
             chat_id = msg_data.get("chat_id", None)
+            number = msg_data.get("number", None)
             received_status = msg_data.get("status", None)
             force_refresh = msg_data.get("force_refresh", False)
             failed = msg_data.get("failed", False)
@@ -117,14 +118,14 @@ class RabbitMQ:
                 # sometimes the fetcher returns a status for a different application
                 # with the one trailing number off
                 # e.g. 1234 instead of 12345
-                if msg_data["number"] not in msg_data["status"]:
+                if number not in received_status:
                     logger.warning(
-                        f"[NOMATCH] Application number in status {received_status} "
-                        f"doesn't match application number {msg_data['number']}"
+                        f"[NOMATCH] Application number in status {received_status} doesn't match application number {number}"
                     )
                     return
 
                 if current_status == received_status and not force_refresh:
+                    logger.info(f"[REFRESH] Status refreshed for user {chat_id}, number {number}")
                     logger.debug(f"Status didn't change for user {chat_id} application")
                     await self.db.update_timestamp(chat_id)
                     return
