@@ -13,6 +13,7 @@ BUTTON_WAIT_SECONDS = 1
 FORCE_FETCH_LIMIT_SECONDS = 86400
 DEFAULT_LANGUAGE = "EN"
 LANGUAGE_LIST = ["EN 🏴󠁧󠁢󠁥󠁮󠁧󠁿|🇺🇸", "RU 🇷🇺", "CZ 🇨🇿", "UA 🇺🇦"]
+IETF_LANGUAGE_MAP = {"en": "EN", "ru": "RU", "cs": "CZ", "uk": "UA"}
 ALLOWED_TYPES = ["CD", "DO", "DP", "DV", "MK", "PP", "ST", "TP", "VP", "ZK", "ZM"]
 POPULAR_ALLOWED_TYPES = ["DP", "TP", "ZM", "ST", "MK", "DV"]
 ALLOWED_YEARS = [y for y in range(datetime.datetime.today().year - 3, datetime.datetime.today().year + 1)]
@@ -29,14 +30,16 @@ rabbit = loader.rabbit
 
 
 async def _get_user_language(update, context):
-    """Fetch user language preference."""
+    """Fetch user language preference"""
     user_lang = context.user_data.get("lang")
 
     if not user_lang:
         user_lang = await db.get_user_language(update.effective_chat.id)
 
         if not user_lang:
-            user_lang = DEFAULT_LANGUAGE
+            # Get the language from user locale and try to match
+            # it against supported languages
+            user_lang = IETF_LANGUAGE_MAP.get(update.effective_user.language_code) or DEFAULT_LANGUAGE
 
         context.user_data["lang"] = user_lang
 
@@ -369,9 +372,7 @@ async def _show_startup_message(update: Update, context: ContextTypes.DEFAULT_TY
     start_msg = message_texts[lang]["start_text"].format(refresh_period=int(REFRESH_PERIOD / 60))
     subscribe_msg = message_texts[lang]["subscribe_intro"]
     msg = f"{start_msg}\n{subscribe_msg}"
-    keyboard = [
-        [InlineKeyboardButton(button_texts[lang]["subscribe_button"], callback_data="subscribe")]
-    ]
+    keyboard = [[InlineKeyboardButton(button_texts[lang]["subscribe_button"], callback_data="subscribe")]]
     if show_language_switch:
         keyboard.append([InlineKeyboardButton(lang, callback_data=f"set_lang_{lang}") for lang in LANGUAGE_LIST])
     reply_markup = InlineKeyboardMarkup(keyboard)
