@@ -68,7 +68,8 @@ class Browser:
 
     def _submit_form(self, app_details):
         """Submit application details into the form"""
-        self._log(logging.INFO, "Submitting application data %s", app_details)
+        logged_details = {key: app_details[key] for key in ["number", "suffix", "type", "year"]}
+        self._log(logging.INFO, "Submitting application data %s", logged_details)
 
         WebDriverWait(self.browser, PAGE_LOAD_LIMIT_SECONDS).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, ".input__control"))
