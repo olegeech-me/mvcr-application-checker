@@ -359,21 +359,33 @@ async def application_dialog_validate(update: Update, context: ContextTypes.DEFA
     return ConversationHandler.END
 
 
+async def _show_startup_message(update: Update, context: ContextTypes.DEFAULT_TYPE, show_language_switch=True):
+    """
+    Shows initial message.
+    If show_language_switch if True then language select menu will be shown as well.
+    """
+    lang = await _get_user_language(update, context)
+    # Prompt the user to select a language if it's the default (assumed they haven't set it yet)
+    start_msg = message_texts[lang]["start_text"].format(refresh_period=int(REFRESH_PERIOD / 60))
+    subscribe_msg = message_texts[lang]["subscribe_intro"]
+    msg = f"{start_msg}\n{subscribe_msg}"
+    keyboard = [
+        [InlineKeyboardButton(button_texts[lang]["subscribe_button"], callback_data="subscribe")]
+    ]
+    if show_language_switch:
+        keyboard.append([InlineKeyboardButton(lang, callback_data=f"set_lang_{lang}") for lang in LANGUAGE_LIST])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    if update.callback_query:
+        await update.callback_query.edit_message_text(msg, reply_markup=reply_markup)
+    else:
+        await update.message.reply_text(msg, reply_markup=reply_markup)
+
+
 # Handler for the /start command
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Shows initial message and asks to subscribe"""
     logging.info(f"Received /start command from {user_info(update)}")
-
-    lang = await _get_user_language(update, context)
-
-    # Prompt the user to select a language if it's the default (assumed they haven't set it yet)
-    await update.message.reply_text(message_texts[lang]["start_text"].format(refresh_period=int(REFRESH_PERIOD / 60)))
-    keyboard = [
-        [InlineKeyboardButton(button_texts[lang]["subscribe_button"], callback_data="subscribe")],
-        [InlineKeyboardButton(lang, callback_data=f"set_lang_{lang}") for lang in LANGUAGE_LIST],
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(message_texts[lang]["subscribe_intro"], reply_markup=reply_markup)
+    await _show_startup_message(update, context)
     return START
 
 
@@ -552,13 +564,7 @@ async def set_language_startup(update: Update, context: ContextTypes.DEFAULT_TYP
 
     await _set_language(update, context, "set_lang_")
     # Show subscribe message again
-    query = update.callback_query
-    lang = await _get_user_language(update, context)
-    keyboard = [
-        [InlineKeyboardButton(button_texts[lang]["subscribe_button"], callback_data="subscribe")],
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await query.edit_message_text(message_texts[lang]["subscribe_intro"], reply_markup=reply_markup)
+    await _show_startup_message(update, context)
     return START
 
 
