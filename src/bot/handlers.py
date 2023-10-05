@@ -5,7 +5,7 @@ import time
 
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, BotCommand, BotCommandScopeChat
 from telegram.ext import ContextTypes, ConversationHandler
-from bot.loader import loader, ADMIN_CHAT_ID, REFRESH_PERIOD
+from bot.loader import loader, ADMIN_CHAT_IDS, REFRESH_PERIOD
 from bot.texts import button_texts, message_texts, commands_description
 
 BUTTON_WAIT_SECONDS = 1
@@ -35,7 +35,7 @@ async def _set_menu_commands(update: Update, context: ContextTypes.DEFAULT_TYPE,
     logger.debug(f"Setting menu commands for {user_info(update)}, language: {lang}")
     commands = [BotCommand(cmd, commands_description[lang][cmd]) for cmd in COMMANDS_LIST]
     if _is_admin(update.effective_chat.id):
-        logger.debug(f"Adding admin menu commands for chat_id {update.effective_chat.id}, ADMIN_CHAT_ID={ADMIN_CHAT_ID}")
+        logger.debug(f"Adding admin menu commands for chat_id {update.effective_chat.id}, ADMIN_CHAT_IDS={ADMIN_CHAT_IDS}")
         commands.extend([BotCommand(cmd, commands_description[lang][cmd]) for cmd in ADMIN_COMMANDS])
     await context.bot.set_my_commands(commands, BotCommandScopeChat(update.effective_chat.id))
 
@@ -57,8 +57,8 @@ async def _get_user_language(update, context):
 
 def _is_admin(chat_id: str) -> bool:
     """Check if the user's chat_id is an admin's chat_id"""
-    logger.debug(f"Effective chat_id: '{chat_id}', Allowed admin id: '{ADMIN_CHAT_ID}'")
-    return int(chat_id) == int(ADMIN_CHAT_ID)
+    logger.debug(f"Effective chat_id: '{chat_id}', Allowed admin ids: '{ADMIN_CHAT_IDS}'")
+    return chat_id in ADMIN_CHAT_IDS
 
 
 async def _is_button_click_abused(update: Update, context: ContextTypes.DEFAULT_TYPE):

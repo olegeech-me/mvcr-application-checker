@@ -4,7 +4,7 @@ import asyncio
 import logging
 import signal
 
-from bot.loader import loader, loop, LOG_LEVEL
+from bot.loader import loader, loop, LOG_LEVEL, ADMIN_CHAT_IDS
 from bot.handlers import start_command, help_command, unknown_text, unknown_command, status_command
 from bot.handlers import unsubscribe_command, subscribe_command, admin_stats_command
 from bot.handlers import force_refresh_command, subscribe_button, lang_command, set_language_startup, set_language_cmd
@@ -112,6 +112,7 @@ async def main():
             else:
                 logger.error("Max retries reached. Could not start telegram bot")
                 raise
+    logger.info(f"Admins are: {ADMIN_CHAT_IDS}")
 
     # Run RabbitMQ consumer
     await rabbit.consume_messages()

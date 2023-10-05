@@ -7,7 +7,7 @@ import asyncio
 from bot.rabbitmq import RabbitMQ
 
 os.environ["RUN_MODE"] = "TEST"
-os.environ["ADMIN_CHAT_ID"] = "1234567"
+os.environ["ADMIN_CHAT_IDS"] = "1234567, 56745679"
 
 from bot.handlers import (
     _parse_application_number_full,

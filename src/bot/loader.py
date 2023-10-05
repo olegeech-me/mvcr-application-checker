@@ -8,7 +8,8 @@ from bot import rabbitmq
 
 # Telegram bot config
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID", "")
+ADMIN_CHAT_IDS = os.getenv("ADMIN_CHAT_IDS", "")
+ADMIN_CHAT_IDS = ADMIN_CHAT_IDS.strip().split(",")
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 # DB config
 DB_NAME = os.getenv("DB_NAME", "AppTrackerDB")
