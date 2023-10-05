@@ -109,6 +109,7 @@ def test_get_user_language(user_lang_db, user_lang_context, expected_lang):
 
 def test_is_admin():
     assert _is_admin("1234567") is True
+    assert _is_admin("56745679") is True
     assert _is_admin("123456789") is False
 
 
