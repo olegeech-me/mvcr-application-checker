@@ -58,7 +58,7 @@ async def _get_user_language(update, context):
 def _is_admin(chat_id: str) -> bool:
     """Check if the user's chat_id is an admin's chat_id"""
     logger.debug(f"Effective chat_id: '{chat_id}', Allowed admin ids: '{ADMIN_CHAT_IDS}'")
-    return chat_id in ADMIN_CHAT_IDS
+    return str(chat_id) in ADMIN_CHAT_IDS
 
 
 async def _is_button_click_abused(update: Update, context: ContextTypes.DEFAULT_TYPE):
