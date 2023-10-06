@@ -13,7 +13,12 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import WebDriverException, ElementClickInterceptedException, TimeoutException
+from selenium.common.exceptions import (
+    WebDriverException,
+    ElementClickInterceptedException,
+    TimeoutException,
+    NoSuchElementException,
+)
 from urllib3.exceptions import MaxRetryError
 import fake_useragent
 
@@ -140,6 +145,7 @@ class Browser:
 
         self.app_details = app_details
         browser = self._get_browser()
+        application_status = None
         application_status_text = None
 
         try:
@@ -153,16 +159,27 @@ class Browser:
                 logger.warning("Recaptcha has been hit, solve it please to continue")
                 WebDriverWait(browser, CAPTCHA_WAIT_SECONDS).until(lambda x: x.find_element(By.CLASS_NAME, "wrapper__form"))
 
-            self._submit_form(app_details)
+            # BUG: sometimes on some systems after submitting data
+            # the page still appears as nothing was done
+            # Magically, re-submitting data resolves the issue ...
+            for _attempt in range(3):
+                self._submit_form(app_details)
+                try:
+                    WebDriverWait(browser, PAGE_LOAD_LIMIT_SECONDS).until(
+                        lambda x: x.find_element(By.CLASS_NAME, "alert__content"),
+                        message="Status field wasn't found in the HTML",
+                    )
+                    application_status = browser.find_element_by_class_name("alert__content")
+                    break
+                except (WebDriverException, NoSuchElementException, TimeoutException) as e:
+                    self._log(logging.ERROR, f"Submit failed: {e}")
+                    asyncio.sleep(1)
 
-            WebDriverWait(browser, PAGE_LOAD_LIMIT_SECONDS).until(
-                lambda x: _has_recaptcha(x) or x.find_element(By.CLASS_NAME, "alert__content"),
-                message="Status field wasn't found in the HTML",
-            )
-
-            application_status = browser.find_element_by_class_name("alert__content")
-            application_status_text = application_status.get_attribute("innerHTML")
-            self._log(logging.INFO, "Application status fetched")
+            if application_status:
+                application_status_text = application_status.get_attribute("innerHTML")
+                self._log(logging.INFO, "Application status fetched")
+            else:
+                raise MaxRetryError("Couldn't fetch application status")
 
         except (WebDriverException, MaxRetryError, TimeoutException) as err:
             self._log(logging.ERROR, "An error has occurred during page loading: %s", err)
