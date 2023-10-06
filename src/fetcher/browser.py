@@ -13,7 +13,7 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import WebDriverException
+from selenium.common.exceptions import WebDriverException, ElementClickInterceptedException, TimeoutException
 from urllib3.exceptions import MaxRetryError
 import fake_useragent
 
@@ -74,6 +74,15 @@ class Browser:
         WebDriverWait(self.browser, PAGE_LOAD_LIMIT_SECONDS).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, ".input__control"))
         )
+
+        # Try clicking on cookies button
+        cookies = self.browser.find_element_by_xpath('//button[@class="button button__primary" and text()="Souhlasím se všemi"]')
+        try:
+            cookies.click()
+            self._log(logging.INFO, "Cookies button found, clicked.")
+        except ElementClickInterceptedException:
+            self._log(logging.DEBUG, "Cookies button is not active")
+
         # Locate and fill out the application number field by its placeholder
         application_number_field = self.browser.find_element(By.XPATH, "//input[@placeholder='12345']")
         application_number_field.clear()
@@ -108,7 +117,7 @@ class Browser:
 
         # Locate the submit button and click it to submit the form
         submit_button = self.browser.find_element(By.CSS_SELECTOR, 'button[type="submit"]')
-        self.browser.execute_script("arguments[0].click();", submit_button)
+        submit_button.click()
 
     async def _do_fetch_with_browser(self, url, app_details):
         def _has_recaptcha(browser):
@@ -136,7 +145,8 @@ class Browser:
         try:
             browser.get(url)
             WebDriverWait(browser, PAGE_LOAD_LIMIT_SECONDS).until(
-                lambda x: _has_recaptcha(x) or x.find_element(By.CLASS_NAME, "wrapper__form")
+                lambda x: _has_recaptcha(x) or x.find_element(By.CLASS_NAME, "wrapper__form"),
+                message="Application submit form wasn't found in the HTML",
             )
 
             if _has_recaptcha(browser):
@@ -146,14 +156,15 @@ class Browser:
             self._submit_form(app_details)
 
             WebDriverWait(browser, PAGE_LOAD_LIMIT_SECONDS).until(
-                lambda x: _has_recaptcha(x) or x.find_element(By.CLASS_NAME, "alert__content")
+                lambda x: _has_recaptcha(x) or x.find_element(By.CLASS_NAME, "alert__content"),
+                message="Status field wasn't found in the HTML",
             )
 
             application_status = browser.find_element_by_class_name("alert__content")
             application_status_text = application_status.get_attribute("innerHTML")
             self._log(logging.INFO, "Application status fetched")
 
-        except (WebDriverException, MaxRetryError) as err:
+        except (WebDriverException, MaxRetryError, TimeoutException) as err:
             self._log(logging.ERROR, "An error has occurred during page loading: %s", err)
             _save_page_source(browser)
             self.close()
