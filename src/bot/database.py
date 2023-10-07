@@ -43,105 +43,134 @@ class Database:
                     logger.error("Max retries reached. Unable to connect to the database")
                     raise
 
-    async def add_to_db(
+    async def add_user_to_db(self, chat_id, first_name, username=None, last_name=None, lang="EN"):
+        logger.info(f"Adding user with chatID {chat_id} to DB")
+        query = "INSERT INTO Users " "(chat_id, username, first_name, last_name, language) " "VALUES ($1, $2, $3, $4, $5)"
+        params = (chat_id, username, first_name, last_name, lang)
+        async with self.pool.acquire() as conn:
+            try:
+                await conn.execute(query, *params)
+            except asyncpg.UniqueViolationError:
+                logger.error(f"Attempt to insert duplicate user, chat ID {chat_id}")
+                return False
+            except Exception as e:
+                logger.error(f"Error while inserting into Users table for chat ID: {chat_id}. Error: {e}")
+                return False
+        return True
+
+    async def add_application_to_db(
         self,
         chat_id,
         application_number,
         application_suffix,
         application_type,
         application_year,
-        username=None,
-        first_name=None,
-        last_name=None,
-        lang="EN",
     ):
-        logger.info(f"Adding chatID {chat_id} with application number {application_number} to DB")
+        logger.info(f"Adding application for chatID {chat_id} to DB")
         query = (
             "INSERT INTO Applications "
-            "(chat_id, application_number, application_suffix, application_type, application_year, current_status, "
-            "username, first_name, last_name, language) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)"
+            "(user_id, application_number, application_suffix, application_type, application_year) "
+            "SELECT user_id, $2, $3, $4, $5 FROM Users WHERE chat_id = $1"
         )
-        params = (
-            chat_id,
-            application_number,
-            application_suffix,
-            application_type,
-            application_year,
-            "Unknown",
-            username,
-            first_name,
-            last_name,
-            lang,
-        )
+        params = (chat_id, application_number, application_suffix, application_type, application_year)
         async with self.pool.acquire() as conn:
             try:
                 await conn.execute(query, *params)
-                return True
             except asyncpg.UniqueViolationError:
-                logger.error(f"Attempt to insert duplicate chat ID {chat_id} and application number {application_number}")
+                logger.error(f"Attempt to insert duplicate application for user {chat_id} and number {application_number}")
                 return False
             except Exception as e:
                 logger.error(
-                    f"Error while inserting into DB for chat ID: {chat_id} "
-                    f"for application number {application_number}. Error: {e}"
+                    f"Error while inserting into Applications table for user {chat_id}, number: {application_number}. Error: {e}"
                 )
                 return False
+        return True
 
-    async def update_db_status(self, chat_id, current_status, is_resolved):
-        logger.debug(f"Updating chatID {chat_id} current status in DB")
-        query = "UPDATE Applications SET current_status = $1, last_updated = CURRENT_TIMESTAMP, is_resolved=$2 WHERE chat_id = $3"
-        params = (current_status, is_resolved, chat_id)
+    async def count_user_subscriptions(self, chat_id):
+        query = "SELECT COUNT(*) FROM Applications WHERE user_id = (SELECT user_id FROM Users WHERE chat_id = $1)"
+        async with self.pool.acquire() as conn:
+            try:
+                count = await conn.fetchval(query, chat_id)
+                return count
+            except Exception as e:
+                logger.error(f"Error while fetching subscription count for chat ID: {chat_id}. Error: {e}")
+                return None
+
+    async def update_db_status(self, chat_id, application_number, current_status, is_resolved):
+        query = """UPDATE Applications
+                   SET current_status = $1, last_updated = CURRENT_TIMESTAMP, is_resolved=$2
+                   WHERE user_id = (SELECT user_id FROM Users WHERE chat_id = $3)
+                   AND application_number = $4"""
+        params = (current_status, is_resolved, chat_id, application_number)
         async with self.pool.acquire() as conn:
             try:
                 await conn.execute(query, *params)
                 return True
             except Exception as e:
-                logger.error(f"Error while updating DB for chat ID: {chat_id}. Error: {e}")
+                logger.error(
+                    f"Error while updating DB for chat ID: {chat_id} and application number: {application_number}. Error: {e}"
+                )
                 return False
 
-    async def remove_from_db(self, chat_id):
-        logger.info(f"Removing chatID {chat_id} from DB")
-        query = "DELETE FROM Applications WHERE chat_id = $1"
+    async def remove_from_db(self, chat_id, application_number):
+        query = """DELETE FROM Applications
+                   WHERE user_id = (SELECT user_id FROM Users WHERE chat_id = $1)
+                   AND application_number = $2"""
+        params = (chat_id, application_number)
         async with self.pool.acquire() as conn:
             try:
-                await conn.execute(query, chat_id)
+                await conn.execute(query, *params)
                 return True
             except Exception as e:
-                logger.error(f"Error while updating DB for chat ID: {chat_id}. Error: {e}")
+                logger.error(
+                    f"Error while removing from DB for user {chat_id} and application number: {application_number}. Error: {e}"
+                )
                 return False
 
     async def get_user_data_from_db(self, chat_id):
-        """Fetch all user data for a given chat_id."""
-        query = """
-            SELECT * FROM Applications WHERE chat_id = $1;
-        """
+        query = """SELECT *
+                   FROM Applications
+                   WHERE user_id = (SELECT user_id FROM Users WHERE chat_id = $1)"""
         async with self.pool.acquire() as conn:
             try:
-                row = await conn.fetchrow(query, chat_id)
-                if row is None:
+                rows = await conn.fetch(query, chat_id)
+                if not rows:
                     logger.info(f"No data found for chat_id {chat_id}")
                     return None
-                return dict(row)  # Convert the record to a dictionary
+                return [dict(row) for row in rows]  # Convert the records to dictionaries
             except Exception as e:
                 logger.error(f"Error while fetching user data for chat ID: {chat_id}. Error: {e}")
                 return None
 
-    async def get_application_status(self, chat_id):
-        query = "SELECT current_status FROM Applications WHERE chat_id = $1;"
+    async def get_application_status(self, chat_id, application_number):
+        """Fetch status for a specific application for a given chat_id."""
+        query = """SELECT current_status
+                   FROM Applications
+                   WHERE user_id = (SELECT user_id FROM Users WHERE chat_id = $1)
+                   AND application_number = $2"""
+        params = (chat_id, application_number)
+
         async with self.pool.acquire() as conn:
             try:
-                result = await conn.fetchval(query, chat_id)
+                result = await conn.fetchval(query, *params)
                 return result
             except Exception as e:
-                logger.error(f"Error while fetching application status for chat ID: {chat_id}. Error: {e}")
+                logger.error(
+                    f"Error while fetching application status for user {chat_id} and number: {application_number}. Error: {e}"
+                )
                 return None
 
-    async def get_application_status_timestamp(self, chat_id, lang="EN"):
-        query = "SELECT current_status, last_updated FROM Applications WHERE chat_id = $1;"
+    async def get_application_status_timestamp(self, chat_id, application_number, lang="EN"):
+        """Fetch status and timestamp for a specific application for a given chat_id."""
+        query = """SELECT current_status, last_updated
+                   FROM Applications
+                   WHERE user_id = (SELECT user_id FROM Users WHERE chat_id = $1)
+                   AND application_number = $2"""
+        params = (chat_id, application_number)
+
         async with self.pool.acquire() as conn:
             try:
-                result = await conn.fetchrow(query, chat_id)
+                result = await conn.fetchrow(query, *params)
                 if result is not None and result["last_updated"]:
                     current_status = result["current_status"]
                     last_updated_utc = result["last_updated"].replace(tzinfo=pytz.utc)
@@ -156,7 +185,9 @@ class Database:
                 else:
                     return message_texts[lang]["current_status_empty"]
             except Exception as e:
-                logger.error(f"Error while fetching status from DB for chat ID: {chat_id}. Error: {e}")
+                logger.error(
+                    f"Error while fetching status from DB for {chat_id} and application number: {application_number}. Error: {e}"
+                )
                 return message_texts[lang]["error_generic"]
 
     async def check_subscription_in_db(self, chat_id):
@@ -197,9 +228,33 @@ class Database:
             except Exception as e:
                 logger.error(f"Error while updating timestamp for chat ID: {chat_id}. Error: {e}")
 
+    async def check_user_exists_in_db(self, chat_id):
+        """Check if a user exists in the database"""
+        query = "SELECT EXISTS(SELECT 1 FROM Users WHERE chat_id = $1)"
+        async with self.pool.acquire() as conn:
+            try:
+                exists = await conn.fetchval(query, chat_id)
+                return exists
+            except Exception as e:
+                logger.error(f"Error while checking if user with chat_id {chat_id} exists. Error: {e}")
+                return False
+
+    async def get_user_subscriptions(self, chat_id):
+        """Fetch all application numbers for a given chat_id"""
+        query = """SELECT application_number
+                   FROM Applications
+                   WHERE user_id = (SELECT user_id FROM Users WHERE chat_id = $1)"""
+        async with self.pool.acquire() as conn:
+            try:
+                rows = await conn.fetch(query, chat_id)
+                # Extract application numbers from the rows and return as a list
+                return [row["application_number"] for row in rows]
+            except Exception as e:
+                logger.error(f"Error while fetching application numbers for chat ID: {chat_id}. Error: {e}")
+                return []
+
     async def get_subscribed_user_count(self):
-        """Return the count of unique users subscribed"""
-        query = "SELECT COUNT(DISTINCT chat_id) FROM Applications;"
+        query = "SELECT COUNT(*) FROM Users"
         async with self.pool.acquire() as conn:
             try:
                 count = await conn.fetchval(query)
