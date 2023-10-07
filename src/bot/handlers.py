@@ -407,7 +407,7 @@ async def _create_user_in_db_if_not_exists(update, lang="EN"):
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Shows initial message and asks to subscribe"""
     lang = await _get_user_language(update, context)
-    _create_user_in_db_if_not_exists(update, lang=lang)
+    await _create_user_in_db_if_not_exists(update, lang=lang)
 
     logging.info(f"Received /start command from {user_info(update)}")
     await _show_startup_message(update, context)
@@ -429,7 +429,7 @@ async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = get_effective_message(update)
     chat_id = message.chat_id
 
-    _create_user_in_db_if_not_exists(update, lang=lang)
+    await _create_user_in_db_if_not_exists(update, lang=lang)
 
     # Verify how many subscriptions user has (not more than SUBSCRIPTIONS_LIMIT)
     if await db.count_user_subscriptions(chat_id) >= SUBSCRIPTIONS_LIMIT:
@@ -490,14 +490,14 @@ def _generate_buttons_from_subscriptions(prefix, subscriptions):
     return InlineKeyboardMarkup(keyboard)
 
 
-def _parse_application_buttons_callback_data(prefix):
+def _parse_application_buttons_callback_data(data):
     """Parses application buttons callback data and returns app_details dict"""
-    data = prefix.split("_")[-1]
-    application_number, application_type, application_year = data.split("-")
+    data_part = data.split("_")[-1]
+    application_number, application_type, application_year = data_part.split("-")
     return {
         "number": application_number,
         "type": application_type,
-        "year": application_year,
+        "year": int(application_year),
     }
 
 
@@ -541,14 +541,14 @@ async def unsubscribe_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
     await query.answer()
 
-    app_details = _parse_application_buttons_callback_data("unsubscribe")
+    app_details = _parse_application_buttons_callback_data(query.data)
     await db.delete_application(
         chat_id,
         app_details["number"],
         app_details["type"],
         app_details["year"],
     )
-    await update.message.reply_text(message_texts[lang]["unsubscribe"])
+    await query.edit_message_text(message_texts[lang]["unsubscribe"])
 
 
 async def _publish_force_request(chat_id, message, lang, app_details):
@@ -608,7 +608,7 @@ async def force_refresh_button(update: Update, context: ContextTypes.DEFAULT_TYP
         return
     await query.answer()
 
-    app_details = _parse_application_buttons_callback_data("force_refresh")
+    app_details = _parse_application_buttons_callback_data(query.data)
     await _publish_force_request(chat_id, message, lang, app_details)
 
 
@@ -642,7 +642,6 @@ async def status_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Retrieves current status for the selected application"""
 
     query = update.callback_query
-    message = update.message
     chat_id = update.effective_chat.id
     lang = await _get_user_language(update, context)
 
@@ -650,7 +649,7 @@ async def status_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     await query.answer()
 
-    app_details = _parse_application_buttons_callback_data("status")
+    app_details = _parse_application_buttons_callback_data(query.data)
     app_status = await db.fetch_status_with_timestamp(
         chat_id,
         app_details["number"],
@@ -658,7 +657,7 @@ async def status_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         app_details["year"],
         lang=lang,
     )
-    await message.reply_text(app_status)
+    await query.edit_message_text(app_status)
 
 
 # Handler for the /help command

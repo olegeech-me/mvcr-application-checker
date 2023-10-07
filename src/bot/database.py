@@ -180,6 +180,7 @@ class Database:
                    AND application_year = $4"""
         params = (chat_id, application_number, application_type, application_year)
 
+        logger.debug("Running status fetch for %s %s %s %s", chat_id, application_number, application_type, application_year)
         async with self.pool.acquire() as conn:
             try:
                 result = await conn.fetchval(query, *params)

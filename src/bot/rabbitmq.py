@@ -91,7 +91,7 @@ class RabbitMQ:
             chat_id = msg_data.get("chat_id", None)
             number = msg_data.get("number", None)
             type_ = msg_data.get("type", None)
-            year = msg_data.get("year", None)
+            year = int(msg_data.get("year"))
             received_status = msg_data.get("status", None)
             force_refresh = msg_data.get("force_refresh", False)
             failed = msg_data.get("failed", False)
