@@ -344,6 +344,18 @@ async def application_dialog_validate(update: Update, context: ContextTypes.DEFA
     await query.answer()
 
     if query.data == "proceed_subscribe":
+        # check if the subscription already exists
+        if await db.subscription_exists(
+            update.effective_chat.id,
+            context.user_data["application_number"],
+            context.user_data["application_type"],
+            int(context.user_data["application_year"]),
+        ):
+            await query.message.edit_reply_markup(reply_markup=None)
+            await query.message.reply_text(message_texts[lang]["already_subscribed"])
+            clean_sub_context(context)
+            return ConversationHandler.END
+
         # check if we are not over daily limit
         if not await enforce_rate_limit(update, context, "subscribe", lang=lang):
             clean_sub_context(context)

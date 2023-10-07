@@ -263,6 +263,33 @@ class Database:
                 logger.error(f"Error while checking if user with chat_id {chat_id} exists. Error: {e}")
                 return False
 
+    async def subscription_exists(self, chat_id, application_number, application_type, application_year):
+        """Check if a specific application already exists for a user"""
+
+        query = """
+            SELECT EXISTS(
+                SELECT 1
+                FROM Applications a
+                JOIN Users u ON a.user_id = u.user_id
+                WHERE u.chat_id = $1
+                AND a.application_number = $2
+                AND a.application_type = $3
+                AND a.application_year = $4
+            )
+        """
+        params = (chat_id, application_number, application_type, application_year)
+
+        async with self.pool.acquire() as conn:
+            try:
+                exists = await conn.fetchval(query, *params)
+                return exists
+            except Exception as e:
+                logger.error(
+                    f"Error while checking if subscription exists for user {chat_id} "
+                    f"and application number: {application_number}. Error: {e}"
+                )
+                return False
+
     async def count_user_subscriptions(self, chat_id):
         """Count the number of subscriptions for a given user"""
 
