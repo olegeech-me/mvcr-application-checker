@@ -91,14 +91,18 @@ class Database:
                 return False
         return True
 
-    async def update_application_status(self, chat_id, application_number, current_status, is_resolved):
+    async def update_application_status(
+        self, chat_id, application_number, application_type, application_year, current_status, is_resolved
+    ):
         """Update the status and resolution for a specific application"""
 
         query = """UPDATE Applications
                    SET current_status = $1, last_updated = CURRENT_TIMESTAMP, is_resolved=$2
                    WHERE user_id = (SELECT user_id FROM Users WHERE chat_id = $3)
-                   AND application_number = $4"""
-        params = (current_status, is_resolved, chat_id, application_number)
+                   AND application_number = $4
+                   AND application_type = $5
+                   AND application_year = $6"""
+        params = (current_status, is_resolved, chat_id, application_number, application_type, application_year)
         async with self.pool.acquire() as conn:
             try:
                 await conn.execute(query, *params)
@@ -109,15 +113,17 @@ class Database:
                 )
                 return False
 
-    async def update_last_checked(self, chat_id, application_number):
+    async def update_last_checked(self, chat_id, application_number, application_type, application_year):
         """Update the last_checked timestamp for a specific application for a user"""
 
         logger.debug(f"Updating last_updated timestamp for chatID {chat_id} and application number {application_number} in DB")
         query = """UPDATE Applications
                    SET last_updated = CURRENT_TIMESTAMP
                    WHERE user_id = (SELECT user_id FROM Users WHERE chat_id = $1)
-                   AND application_number = $2"""
-        params = (chat_id, application_number)
+                   AND application_number = $2
+                   AND application_type = $3
+                   AND application_year = $4"""
+        params = (chat_id, application_number, application_type, application_year)
         async with self.pool.acquire() as conn:
             try:
                 await conn.execute(query, *params)
@@ -126,20 +132,23 @@ class Database:
                     f"Error while updating timestamp for user {chat_id} and application number: {application_number}. Error: {e}"
                 )
 
-    async def delete_application(self, chat_id, application_number):
-        """Delete a specific application for a user"""
+    async def delete_application(self, chat_id, application_number, application_type, application_year):
+        """Delete a specific application for a user based on number, type, and year"""
 
         query = """DELETE FROM Applications
-                   WHERE user_id = (SELECT user_id FROM Users WHERE chat_id = $1)
-                   AND application_number = $2"""
-        params = (chat_id, application_number)
+                WHERE user_id = (SELECT user_id FROM Users WHERE chat_id = $1)
+                AND application_number = $2
+                AND application_type = $3
+                AND application_year = $4"""
+        params = (chat_id, application_number, application_type, application_year)
         async with self.pool.acquire() as conn:
             try:
                 await conn.execute(query, *params)
                 return True
             except Exception as e:
                 logger.error(
-                    f"Error while removing from DB for user {chat_id} and application number: {application_number}. Error: {e}"
+                    f"Error while removing application {application_number}, "
+                    f"type {application_type}, year {application_year} for user {chat_id}. Error: {e}"
                 )
                 return False
 
@@ -160,14 +169,16 @@ class Database:
                 logger.error(f"Error while fetching user data for chat ID: {chat_id}. Error: {e}")
                 return None
 
-    async def fetch_application_status(self, chat_id, application_number):
+    async def fetch_application_status(self, chat_id, application_number, application_type, application_year):
         """Fetch the status and timestamp of a specific application for a user"""
 
         query = """SELECT current_status
                    FROM Applications
                    WHERE user_id = (SELECT user_id FROM Users WHERE chat_id = $1)
-                   AND application_number = $2"""
-        params = (chat_id, application_number)
+                   AND application_number = $2
+                   AND application_type = $3
+                   AND application_year = $4"""
+        params = (chat_id, application_number, application_type, application_year)
 
         async with self.pool.acquire() as conn:
             try:
@@ -179,14 +190,16 @@ class Database:
                 )
                 return None
 
-    async def fetch_status_with_timestamp(self, chat_id, application_number, lang="EN"):
+    async def fetch_status_with_timestamp(self, chat_id, application_number, application_type, application_year, lang="EN"):
         """Fetch the status and timestamp of a specific application for a user"""
 
         query = """SELECT current_status, last_updated
                    FROM Applications
                    WHERE user_id = (SELECT user_id FROM Users WHERE chat_id = $1)
-                   AND application_number = $2"""
-        params = (chat_id, application_number)
+                   AND application_number = $2
+                   AND application_type = $3
+                   AND application_year = $4"""
+        params = (chat_id, application_number, application_type, application_year)
 
         async with self.pool.acquire() as conn:
             try:

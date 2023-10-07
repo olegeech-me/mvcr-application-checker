@@ -26,7 +26,7 @@ class ApplicationMonitor:
                 pass
 
     async def check_for_updates(self):
-        applications_to_update = await self.db.get_applications_needing_update(self.refresh)
+        applications_to_update = await self.db.fetch_applications_needing_update(self.refresh)
 
         if not applications_to_update:
             logger.info("No applications need status refresh")

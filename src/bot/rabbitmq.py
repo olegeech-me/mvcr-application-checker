@@ -90,6 +90,8 @@ class RabbitMQ:
             logger.debug(f"Received status update message: {msg_data}")
             chat_id = msg_data.get("chat_id", None)
             number = msg_data.get("number", None)
+            type_ = msg_data.get("type", None)
+            year = msg_data.get("year", None)
             received_status = msg_data.get("status", None)
             force_refresh = msg_data.get("force_refresh", False)
             failed = msg_data.get("failed", False)
@@ -101,7 +103,7 @@ class RabbitMQ:
 
             if chat_id and received_status:
                 # Fetch the current status from the database
-                current_status = await self.db.get_application_status(chat_id)
+                current_status = await self.db.fetch_application_status(chat_id, number, type_, year)
 
                 if current_status is None:
                     logger.error(f"Failed to get current status from db for user {chat_id}")
@@ -127,7 +129,7 @@ class RabbitMQ:
                 if current_status == received_status and not force_refresh:
                     logger.info(f"[REFRESH] Status refreshed for user {chat_id}, number {number}")
                     logger.debug(f"Status didn't change for user {chat_id} application")
-                    await self.db.update_timestamp(chat_id)
+                    await self.db.update_last_checked(chat_id, number, type_, year)
                     return
 
                 if failed and request_type == "fetch":
@@ -141,8 +143,8 @@ class RabbitMQ:
                     logger.info(f"[CHANGED] Application status for user {chat_id} has changed to {received_status}")
 
                 # update application status in the DB
-                if await self.db.update_db_status(chat_id, received_status, is_resolved):
-                    lang = await self.db.get_user_language(chat_id)
+                if await self.db.update_application_status(chat_id, number, type_, year, received_status, is_resolved):
+                    lang = await self.db.fetch_user_language(chat_id)
 
                     # if fetch request failed miserably
                     if failed and request_type == "fetch":

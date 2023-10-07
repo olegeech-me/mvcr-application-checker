@@ -8,6 +8,7 @@ from bot.loader import loader, loop, LOG_LEVEL, ADMIN_CHAT_IDS
 from bot.handlers import start_command, help_command, unknown_text, unknown_command, status_command
 from bot.handlers import unsubscribe_command, subscribe_command, admin_stats_command
 from bot.handlers import force_refresh_command, subscribe_button, lang_command, set_language_startup, set_language_cmd
+from bot.handlers import status_button, unsubscribe_button, force_refresh_button
 from bot.handlers import (
     application_dialog_number,
     application_dialog_year,
@@ -68,8 +69,11 @@ async def main():
 
     # Register command and message handlers
     bot.add_handler(CommandHandler("status", status_command, has_args=False))
+    bot.add_handler(CallbackQueryHandler(status_button, pattern="status_*"))
     bot.add_handler(CommandHandler("unsubscribe", unsubscribe_command, has_args=False))
+    bot.add_handler(CallbackQueryHandler(unsubscribe_button, pattern="unsubscribe_*"))
     bot.add_handler(CommandHandler("force_refresh", force_refresh_command, has_args=False))
+    bot.add_handler(CallbackQueryHandler(force_refresh_button, pattern="force_refresh_*"))
     bot.add_handler(CommandHandler("admin_stats", admin_stats_command, has_args=False))
     bot.add_handler(CommandHandler("lang", lang_command, has_args=False))
     bot.add_handler(CallbackQueryHandler(set_language_cmd, pattern="set_lang_cmd_*"))
