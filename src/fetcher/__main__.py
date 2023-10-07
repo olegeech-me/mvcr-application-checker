@@ -7,7 +7,7 @@ import signal
 import asyncio
 import uvloop
 
-from fetcher.config import URL, RABBIT_HOST, RABBIT_SSL_PORT, RABBIT_USER, RABBIT_PASSWORD
+from fetcher.config import URL, RABBIT_HOST, RABBIT_SSL_PORT, RABBIT_USER, RABBIT_PASSWORD, LOG_LEVEL
 from fetcher.config import RABBIT_SSL_CACERTFILE, RABBIT_SSL_CERTFILE, RABBIT_SSL_KEYFILE
 from fetcher.browser import Browser
 from fetcher.messaging import Messaging
@@ -15,9 +15,10 @@ from fetcher.application_processor import ApplicationProcessor
 
 
 # Set up logging
-logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
+log_level_int = eval(f"logging.{LOG_LEVEL}")
+logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=log_level_int)
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(log_level_int)
 
 
 # Set up SSL params for RabbitMQ

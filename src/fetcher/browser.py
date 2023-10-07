@@ -19,12 +19,17 @@ from selenium.common.exceptions import (
     TimeoutException,
     NoSuchElementException,
 )
-from urllib3.exceptions import MaxRetryError
 import fake_useragent
 
 from fetcher.config import PAGE_LOAD_LIMIT_SECONDS, CAPTCHA_WAIT_SECONDS, OUTPUT_DIR, RETRY_INTERVAL
 
 logger = logging.getLogger(__name__)
+
+
+class CustomMaxRetryError(Exception):
+    def __init__(self, url, msg):
+        super().__init__(msg)
+        self.url = url
 
 
 class Browser:
@@ -162,27 +167,33 @@ class Browser:
             # BUG: sometimes on some systems after submitting data
             # the page still appears as nothing was done
             # Magically, re-submitting data resolves the issue ...
+            retry_count = 0
             for _attempt in range(3):
                 self._submit_form(app_details)
                 try:
-                    WebDriverWait(browser, PAGE_LOAD_LIMIT_SECONDS).until(
+                    WebDriverWait(browser, 5).until(
                         lambda x: x.find_element(By.CLASS_NAME, "alert__content"),
-                        message="Status field wasn't found in the HTML",
+                        message="Status field wasn't found",
                     )
                     application_status = browser.find_element_by_class_name("alert__content")
                     break
                 except (WebDriverException, NoSuchElementException, TimeoutException) as e:
-                    self._log(logging.ERROR, f"Submit failed: {e}")
-                    asyncio.sleep(1)
+                    retry_count += 1
+                    self._log(logging.ERROR, f"Submit failed on attempt {retry_count}: {e}")
+                    await asyncio.sleep(1)
 
             if application_status:
                 application_status_text = application_status.get_attribute("innerHTML")
                 self._log(logging.INFO, "Application status fetched")
             else:
-                raise MaxRetryError("Couldn't fetch application status")
+                raise CustomMaxRetryError(url=url, msg="Couldn't fetch application status")
 
-        except (WebDriverException, MaxRetryError, TimeoutException) as err:
+        except (WebDriverException, CustomMaxRetryError, TimeoutException) as err:
             self._log(logging.ERROR, "An error has occurred during page loading: %s", err)
+            _save_page_source(browser)
+            self.close()
+        except Exception as e:
+            self._log(logging.ERROR, "Unexpected exception: %s", e)
             _save_page_source(browser)
             self.close()
 

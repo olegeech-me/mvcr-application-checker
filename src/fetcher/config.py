@@ -6,6 +6,8 @@ URL = os.getenv("URL", "https://frs.gov.cz/informace-o-stavu-rizeni/")
 RETRY_INTERVAL = int(os.getenv("RETRY_INTERVAL", 30))
 # Where to save reports for failed fetches
 OUTPUT_DIR = os.getenv("OUTPUT_DIR", "output")
+# Log verbosity
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 # How long to wait for a page to load
 PAGE_LOAD_LIMIT_SECONDS = 20
 # How much time wait when captcha is hit
