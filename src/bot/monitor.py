@@ -46,7 +46,7 @@ class ApplicationMonitor:
                 "last_updated": app["last_updated"].isoformat() if app["last_updated"] else "0",
             }
             logger.info(
-                "Scheduling status update for user: "
+                "Scheduling status refresh for user: "
                 f"{app['chat_id']}, number: {app['application_number']}, last_updated: {app['last_updated']}"
             )
             await self.rabbit.publish_message(message, routing_key="RefreshStatusQueue")
