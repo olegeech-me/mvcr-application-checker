@@ -356,7 +356,10 @@ async def application_dialog_validate(update: Update, context: ContextTypes.DEFA
             "year": context.user_data["application_year"],
         }
 
-        logger.info(f"[SUBSCRIBE] Received application details: {app_data} from {user_info(update)}")
+        logger.info(
+            f"[SUBSCRIBE] Adding application OAM-"
+            f"{app_data['number']}-{app_data['suffix']}/{app_data['type']}-{app_data['year']} for {user_info(update)}"
+        )
         await query.message.edit_reply_markup(reply_markup=None)
         await create_subscription(update, app_data, lang=lang)
         clean_sub_context(context)
@@ -551,19 +554,31 @@ async def unsubscribe_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await query.edit_message_text(message_texts[lang]["unsubscribe"])
 
 
-async def _publish_force_request(chat_id, message, lang, app_details):
+async def _publish_force_request(update, caller, lang, app_details):
     """Publishes a force refresh request"""
+    if caller == "button":
+        target_message = update.callback_query
+        reply_function = target_message.message.reply_text
+    else:
+        target_message = get_effective_message(update)
+        reply_function = target_message.reply_text
+
     try:
-        request = create_request(chat_id, app_details, True)
+        request = create_request(update.effective_chat.id, app_details, True)
 
         logger.info(f"Publishing force refresh for {request}")
-
         await rabbit.publish_message(request)
-        await message.reply_text(message_texts[lang]["refresh_sent"])
-        await message.reply_text(message_texts[lang]["cizi_problem_promo"])
+
+        if caller == "button":
+            await target_message.edit_message_text(message_texts[lang]["refresh_sent"])
+        else:
+            await reply_function(message_texts[lang]["refresh_sent"])
+
+        await reply_function(message_texts[lang]["cizi_problem_promo"])
+
     except Exception as e:
         logger.error(f"Error creating force refresh request: {e}")
-        await message.reply_text(message_texts[lang]["failed_to_refresh"])
+        await reply_function(message_texts[lang]["failed_to_refresh"])
 
 
 # Handler for /force_refresh command
@@ -586,8 +601,8 @@ async def force_refresh_command(update: Update, context: ContextTypes.DEFAULT_TY
         await update.message.reply_text("Select which application to force refresh:", reply_markup=keyboard)
     else:
         await _publish_force_request(
-            chat_id,
-            message,
+            update,
+            "cli",
             lang,
             {
                 "number": subscriptions[0]["application_number"],
@@ -600,8 +615,6 @@ async def force_refresh_command(update: Update, context: ContextTypes.DEFAULT_TY
 async def force_refresh_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Sends force refresh request for selected application"""
     query = update.callback_query
-    message = update.message
-    chat_id = update.effective_chat.id
     lang = await _get_user_language(update, context)
 
     if await _is_button_click_abused(update, context):
@@ -609,7 +622,7 @@ async def force_refresh_button(update: Update, context: ContextTypes.DEFAULT_TYP
     await query.answer()
 
     app_details = _parse_application_buttons_callback_data(query.data)
-    await _publish_force_request(chat_id, message, lang, app_details)
+    await _publish_force_request(update, "button", lang, app_details)
 
 
 # Handler for /status command

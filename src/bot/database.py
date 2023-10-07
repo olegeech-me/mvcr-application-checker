@@ -71,7 +71,9 @@ class Database:
     ):
         """Insert a new application to the Applications table"""
 
-        logger.info(f"Adding application for chatID {chat_id} to DB")
+        logger.debug(
+            f"Adding application OAM-{application_number}/{application_type}-{application_year} for chatID {chat_id} to DB"
+        )
         query = (
             "INSERT INTO Applications "
             "(user_id, application_number, application_suffix, application_type, application_year) "
@@ -135,6 +137,9 @@ class Database:
     async def delete_application(self, chat_id, application_number, application_type, application_year):
         """Delete a specific application for a user based on number, type, and year"""
 
+        logger.info(
+            f"Removing application OAM-{application_number}/{application_type}-{application_year} for chatID {chat_id} from DB"
+        )
         query = """DELETE FROM Applications
                 WHERE user_id = (SELECT user_id FROM Users WHERE chat_id = $1)
                 AND application_number = $2
