@@ -1,4 +1,5 @@
 import asyncpg
+import datetime
 import logging
 import pytz
 import asyncio
@@ -401,6 +402,13 @@ class Database:
 
     async def insert_reminder(self, chat_id, time_input):
         """Insert a new reminder for a specific user based on chat_id and time"""
+        try:
+            # Convert the string to a time object
+            time_obj = datetime.datetime.strptime(time_input, "%H:%M").time()
+        except ValueError:
+            logger.error(f"Invalid time format: {time_input}")
+            return False
+
         query = """
             INSERT INTO Reminders (user_id, reminder_time)
             SELECT user_id, $2
@@ -409,7 +417,7 @@ class Database:
         """
         async with self.pool.acquire() as conn:
             try:
-                await conn.execute(query, chat_id, time_input)
+                await conn.execute(query, chat_id, time_obj)
                 return True
             except asyncpg.UniqueViolationError:
                 logger.error(f"Attempt to insert duplicate reminder for chat ID {chat_id}")

@@ -12,7 +12,7 @@ from bot.utils import generate_oam_full_string
 SUBSCRIPTIONS_LIMIT = 5
 BUTTON_WAIT_SECONDS = 1
 FORCE_FETCH_LIMIT_SECONDS = 86400
-COMMANDS_LIST = ["status", "subscribe", "unsubscribe", "force_refresh", "lang", "start", "help", "remind"]
+COMMANDS_LIST = ["status", "subscribe", "unsubscribe", "force_refresh", "lang", "start", "help", "reminder"]
 ADMIN_COMMANDS = ["admin_stats", "admin_broadcast"]
 DEFAULT_LANGUAGE = "EN"
 LANGUAGE_LIST = ["EN 🏴󠁧󠁢󠁥󠁮󠁧󠁿|🇺🇸", "RU 🇷🇺", "CZ 🇨🇿", "UA 🇺🇦"]
@@ -789,10 +789,11 @@ async def reminder_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # If user already has reminders
     if reminders:
         # Prompt to either add a new reminder or delete an existing one
-        keyboard = [
-            [InlineKeyboardButton(button_texts[lang]["add_reminder"], callback_data="add_reminder")],
-            [InlineKeyboardButton(button_texts[lang]["delete_reminder"], callback_data="delete_reminder")],
+        row = [
+            InlineKeyboardButton(button_texts[lang]["add_reminder"], callback_data="add_reminder"),
+            InlineKeyboardButton(button_texts[lang]["delete_reminder"], callback_data="delete_reminder"),
         ]
+        keyboard = [row]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await update.message.reply_text(message_texts[lang]["reminder_decision"], reply_markup=reply_markup)
         return
@@ -816,12 +817,13 @@ async def reminder_button_callback(update: Update, context: ContextTypes.DEFAULT
         # Fetch user reminders
         reminders = await db.fetch_user_reminders(query.message.chat_id)
 
-        keyboard = []
+        row = []
         for reminder in reminders:
             callback_data = f"delete_{reminder['reminder_id']}"
             button_label = str(reminder["reminder_time"])
-            keyboard.append([InlineKeyboardButton(button_label, callback_data=callback_data)])
+            row.append(InlineKeyboardButton(button_label, callback_data=callback_data))
 
+        keyboard = [row]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(message_texts[lang]["select_reminder_to_delete"], reply_markup=reply_markup)
         return REMINDER_DELETE
@@ -873,8 +875,10 @@ async def add_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE):
     success = await db.insert_reminder(chat_id, time_input)
 
     if success:
+        logger.info(f"Reminder added for {time_input}, user {user_info(update)}")
         await update.message.reply_text(message_texts[lang]["reminder_added"])
     else:
+        logger.error(f"Failed to add reminder {time_input}, user {user_info(update)}")
         await update.message.reply_text(message_texts[lang]["reminder_add_failed"])
 
     return ConversationHandler.END
