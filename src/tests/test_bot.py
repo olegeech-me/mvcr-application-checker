@@ -76,7 +76,7 @@ def test__parse_application_number(num_str, app_num, app_suffix):
 )
 def test_get_user_language(user_lang_db, user_lang_context, expected_lang):
     db_mock = Mock()
-    db_mock.get_user_language = AsyncMock(return_value=user_lang_db)
+    db_mock.fetch_user_language = AsyncMock(return_value=user_lang_db)
 
     with patch("bot.handlers.db", db_mock):  # Patch the global db instance
         update = Mock()
@@ -126,11 +126,11 @@ def test_user_info():
 
 def test_check_and_update_limit():
     user_data = {}
-    result = check_and_update_limit(user_data, "test_command")
-    assert result is True
-    # Assume 2 as the limit. The 3rd time it should return False.
-    result = check_and_update_limit(user_data, "test_command")
-    assert result is True
+    # Assume 5 as the limit. The 6th time it should return False.
+    for _attempt in range(5):
+        result = check_and_update_limit(user_data, "test_command")
+        assert result is True
+
     result = check_and_update_limit(user_data, "test_command")
     assert result is False
 
@@ -229,15 +229,11 @@ def test_enforce_rate_limit():
     context = Mock()
     context.user_data = {}
 
-    # Testing rate limit for the first time, should return True
-    result = asyncio.run(enforce_rate_limit(update, context, "test_command"))
-    assert result
+    for _attempt in range(5):
+        result = asyncio.run(enforce_rate_limit(update, context, "test_command"))
+        assert result
 
-    # Testing rate limit for the second time, should still return True
-    result = asyncio.run(enforce_rate_limit(update, context, "test_command"))
-    assert result
-
-    # Testing rate limit for the third time, should return False
+    # Testing rate limit for the 6th time, should return False
     result = asyncio.run(enforce_rate_limit(update, context, "test_command"))
     assert not result
 
