@@ -5,6 +5,7 @@ import logging
 import hashlib
 from aiormq.exceptions import AMQPConnectionError
 from bot.texts import message_texts
+from bot.utils import generate_oam_full_string
 
 MAX_RETRIES = 5  # maximum number of connection retries
 RETRY_DELAY = 5  # delay (in seconds) between retries
@@ -75,19 +76,9 @@ class RabbitMQ:
         """Check if the application was resolved to its final status"""
         return any(phrase in status for phrase in FINAL_STATUSES)
 
-    def generate_oam_full_string(self, app_details):
-        """Generate full OAM application identifier"""
-        if app_details["suffix"] != "0":
-            oam_string = "OAM-{}-{}/{}-{}".format(
-                app_details["number"], app_details["suffix"], app_details["type"], app_details["year"]
-            )
-        else:
-            oam_string = "OAM-{}/{}-{}".format(app_details["number"], app_details["type"], app_details["year"])
-        return oam_string
-
     def _generate_error_message(self, app_details, lang):
         """Generate an error message for an application number"""
-        app_string = self.generate_oam_full_string(app_details)
+        app_string = generate_oam_full_string(app_details)
 
         return message_texts[lang]["application_failed"].format(app_string=app_string)
 
@@ -104,7 +95,7 @@ class RabbitMQ:
             force_refresh = msg_data.get("force_refresh", False)
             failed = msg_data.get("failed", False)
             request_type = msg_data.get("request_type", None)
-            oam_full_string = self.generate_oam_full_string(msg_data)
+            oam_full_string = generate_oam_full_string(msg_data)
 
             # Generate unique ID for the consumed message and remove it from published_messages
             unique_id = self.generate_unique_id(msg_data)
@@ -193,7 +184,7 @@ class RabbitMQ:
     async def publish_message(self, message, routing_key="ApplicationFetchQueue"):
         """Publishes a message to fetchers queue, ensuring not to publish duplicates"""
         unique_id = self.generate_unique_id(message)
-        oam_full_string = self.generate_oam_full_string(message)
+        oam_full_string = generate_oam_full_string(message)
         message_tag = (
             f"request_type: {message['request_type']}, {oam_full_string}, "
             f"user: {message['chat_id']}, last_updated: {message['last_updated']}"

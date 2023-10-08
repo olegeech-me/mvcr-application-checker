@@ -7,6 +7,7 @@ from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, BotComm
 from telegram.ext import ContextTypes, ConversationHandler
 from bot.loader import loader, ADMIN_CHAT_IDS, REFRESH_PERIOD
 from bot.texts import button_texts, message_texts, commands_description
+from bot.utils import generate_oam_full_string
 
 SUBSCRIPTIONS_LIMIT = 5
 BUTTON_WAIT_SECONDS = 1
@@ -528,8 +529,7 @@ async def unsubscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     subscriptions = await db.fetch_user_subscriptions(chat_id)
     if len(subscriptions) > 1:
         keyboard = _generate_buttons_from_subscriptions("unsubscribe", subscriptions)
-        # TODO should be translated
-        await update.message.reply_text("Select which subscription you want to delete:", reply_markup=keyboard)
+        await update.message.reply_text(message_texts[lang]["select_unsubscribe"], reply_markup=keyboard)
     # If user has a single subscription - remove it right away
     elif len(subscriptions) == 1:
         if await db.delete_application(
@@ -538,10 +538,10 @@ async def unsubscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             subscriptions[0]["application_type"],
             subscriptions[0]["application_year"],
         ):
-            await update.message.reply_text(message_texts[lang]["unsubscribe"])
+            oam_full_string = generate_oam_full_string(subscriptions[0])
+            await update.message.reply_text(message_texts[lang]["unsubscribe"].format(app_string=oam_full_string))
         else:
-            # TODO: translate me
-            await update.message.reply_text("Failed to remove subscription")
+            await update.message.reply_text(message_texts[lang]["unsubscribe_failed"])
     else:
         await update.message.reply_text(message_texts[lang]["not_subscribed"])
 
@@ -563,7 +563,8 @@ async def unsubscribe_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
         app_details["type"],
         app_details["year"],
     )
-    await query.edit_message_text(message_texts[lang]["unsubscribe"])
+    oam_full_string = generate_oam_full_string(app_details)
+    await query.edit_message_text(message_texts[lang]["unsubscribe"].format(app_string=oam_full_string))
 
 
 async def _publish_force_request(update, caller, lang, app_details):
@@ -609,8 +610,7 @@ async def force_refresh_command(update: Update, context: ContextTypes.DEFAULT_TY
         return
     if len(subscriptions) > 1:
         keyboard = _generate_buttons_from_subscriptions("force_refresh", subscriptions)
-        # TODO should be translated
-        await update.message.reply_text("Select which application to force refresh:", reply_markup=keyboard)
+        await update.message.reply_text(message_texts[lang]["select_refresh"], reply_markup=keyboard)
     else:
         await _publish_force_request(
             update,
@@ -648,8 +648,7 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     subscriptions = await db.fetch_user_subscriptions(chat_id)
     if len(subscriptions) > 1:
         keyboard = _generate_buttons_from_subscriptions("status", subscriptions)
-        # TODO should be translated
-        await message.reply_text("Select which subscription you want to get status for", reply_markup=keyboard)
+        await message.reply_text(message_texts[lang]["select_status"], reply_markup=keyboard)
     elif len(subscriptions) == 1:
         app_status = await db.fetch_status_with_timestamp(
             chat_id,
@@ -719,9 +718,11 @@ async def lang_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler for /lang command to set language preference"""
     logging.info(f"Received /lang command from {user_info(update)}")
 
-    keyboard = [[InlineKeyboardButton(lang, callback_data=f"set_lang_cmd_{lang}")] for lang in LANGUAGE_LIST]
+    row = [InlineKeyboardButton(lang, callback_data=f"set_lang_cmd_{lang}") for lang in LANGUAGE_LIST]
+    keyboard = [row]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("Select your language / Выберете язык / Zvolte jazyk:", reply_markup=reply_markup)
+
+    await update.message.reply_text("Choose language / Выберете язык / Zvolte jazyk / Виберіть мову:", reply_markup=reply_markup)
     return START
 
 
