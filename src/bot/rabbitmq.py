@@ -6,11 +6,11 @@ import hashlib
 from aiormq.exceptions import AMQPConnectionError
 from bot.texts import message_texts
 from bot.utils import generate_oam_full_string
-from bot.utils import MVCR_STATUSES
+from bot.utils import MVCR_STATUSES, categorize_application_status
 
 MAX_RETRIES = 5  # maximum number of connection retries
 RETRY_DELAY = 5  # delay (in seconds) between retries
-FINAL_STATUSES = [item for key, (value, emoji) in MVCR_STATUSES.items() if key != "processed" for item in value]
+FINAL_STATUSES = [item for key, (value, emoji) in MVCR_STATUSES.items() if key != "application_in_progress" for item in value]
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +96,7 @@ class RabbitMQ:
             force_refresh = msg_data.get("force_refresh", False)
             failed = msg_data.get("failed", False)
             request_type = msg_data.get("request_type", None)
+            has_changed = False
             oam_full_string = generate_oam_full_string(msg_data)
 
             # Generate unique ID for the consumed message and remove it from published_messages
@@ -109,6 +110,8 @@ class RabbitMQ:
                 if current_status is None:
                     logger.error(f"Failed to get current status from db for {oam_full_string}, user {chat_id}")
                     return
+
+                has_changed = current_status != received_status
 
                 if failed and request_type == "refresh":
                     # Drop failed refresh requests with log message
@@ -127,7 +130,7 @@ class RabbitMQ:
                     )
                     return
 
-                if current_status == received_status and not force_refresh:
+                if not has_changed and not force_refresh:
                     logger.info(f"[REFRESH] Status refreshed for {oam_full_string}, user {chat_id}")
                     logger.debug(f"Status didn't change for {oam_full_string}, user {chat_id}")
                     await self.db.update_last_checked(chat_id, number, type_, year)
@@ -143,10 +146,6 @@ class RabbitMQ:
                         f"[FORCED] Received force refresh response for {oam_full_string}, "
                         f"user {chat_id}, status: {received_status}"
                     )
-                else:
-                    logger.info(
-                        f"[CHANGED] Application status for {oam_full_string}, user {chat_id} has changed to {received_status}"
-                    )
 
                 # update application status in the DB
                 if await self.db.update_application_status(chat_id, number, type_, year, received_status, is_resolved):
@@ -156,19 +155,27 @@ class RabbitMQ:
                     if failed and request_type == "fetch":
                         logger.warning(f"[FETCH FAILED] Fetch request failed for {oam_full_string}, user {chat_id}")
                         notification_text = self._generate_error_message(msg_data, lang)
+                    else:
+                        # Get category and status sign
+                        category, emoji_sign = categorize_application_status(received_status)
 
-                    # construct the notification text
-                    if is_resolved and not failed:
-                        notification_text = f"{message_texts[lang]['application_resolved']}\n\n{received_status}"
-                        logger.info(
-                            f"[RESOLVED] Application {oam_full_string}, user {chat_id} has been resolved to {received_status}"
-                        )
+                        # Log changes only if status has changed
+                        if has_changed:
+                            if is_resolved:
+                                logger.info(
+                                    f"[RESOLVED][{category.upper()}] Application {oam_full_string}, "
+                                    f"user {chat_id} has been resolved to {received_status}"
+                                )
+                            elif not force_refresh:
+                                logger.info(
+                                    f"[CHANGED][{category.upper()}] Application status for {oam_full_string},"
+                                    f"user {chat_id} has changed to {received_status}"
+                                )
+                        # Since we came to this place, it means either smth has changed
+                        # or it's a force refresh request, so we need to notify the user
 
-                    # handle force refresh cases
-                    if not is_resolved and force_refresh and not failed:
-                        notification_text = f"{message_texts[lang]['current_status']} {received_status}"
-                    elif not is_resolved and not force_refresh and not failed:
-                        notification_text = f"{message_texts[lang]['application_updated']}\n\n{received_status}"
+                        message = message_texts[lang][category].format(status_sign=emoji_sign)
+                        notification_text = f"{message}\n\n{received_status}"
 
                     # notify the user
                     try:

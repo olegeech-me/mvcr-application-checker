@@ -3,10 +3,10 @@ import logging
 logger = logging.getLogger(__name__)
 
 MVCR_STATUSES = {
-    "not_found": (["nebylo nalezeno", "bez úvodních nul"], "⚪️"),
-    "processed": (["zpracovává se", "v-prubehu-rizeni"], "🟡"),
-    "approved": (["bylo <b>povoleno</b>", "rizeni-povoleno"], "🟢"),
-    "declined": (["bylo <b>nepovoleno</b>", "zamítlo", "zastavilo"], "🔴"),
+    "application_not_found": (["nebylo nalezeno", "bez úvodních nul"], "⚪️"),
+    "application_in_progress": (["zpracovává se", "v-prubehu-rizeni"], "🟡"),
+    "application_approved": (["bylo <b>povoleno</b>", "rizeni-povoleno"], "🟢"),
+    "application_denied": (["bylo <b>nepovoleno</b>", "zamítlo", "zastavilo"], "🔴"),
 }
 
 

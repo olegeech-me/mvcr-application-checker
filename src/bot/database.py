@@ -218,7 +218,7 @@ class Database:
                     timestamp = last_updated_prague.strftime("%H:%M:%S %d-%m-%Y")
 
                     status_str = message_texts[lang]["current_status_timestamp"].format(
-                        category=categorize_application_status(current_status)[1],
+                        status_sign=categorize_application_status(current_status)[1],
                         status=current_status,
                         timestamp=timestamp,
                     )
