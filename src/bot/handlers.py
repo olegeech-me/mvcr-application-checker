@@ -705,9 +705,9 @@ async def admin_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     active_users = await db.count_active_users()
     if user_count is not None:
         await update.message.reply_text(
-            f"Total users: {user_count}\n"
-            f"Subscribed users: {subscribed_users}\n"
-            f"Users with active (non-resolved) subscriptions: {active_users}\n"
+            f"👥 Total users: <b>{user_count}</b>\n"
+            f"✉️ Subscribed users: <b>{subscribed_users}</b>\n"
+            f"🔍 Users with active (non-resolved) subscriptions: <b>{active_users}</b>\n"
         )
     else:
         await update.message.reply_text("Error retrieving statistics.")
