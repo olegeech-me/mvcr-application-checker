@@ -17,7 +17,7 @@
   "application_resolved": "Your application has been resolved!",
   "application_failed": "😥Unfortunately, we couldn't get the status of <b>{app_string}</b> application. Please ensure your application details are correct and try unsubscribing and then subscribing again. If the issue persists, you can reach out to developers.",
   "current_status": "Current application status is:",
-  "current_status_timestamp": "Current Status: {status}\nLast Updated: <b>{timestamp}</b>",
+  "current_status_timestamp": "Current Status {category}:\n\n{status}\n\nLast Updated: <b>{timestamp}</b>",
   "current_status_empty": "Current status is empty. Please wait some time and try again.",
   "cizi_problem_promo": "Waiting for more than 60 days? 🤔 Maybe it's time to <a href='https://ciziproblem.cz/necinnost_Nin1'>file a complaint</a> 📝",
   "language_selected": "Language set to {lang}.",

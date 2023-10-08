@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS Applications (
     application_suffix VARCHAR(255),
     application_type VARCHAR(255) NOT NULL,
     application_year INT NOT NULL,
-    current_status VARCHAR(255) DEFAULT 'Unknown',
+    current_status VARCHAR(1000) DEFAULT 'Unknown',
     last_updated TIMESTAMP,
     is_resolved BOOLEAN NOT NULL DEFAULT FALSE
 );

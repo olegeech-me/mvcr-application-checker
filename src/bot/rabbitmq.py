@@ -6,10 +6,11 @@ import hashlib
 from aiormq.exceptions import AMQPConnectionError
 from bot.texts import message_texts
 from bot.utils import generate_oam_full_string
+from bot.utils import MVCR_STATUSES
 
 MAX_RETRIES = 5  # maximum number of connection retries
 RETRY_DELAY = 5  # delay (in seconds) between retries
-FINAL_STATUSES = ["bylo <b>povoleno</b>", "pokud bylo vaše řízení povoleno", "nebylo", "nepovoleno", "bylo <b>nepovoleno</b>"]
+FINAL_STATUSES = [item for key, (value, emoji) in MVCR_STATUSES.items() if key != "processed" for item in value]
 
 logger = logging.getLogger(__name__)
 

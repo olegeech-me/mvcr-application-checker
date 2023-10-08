@@ -3,6 +3,7 @@ import logging
 import pytz
 import asyncio
 from bot.texts import message_texts
+from bot.utils import categorize_application_status
 
 MAX_RETRIES = 5  # maximum number of connection retries
 RETRY_DELAY = 2  # delay (in seconds) between retries
@@ -217,6 +218,7 @@ class Database:
                     timestamp = last_updated_prague.strftime("%H:%M:%S %d-%m-%Y")
 
                     status_str = message_texts[lang]["current_status_timestamp"].format(
+                        category=categorize_application_status(current_status)[1],
                         status=current_status,
                         timestamp=timestamp,
                     )

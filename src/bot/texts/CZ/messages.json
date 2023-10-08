@@ -17,7 +17,7 @@
   "application_resolved": "Vaše žádost byla vyřešena!",
   "application_failed": "😥Bohužel jsme nemohli získat stav žádosti <b>{app_string}</b>. Ujistěte se, že údaje vaší žádosti jsou správné a zkuste se odhlásit a poté znovu přihlásit. Pokud problém přetrvává, můžete se obrátit na vývojáře.",
   "current_status": "Aktuální stav žádosti:",
-  "current_status_timestamp": "Aktuální stav: {status}\nPoslední kontrola: <b>{timestamp}</b>",
+  "current_status_timestamp": "Aktuální stav {category}:\n\n{status}\n\nPoslední kontrola: <b>{timestamp}</b>",
   "current_status_empty": "Aktuální stav je prázdný. Počkejte prosím chvíli a zkuste to znovu.",
   "cizi_problem_promo": "Čekáte více než 60 dní? 🤔 Možná je čas <a href='https://ciziproblem.cz/necinnost_Nin1'>podat stížnost</a> 📝",
   "language_selected": "Jazyk nastaven na {lang}.",
