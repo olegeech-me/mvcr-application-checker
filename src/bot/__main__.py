@@ -19,6 +19,11 @@ from bot.handlers import (
     TYPE,
     YEAR,
     VALIDATE,
+    BROADCAST_TEXT,
+    BROADCAST_CONFIRM,
+    admin_broadcast_command,
+    admin_broadcast_text,
+    admin_broadcast_confirm,
 )
 from bot import monitor
 
@@ -98,6 +103,15 @@ async def main():
         fallbacks=[CommandHandler("subscribe", subscribe_command), CommandHandler("start", start_command, has_args=False)],
     )
     bot.add_handler(conv_handler)
+    broadcast_handler = ConversationHandler(
+        entry_points=[CommandHandler("admin_broadcast", admin_broadcast_command)],
+        states={
+            BROADCAST_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_broadcast_text)],
+            BROADCAST_CONFIRM: [CallbackQueryHandler(admin_broadcast_confirm)],
+        },
+        fallbacks=[],
+    )
+    bot.add_handler(broadcast_handler)
     bot.add_handler(MessageHandler(filters.TEXT, unknown_text))
     bot.add_handler(MessageHandler(filters.COMMAND, unknown_command))
 

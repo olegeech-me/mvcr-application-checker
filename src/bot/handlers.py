@@ -3,7 +3,7 @@ import logging
 import re
 import time
 
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, BotCommand, BotCommandScopeChat
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, BotCommand, BotCommandScopeChat, ForceReply
 from telegram.ext import ContextTypes, ConversationHandler
 from bot.loader import loader, ADMIN_CHAT_IDS, REFRESH_PERIOD
 from bot.texts import button_texts, message_texts, commands_description
@@ -23,6 +23,7 @@ ALLOWED_YEARS = [y for y in range(datetime.datetime.today().year - 3, datetime.d
 
 
 START, NUMBER, TYPE, YEAR, VALIDATE = range(5)
+BROADCAST_TEXT, BROADCAST_CONFIRM = range(2)
 
 
 logger = logging.getLogger(__name__)
@@ -425,7 +426,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = await _get_user_language(update, context)
     await _create_user_in_db_if_not_exists(update, lang=lang)
 
-    logging.info(f"Received /start command from {user_info(update)}")
+    logging.info(f"💻 Received /start command from {user_info(update)}")
     await _show_startup_message(update, context)
     return START
 
@@ -439,7 +440,7 @@ async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     [TBD] If an argument is passed then an attempt to parse it will be made and upon success it will be treated as
     application number.
     """
-    logger.info(f"Received /subscribe command from {user_info(update)}")
+    logger.info(f"💻 Received /subscribe command from {user_info(update)}")
 
     lang = await _get_user_language(update, context)
     message = get_effective_message(update)
@@ -520,7 +521,7 @@ def _parse_application_buttons_callback_data(data):
 # Handler for /unsubscribe command
 async def unsubscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Unsubscribes user from application status updates"""
-    logger.info(f"Received /unsubscribe command from {user_info(update)}")
+    logger.info(f"💻 Received /unsubscribe command from {user_info(update)}")
     lang = await _get_user_language(update, context)
     chat_id = update.message.chat_id
 
@@ -597,7 +598,7 @@ async def _publish_force_request(update, caller, lang, app_details):
 # Handler for /force_refresh command
 async def force_refresh_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Force refresh application status"""
-    logger.info(f"Received /force_refresh command from {user_info(update)}")
+    logger.info(f"💻 Received /force_refresh command from {user_info(update)}")
     message = get_effective_message(update)
     lang = await _get_user_language(update, context)
     chat_id = update.effective_chat.id
@@ -640,7 +641,7 @@ async def force_refresh_button(update: Update, context: ContextTypes.DEFAULT_TYP
 # Handler for /status command
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Returns current status of the application"""
-    logger.info(f"Received /status command from {user_info(update)}")
+    logger.info(f"💻 Received /status command from {user_info(update)}")
     message = update.message
     chat_id = update.effective_chat.id
     lang = await _get_user_language(update, context)
@@ -687,7 +688,7 @@ async def status_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Handler for the /help command
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Displays info on how to use the bot."""
-    logger.info(f"Received /help command from {user_info(update)}")
+    logger.info(f"💻 Received /help command from {user_info(update)}")
     lang = await _get_user_language(update, context)
     await update.message.reply_text(message_texts[lang]["start_text"].format(refresh_period=int(REFRESH_PERIOD / 60)))
 
@@ -695,7 +696,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 # handler for /admin_stats
 async def admin_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Return admin statistics"""
-    logging.info(f"Received /admin_stats command from {user_info(update)}")
+    logging.info(f"💻 Received /admin_stats command from {user_info(update)}")
     if not _is_admin(update.effective_chat.id):
         await update.message.reply_text("Unauthorized. This command is only for admins.")
         return
@@ -713,10 +714,72 @@ async def admin_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("Error retrieving statistics.")
 
 
+# Handler for /admin_broadcast
+async def admin_broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Initiates the admin broadcasting process"""
+    logger.info(f"💻 Received /admin_broadcast command from {user_info(update)}")
+
+    # Check authorization
+    if not _is_admin(update.effective_chat.id):
+        await update.message.reply_text("Unauthorized. This command is only for admins.")
+        return ConversationHandler.END
+
+    # Prompt the admin for the broadcast message
+    await update.message.reply_text("Please provide the message to be broadcasted.", reply_markup=ForceReply(selective=True))
+    return BROADCAST_TEXT
+
+
+async def admin_broadcast_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handles the provided broadcast message and asks for confirmation"""
+    user_message = update.message.text
+
+    # Store the broadcast message in the context for future reference
+    context.user_data["broadcast_message"] = user_message
+
+    total_users = await db.count_users_total()
+    confirmation_text = (
+        f"This will be broadcasted to {total_users} users. Message:\n\n{user_message}\n\n" "Do you confirm to send this?"
+    )
+    keyboard = [
+        [InlineKeyboardButton("Yes", callback_data="confirm_broadcast")],
+        [InlineKeyboardButton("No", callback_data="cancel_broadcast")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await update.message.reply_text(confirmation_text, reply_markup=reply_markup)
+    return BROADCAST_CONFIRM
+
+
+async def admin_broadcast_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handles the confirmation of the broadcast and sends the message to all users"""
+    query = update.callback_query
+    user_message = context.user_data.get("broadcast_message")
+
+    if query.data == "confirm_broadcast":
+        # TODO implement this DB method
+        chat_ids = await db.fetch_all_chat_ids()
+
+        for chat_id in chat_ids:
+            try:
+                await context.bot.send_message(chat_id, user_message)
+            except Exception as e:
+                logger.error(f"Error broadcasting to chat_id {chat_id}: {e}")
+
+        logger.warning(f"📢 Admin broadcast message was issued to all users by {user_info(update)}")
+        await query.edit_message_text("Message broadcasted successfully!")
+    elif query.data == "cancel_broadcast":
+        await query.edit_message_text("Broadcast canceled.")
+
+    # Clear the stored broadcast message from the context
+    context.user_data.pop("broadcast_message", None)
+
+    return ConversationHandler.END
+
+
 # Handler for /lang command
 async def lang_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler for /lang command to set language preference"""
-    logging.info(f"Received /lang command from {user_info(update)}")
+    logging.info(f"💻 Received /lang command from {user_info(update)}")
 
     row = [InlineKeyboardButton(lang, callback_data=f"set_lang_cmd_{lang}") for lang in LANGUAGE_LIST]
     keyboard = [row]

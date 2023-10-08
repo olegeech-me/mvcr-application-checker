@@ -370,6 +370,19 @@ class Database:
                 logger.error(f"Error while updating lang in DB for chat ID: {chat_id}. Error: {e}")
                 return False
 
+    async def fetch_all_chat_ids(self):
+        """Fetch all chat IDs from the Users table"""
+
+        query = "SELECT chat_id FROM Users"
+        async with self.pool.acquire() as conn:
+            try:
+                rows = await conn.fetch(query)
+                # Extract chat_id from each record and return as a list
+                return [row["chat_id"] for row in rows]
+            except Exception as e:
+                logger.error(f"Error while fetching all chat IDs. Error: {e}")
+                return []
+
     async def close(self):
         logger.info("Shutting down DB connection")
         try:
