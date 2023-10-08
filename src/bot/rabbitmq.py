@@ -9,7 +9,7 @@ from bot.utils import generate_oam_full_string
 
 MAX_RETRIES = 5  # maximum number of connection retries
 RETRY_DELAY = 5  # delay (in seconds) between retries
-FINAL_STATUSES = ["bylo <b>povoleno</b>", "pokud bylo vaše řízení povoleno", "nebylo", "nepovoleno"]
+FINAL_STATUSES = ["bylo <b>povoleno</b>", "pokud bylo vaše řízení povoleno", "nebylo", "nepovoleno", "bylo <b>nepovoleno</b>"]
 
 logger = logging.getLogger(__name__)
 
