@@ -168,7 +168,7 @@ class Database:
                 rows = await conn.fetch(query, chat_id)
                 if not rows:
                     logger.info(f"No data found for chat_id {chat_id}")
-                    return None
+                    return []
                 return [dict(row) for row in rows]  # Convert the records to dictionaries
             except Exception as e:
                 logger.error(f"Error while fetching user data for chat ID: {chat_id}. Error: {e}")
