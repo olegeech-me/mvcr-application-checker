@@ -5,6 +5,7 @@ import logging
 import hashlib
 from aiormq.exceptions import AMQPConnectionError
 from bot.texts import message_texts
+from bot.utils import generate_oam_full_string
 
 MAX_RETRIES = 5  # maximum number of connection retries
 RETRY_DELAY = 5  # delay (in seconds) between retries
@@ -51,7 +52,10 @@ class RabbitMQ:
 
     def generate_unique_id(self, message):
         """Generate a unique ID for a given message"""
-        uid_string = f"{message['chat_id']}_{message['number']}_{message['last_updated']}"
+        uid_string = (
+            f"{message['request_type']}_{message['chat_id']}_{message['number']}_"
+            f"{message['type']}_{message['year']}_{message['last_updated']}"
+        )
         return hashlib.md5(uid_string.encode()).hexdigest()
 
     def is_message_published(self, unique_id):
@@ -74,12 +78,7 @@ class RabbitMQ:
 
     def _generate_error_message(self, app_details, lang):
         """Generate an error message for an application number"""
-        if app_details["suffix"] != "0":
-            app_string = "OAM-{}-{}/{}-{}".format(
-                app_details["number"], app_details["suffix"], app_details["type"], app_details["year"]
-            )
-        else:
-            app_string = "OAM-{}/{}-{}".format(app_details["number"], app_details["type"], app_details["year"])
+        app_string = generate_oam_full_string(app_details)
 
         return message_texts[lang]["application_failed"].format(app_string=app_string)
 
@@ -90,10 +89,13 @@ class RabbitMQ:
             logger.debug(f"Received status update message: {msg_data}")
             chat_id = msg_data.get("chat_id", None)
             number = msg_data.get("number", None)
+            type_ = msg_data.get("type", None)
+            year = int(msg_data.get("year"))
             received_status = msg_data.get("status", None)
             force_refresh = msg_data.get("force_refresh", False)
             failed = msg_data.get("failed", False)
             request_type = msg_data.get("request_type", None)
+            oam_full_string = generate_oam_full_string(msg_data)
 
             # Generate unique ID for the consumed message and remove it from published_messages
             unique_id = self.generate_unique_id(msg_data)
@@ -101,17 +103,17 @@ class RabbitMQ:
 
             if chat_id and received_status:
                 # Fetch the current status from the database
-                current_status = await self.db.get_application_status(chat_id)
+                current_status = await self.db.fetch_application_status(chat_id, number, type_, year)
 
                 if current_status is None:
-                    logger.error(f"Failed to get current status from db for user {chat_id}")
+                    logger.error(f"Failed to get current status from db for {oam_full_string}, user {chat_id}")
                     return
 
                 if failed and request_type == "refresh":
                     # Drop failed refresh requests with log message
                     # But do not update status in DB to avoid mass status rewrite
                     # in case of issues at fetcher
-                    logger.warning(f"[REFRESH FAILED] Failed to refresh status for user {chat_id}")
+                    logger.warning(f"[REFRESH FAILED] Failed to refresh status {oam_full_string}, user {chat_id}")
                     return
 
                 # FIXME olegeech: should be fixed on the fetcher side
@@ -125,9 +127,9 @@ class RabbitMQ:
                     return
 
                 if current_status == received_status and not force_refresh:
-                    logger.info(f"[REFRESH] Status refreshed for user {chat_id}, number {number}")
-                    logger.debug(f"Status didn't change for user {chat_id} application")
-                    await self.db.update_timestamp(chat_id)
+                    logger.info(f"[REFRESH] Status refreshed for {oam_full_string}, user {chat_id}")
+                    logger.debug(f"Status didn't change for {oam_full_string}, user {chat_id}")
+                    await self.db.update_last_checked(chat_id, number, type_, year)
                     return
 
                 if failed and request_type == "fetch":
@@ -136,23 +138,30 @@ class RabbitMQ:
                     is_resolved = self.is_resolved(received_status)
 
                 if force_refresh:
-                    logger.info(f"[FORCED] Received force refresh response for user {chat_id}, status: {received_status}")
+                    logger.info(
+                        f"[FORCED] Received force refresh response for {oam_full_string}, "
+                        f"user {chat_id}, status: {received_status}"
+                    )
                 else:
-                    logger.info(f"[CHANGED] Application status for user {chat_id} has changed to {received_status}")
+                    logger.info(
+                        f"[CHANGED] Application status for {oam_full_string}, user {chat_id} has changed to {received_status}"
+                    )
 
                 # update application status in the DB
-                if await self.db.update_db_status(chat_id, received_status, is_resolved):
-                    lang = await self.db.get_user_language(chat_id)
+                if await self.db.update_application_status(chat_id, number, type_, year, received_status, is_resolved):
+                    lang = await self.db.fetch_user_language(chat_id)
 
                     # if fetch request failed miserably
                     if failed and request_type == "fetch":
-                        logger.warning(f"[FETCH FAILED] Fetch request failed for user {chat_id}")
+                        logger.warning(f"[FETCH FAILED] Fetch request failed for {oam_full_string}, user {chat_id}")
                         notification_text = self._generate_error_message(msg_data, lang)
 
                     # construct the notification text
                     if is_resolved and not failed:
                         notification_text = f"{message_texts[lang]['application_resolved']}\n\n{received_status}"
-                        logger.info(f"[RESOLVED] Application for user {chat_id} has been resolved to {received_status}")
+                        logger.info(
+                            f"[RESOLVED] Application {oam_full_string}, user {chat_id} has been resolved to {received_status}"
+                        )
 
                     # handle force refresh cases
                     if not is_resolved and force_refresh and not failed:
@@ -175,7 +184,11 @@ class RabbitMQ:
     async def publish_message(self, message, routing_key="ApplicationFetchQueue"):
         """Publishes a message to fetchers queue, ensuring not to publish duplicates"""
         unique_id = self.generate_unique_id(message)
-        message_tag = f"chat_id: {message['chat_id']} number: {message['number']} last_updated: {message['last_updated']}"
+        oam_full_string = generate_oam_full_string(message)
+        message_tag = (
+            f"request_type: {message['request_type']}, {oam_full_string}, "
+            f"user: {message['chat_id']}, last_updated: {message['last_updated']}"
+        )
         if self.is_message_published(unique_id):
             logger.warning(f"Message {unique_id} {message_tag} has already been published. Skipping.")
             return

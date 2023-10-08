@@ -7,7 +7,9 @@ from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, BotComm
 from telegram.ext import ContextTypes, ConversationHandler
 from bot.loader import loader, ADMIN_CHAT_IDS, REFRESH_PERIOD
 from bot.texts import button_texts, message_texts, commands_description
+from bot.utils import generate_oam_full_string
 
+SUBSCRIPTIONS_LIMIT = 5
 BUTTON_WAIT_SECONDS = 1
 FORCE_FETCH_LIMIT_SECONDS = 86400
 COMMANDS_LIST = ["status", "subscribe", "unsubscribe", "force_refresh", "lang", "start", "help"]
@@ -45,7 +47,7 @@ async def _get_user_language(update, context):
     user_lang = context.user_data.get("lang")
 
     if not user_lang:
-        user_lang = await db.get_user_language(update.effective_chat.id)
+        user_lang = await db.fetch_user_language(update.effective_chat.id)
         if not user_lang:
             # Get the language from user locale and try to match
             # it against supported languages
@@ -109,7 +111,7 @@ def check_and_update_limit(user_data, command_name):
     # filter timestamps within the last FORCE_FETCH_LIMIT_SECONDS
     valid_timestamps = [ts for ts in user_data[key_name] if current_time - ts < FORCE_FETCH_LIMIT_SECONDS]
 
-    if len(valid_timestamps) >= 2:
+    if len(valid_timestamps) >= 5:
         return False
 
     valid_timestamps.append(current_time)
@@ -145,7 +147,7 @@ def create_request(chat_id, app_data, force_refresh=False):
     return {
         "chat_id": chat_id,
         "number": app_data["number"],
-        "suffix": app_data["suffix"],
+        "suffix": app_data.get("suffix", "0"),
         "type": app_data["type"].upper(),
         "year": app_data["year"],
         "force_refresh": force_refresh,
@@ -160,16 +162,12 @@ async def create_subscription(update, app_data, lang="EN"):
     chat = update.effective_chat
     message = update.callback_query.message
     try:
-        if await db.add_to_db(
+        if await db.insert_application(
             chat.id,
             app_data["number"],
-            app_data["suffix"],
+            app_data.get("suffix", "0"),
             app_data["type"],
             int(app_data["year"]),
-            chat.username,
-            chat.first_name,
-            chat.last_name,
-            lang,
         ):
             request = create_request(chat.id, app_data)
             await rabbit.publish_message(request)
@@ -347,6 +345,18 @@ async def application_dialog_validate(update: Update, context: ContextTypes.DEFA
     await query.answer()
 
     if query.data == "proceed_subscribe":
+        # check if the subscription already exists
+        if await db.subscription_exists(
+            update.effective_chat.id,
+            context.user_data["application_number"],
+            context.user_data["application_type"],
+            int(context.user_data["application_year"]),
+        ):
+            await query.message.edit_reply_markup(reply_markup=None)
+            await query.message.reply_text(message_texts[lang]["already_subscribed"])
+            clean_sub_context(context)
+            return ConversationHandler.END
+
         # check if we are not over daily limit
         if not await enforce_rate_limit(update, context, "subscribe", lang=lang):
             clean_sub_context(context)
@@ -359,7 +369,10 @@ async def application_dialog_validate(update: Update, context: ContextTypes.DEFA
             "year": context.user_data["application_year"],
         }
 
-        logger.info(f"[SUBSCRIBE] Received application details: {app_data} from {user_info(update)}")
+        logger.info(
+            f"[SUBSCRIBE] Adding application OAM-"
+            f"{app_data['number']}-{app_data['suffix']}/{app_data['type']}-{app_data['year']} for {user_info(update)}"
+        )
         await query.message.edit_reply_markup(reply_markup=None)
         await create_subscription(update, app_data, lang=lang)
         clean_sub_context(context)
@@ -393,9 +406,25 @@ async def _show_startup_message(update: Update, context: ContextTypes.DEFAULT_TY
         await update.message.reply_text(msg, reply_markup=reply_markup)
 
 
+async def _create_user_in_db_if_not_exists(update, lang="EN"):
+    """Create user in the database if it does not exist"""
+    chat_id = update.effective_chat.id
+    if not await db.user_exists(chat_id):
+        await db.insert_user(
+            chat_id,
+            update.effective_chat.first_name,
+            update.effective_chat.username,
+            update.effective_chat.last_name,
+            lang=lang,
+        )
+
+
 # Handler for the /start command
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Shows initial message and asks to subscribe"""
+    lang = await _get_user_language(update, context)
+    await _create_user_in_db_if_not_exists(update, lang=lang)
+
     logging.info(f"Received /start command from {user_info(update)}")
     await _show_startup_message(update, context)
     return START
@@ -414,9 +443,13 @@ async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     lang = await _get_user_language(update, context)
     message = get_effective_message(update)
+    chat_id = message.chat_id
 
-    if await db.check_subscription_in_db(message.chat_id):
-        await message.reply_text(message_texts[lang]["already_subscribed"])
+    await _create_user_in_db_if_not_exists(update, lang=lang)
+
+    # Verify how many subscriptions user has (not more than SUBSCRIPTIONS_LIMIT)
+    if await db.count_user_subscriptions(chat_id) >= SUBSCRIPTIONS_LIMIT:
+        await message.reply_text(message_texts[lang]["max_subscriptions_reached"])
         return
     else:
         # Let's first check if the user has supplied any arguments. If he did - let's treat them as application number
@@ -447,11 +480,41 @@ async def subscribe_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     if query.data == "subscribe":
-        if await db.check_subscription_in_db(query.message.chat_id):
-            await query.edit_message_text(message_texts[lang]["already_subscribed"])
+        if await db.count_user_subscriptions(query.message.chat_id) >= SUBSCRIPTIONS_LIMIT:
+            await query.edit_message_text(message_texts[lang]["max_subscriptions_reached"])
         else:
             await query.edit_message_text(message_texts[lang]["dialog_app_number"])
             return NUMBER
+
+
+def _generate_buttons_from_subscriptions(prefix, subscriptions):
+    """Generate inline keyboard from the user's subscriptions"""
+
+    keyboard = []
+
+    for sub in subscriptions:
+        # Construct button label
+        suffix_part = f"-{sub['application_suffix']}" if sub["application_suffix"] != "0" else ""
+        button_label = f"OAM-{sub['application_number']}{suffix_part}/{sub['application_type']}-{sub['application_year']}"
+
+        # Construct button callback data
+        callback_data = f"{prefix}_{sub['application_number']}-{sub['application_type']}-{sub['application_year']}"
+
+        # Append to the keyboard list
+        keyboard.append([InlineKeyboardButton(button_label, callback_data=callback_data)])
+
+    return InlineKeyboardMarkup(keyboard)
+
+
+def _parse_application_buttons_callback_data(data):
+    """Parses application buttons callback data and returns app_details dict"""
+    data_part = data.split("_")[-1]
+    application_number, application_type, application_year = data_part.split("-")
+    return {
+        "number": application_number,
+        "type": application_type,
+        "year": int(application_year),
+    }
 
 
 # Handler for /unsubscribe command
@@ -459,61 +522,166 @@ async def unsubscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     """Unsubscribes user from application status updates"""
     logger.info(f"Received /unsubscribe command from {user_info(update)}")
     lang = await _get_user_language(update, context)
+    chat_id = update.message.chat_id
 
-    if await db.check_subscription_in_db(update.message.chat_id):
-        await db.remove_from_db(update.message.chat_id)
-        await update.message.reply_text(message_texts[lang]["unsubscribe"])
+    # Get all subscriptions and ask user which one he wants to
+    # unsubscribe from
+    subscriptions = await db.fetch_user_subscriptions(chat_id)
+    if len(subscriptions) > 1:
+        keyboard = _generate_buttons_from_subscriptions("unsubscribe", subscriptions)
+        await update.message.reply_text(message_texts[lang]["select_unsubscribe"], reply_markup=keyboard)
+    # If user has a single subscription - remove it right away
+    elif len(subscriptions) == 1:
+        if await db.delete_application(
+            chat_id,
+            subscriptions[0]["application_number"],
+            subscriptions[0]["application_type"],
+            subscriptions[0]["application_year"],
+        ):
+            oam_full_string = generate_oam_full_string(subscriptions[0])
+            await update.message.reply_text(message_texts[lang]["unsubscribe"].format(app_string=oam_full_string))
+        else:
+            await update.message.reply_text(message_texts[lang]["unsubscribe_failed"])
     else:
         await update.message.reply_text(message_texts[lang]["not_subscribed"])
 
 
+async def unsubscribe_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Removes selected user subscriptions"""
+    query = update.callback_query
+    chat_id = update.effective_chat.id
+    lang = await _get_user_language(update, context)
+
+    if await _is_button_click_abused(update, context):
+        return
+    await query.answer()
+
+    app_details = _parse_application_buttons_callback_data(query.data)
+    await db.delete_application(
+        chat_id,
+        app_details["number"],
+        app_details["type"],
+        app_details["year"],
+    )
+    oam_full_string = generate_oam_full_string(app_details)
+    await query.edit_message_text(message_texts[lang]["unsubscribe"].format(app_string=oam_full_string))
+
+
+async def _publish_force_request(update, caller, lang, app_details):
+    """Publishes a force refresh request"""
+    if caller == "button":
+        target_message = update.callback_query
+        reply_function = target_message.message.reply_text
+    else:
+        target_message = get_effective_message(update)
+        reply_function = target_message.reply_text
+
+    try:
+        request = create_request(update.effective_chat.id, app_details, True)
+        oam_full_string = generate_oam_full_string(request)
+        logger.info(f"Publishing force refresh for {oam_full_string}, user: {request['chat_id']}")
+        await rabbit.publish_message(request)
+
+        if caller == "button":
+            await target_message.edit_message_text(message_texts[lang]["refresh_sent"])
+        else:
+            await reply_function(message_texts[lang]["refresh_sent"])
+
+        await reply_function(message_texts[lang]["cizi_problem_promo"])
+
+    except Exception as e:
+        logger.error(f"Error creating force refresh request: {e}")
+        await reply_function(message_texts[lang]["failed_to_refresh"])
+
+
 # Handler for /force_refresh command
 async def force_refresh_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Force refresh application status."""
+    """Force refresh application status"""
     logger.info(f"Received /force_refresh command from {user_info(update)}")
     message = get_effective_message(update)
     lang = await _get_user_language(update, context)
+    chat_id = update.effective_chat.id
 
-    if not await db.check_subscription_in_db(message.chat_id):
+    subscriptions = await db.fetch_user_subscriptions(chat_id)
+    if not subscriptions:
         await message.reply_text(message_texts[lang]["not_subscribed"])
         return
     if not await enforce_rate_limit(update, context, "force_refresh", lang=lang):
         return
-    try:
-        user_data = await db.get_user_data_from_db(message.chat_id)
+    if len(subscriptions) > 1:
+        keyboard = _generate_buttons_from_subscriptions("force_refresh", subscriptions)
+        await update.message.reply_text(message_texts[lang]["select_refresh"], reply_markup=keyboard)
+    else:
+        await _publish_force_request(
+            update,
+            "cli",
+            lang,
+            {
+                "number": subscriptions[0]["application_number"],
+                "type": subscriptions[0]["application_type"],
+                "year": subscriptions[0]["application_year"],
+            },
+        )
 
-        if user_data:
-            app_data = {
-                "number": user_data["application_number"],
-                "suffix": user_data["application_suffix"],
-                "type": user_data["application_type"].upper(),
-                "year": user_data["application_year"],
-            }
-            request = create_request(message.chat_id, app_data, True)
 
-            logger.info(f"Publishing force refresh for {request}")
+async def force_refresh_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Sends force refresh request for selected application"""
+    query = update.callback_query
+    lang = await _get_user_language(update, context)
 
-            await rabbit.publish_message(request)
-            await message.reply_text(message_texts[lang]["refresh_sent"])
-            await message.reply_text(message_texts[lang]["cizi_problem_promo"])
-        else:
-            await message.reply_text(message_texts[lang]["failed_to_refresh"])
-    except Exception as e:
-        logger.error(f"Error creating force refresh request: {e}")
-        await message.reply_text(message_texts[lang]["error_generic"])
+    if await _is_button_click_abused(update, context):
+        return
+    await query.answer()
+
+    app_details = _parse_application_buttons_callback_data(query.data)
+    await _publish_force_request(update, "button", lang, app_details)
 
 
 # Handler for /status command
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Returns current status of the application"""
     logger.info(f"Received /status command from {user_info(update)}")
+    message = update.message
+    chat_id = update.effective_chat.id
     lang = await _get_user_language(update, context)
 
-    if await db.check_subscription_in_db(update.message.chat_id):
-        app_status = await db.get_application_status_timestamp(update.message.chat_id, lang=lang)
-        await update.message.reply_text(app_status)
+    subscriptions = await db.fetch_user_subscriptions(chat_id)
+    if len(subscriptions) > 1:
+        keyboard = _generate_buttons_from_subscriptions("status", subscriptions)
+        await message.reply_text(message_texts[lang]["select_status"], reply_markup=keyboard)
+    elif len(subscriptions) == 1:
+        app_status = await db.fetch_status_with_timestamp(
+            chat_id,
+            subscriptions[0]["application_number"],
+            subscriptions[0]["application_type"],
+            subscriptions[0]["application_year"],
+            lang=lang,
+        )
+        await message.reply_text(app_status)
     else:
-        await update.message.reply_text(message_texts[lang]["not_subscribed"])
+        await message.reply_text(message_texts[lang]["not_subscribed"])
+
+
+async def status_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Retrieves current status for the selected application"""
+
+    query = update.callback_query
+    chat_id = update.effective_chat.id
+    lang = await _get_user_language(update, context)
+
+    if await _is_button_click_abused(update, context):
+        return
+    await query.answer()
+
+    app_details = _parse_application_buttons_callback_data(query.data)
+    app_status = await db.fetch_status_with_timestamp(
+        chat_id,
+        app_details["number"],
+        app_details["type"],
+        app_details["year"],
+        lang=lang,
+    )
+    await query.edit_message_text(app_status)
 
 
 # Handler for the /help command
@@ -526,15 +694,21 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 # handler for /admin_stats
 async def admin_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Return total number of subscribed users"""
+    """Return admin statistics"""
     logging.info(f"Received /admin_stats command from {user_info(update)}")
     if not _is_admin(update.effective_chat.id):
         await update.message.reply_text("Unauthorized. This command is only for admins.")
         return
 
-    user_count = await db.get_subscribed_user_count()
+    user_count = await db.count_users_total()
+    subscribed_users = await db.count_subscribed_users()
+    active_users = await db.count_active_users()
     if user_count is not None:
-        await update.message.reply_text(f"Total users subscribed: {user_count}")
+        await update.message.reply_text(
+            f"Total users: {user_count}\n"
+            f"Subscribed users: {subscribed_users}\n"
+            f"Users with active (non-resolved) subscriptions: {active_users}\n"
+        )
     else:
         await update.message.reply_text("Error retrieving statistics.")
 
@@ -544,9 +718,11 @@ async def lang_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler for /lang command to set language preference"""
     logging.info(f"Received /lang command from {user_info(update)}")
 
-    keyboard = [[InlineKeyboardButton(lang, callback_data=f"set_lang_cmd_{lang}")] for lang in LANGUAGE_LIST]
+    row = [InlineKeyboardButton(lang, callback_data=f"set_lang_cmd_{lang}") for lang in LANGUAGE_LIST]
+    keyboard = [row]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("Select your language / Выберете язык / Zvolte jazyk:", reply_markup=reply_markup)
+
+    await update.message.reply_text("Choose language / Выберете язык / Zvolte jazyk / Виберіть мову:", reply_markup=reply_markup)
     return START
 
 
@@ -564,9 +740,9 @@ async def _set_language(update: Update, context: ContextTypes.DEFAULT_TYPE, cmd_
     context.user_data["lang"] = selected_lang
     logger.info(f"Language set to {selected_lang} for {user_info(update)}")
 
-    # If user has subscription, update preference in DB
-    if await db.check_subscription_in_db(chat_id):
-        await db.set_user_language(chat_id, selected_lang)
+    # If user exists in DB, update preference in DB
+    if await db.user_exists(chat_id):
+        await db.update_user_language(chat_id, selected_lang)
 
     await query.edit_message_text(message_texts[selected_lang]["language_selected"].format(lang=selected_lang_with_emoji))
     return selected_lang

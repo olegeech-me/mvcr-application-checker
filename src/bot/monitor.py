@@ -2,6 +2,7 @@ import asyncio
 import logging
 from datetime import timedelta
 from bot.loader import REFRESH_PERIOD, SCHEDULER_PERIOD
+from bot.utils import generate_oam_full_string
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,7 @@ class ApplicationMonitor:
                 pass
 
     async def check_for_updates(self):
-        applications_to_update = await self.db.get_applications_needing_update(self.refresh)
+        applications_to_update = await self.db.fetch_applications_needing_update(self.refresh)
 
         if not applications_to_update:
             logger.info("No applications need status refresh")
@@ -45,9 +46,9 @@ class ApplicationMonitor:
                 "request_type": "refresh",
                 "last_updated": app["last_updated"].isoformat() if app["last_updated"] else "0",
             }
+            oam_full_string = generate_oam_full_string(app)
             logger.info(
-                "Scheduling status refresh for user: "
-                f"{app['chat_id']}, number: {app['application_number']}, last_updated: {app['last_updated']}"
+                f"Scheduling status refresh for {oam_full_string}, user: {app['chat_id']}, last_updated: {app['last_updated']}"
             )
             await self.rabbit.publish_message(message, routing_key="RefreshStatusQueue")
 

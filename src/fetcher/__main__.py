@@ -61,7 +61,7 @@ async def main():
     while not shutdown_event.is_set():
         try:
             if processor.waiting_refresh_requests:
-                requests_list_str = ", ".join(processor.processing_apps["refresh"])
+                requests_list_str = ", ".join([f"{key[0]}/{key[1]}-{key[2]}" for key in processor.processing_apps["refresh"]])
                 logger.info(
                     f"{processor.waiting_refresh_requests} refresh request(s) waiting for execution: [{requests_list_str}]"
                 )
