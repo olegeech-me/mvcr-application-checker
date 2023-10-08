@@ -21,7 +21,7 @@
   "current_status_empty": "Aktuální stav je prázdný. Počkejte prosím chvíli a zkuste to znovu.",
   "cizi_problem_promo": "Čekáte více než 60 dní? 🤔 Možná je čas <a href='https://ciziproblem.cz/necinnost_Nin1'>podat stížnost</a> 📝",
   "language_selected": "Jazyk nastaven na {lang}.",
-  "dialog_app_number": "Ahoj! 👋 Začněme.\n\nPodívejte se prosím na svůj Číslo Jednací nebo č. j 🔢\nDejte mi vědět všechna čísla po \"<i>OAM-</i>\", ale před \"<i>/ XX-2023</i>\"?\nNapříklad v <code>OAM-12345-6/TP-2023</code> je to <b>12345-6</b>.",
+  "dialog_app_number": "Ahoj! 👋 Začněme.\n\nPodívejte se prosím na svůj Číslo Jednací nebo č. j 🔢\nDejte mi vědět všechna čísla po \"<i>OAM-</i>\", ale před \"<i>/ XX-2023</i>\"?\nNapříklad v <code>OAM-12345-6/TP-2023</code> je to <b>12345-6</b>.\n\n💡 Upozornění:\n- Číslo zadávejte bez úvodních nul, tj. v <code>OAM-00345-6/TP-2023</code> by vaše číslo bylo <b>345-6</b>.\n- Přípona vaší žádosti (tj. <b>6</b> v <code>OAM-12345-6</code>) je volitelná a na ověřovacím webu MVČR není brána v úvahu.",
   "dialog_type": "Teď vyberte typ vaší žádosti 📄:",
   "dialog_year": "Dále vyberte rok vaší žádosti 📅:",
   "dialog_confirmation": "Dobře, zde je číslo vaší žádosti: <b>OAM-{number}-{suffix}/{type}-{year}</b>. Je to správné?🤔",
