@@ -3,7 +3,7 @@
   "subscribe_intro": "👇 Please hit the button below to subscribe to your application status updates.",
   "already_subscribed": "You are already subscribed.",
   "max_subscriptions_reached": "🔒 You have reached the maximum number of subscriptions. Please unsubscribe from one of your applications before subscribing to another.",
-  "not_subscribed": "You are not subscribed",
+  "not_subscribed": "You are not subscribed to any application updates. Use /subscribe to start tracking your applications.",
   "just_subscribed": "You have subscribed",
   "unsubscribe": "You have unsubscribed from <b>{app_string}</b> updates.",
   "unsubscribe_failed": "😓 Oops! Failed to unsubscribe, please try again in a bit.",

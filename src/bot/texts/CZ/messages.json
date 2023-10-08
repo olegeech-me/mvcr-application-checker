@@ -3,7 +3,7 @@
   "subscribe_intro": "👇 Prosím, stiskněte tlačítko níže, abyste se přihlásili k odběru aktualizací stavu vaší žádosti.",
   "already_subscribed": "Již jste přihlášeni k odběru.",
   "max_subscriptions_reached": "🔒 Dosáhli jste maximálního počtu předplatných. Prosím, odhlaste se od jedné z vašich žádostí před přihlášením k další.",
-  "not_subscribed": "Nejste přihlášeni k odběru.",
+  "not_subscribed": "Nejste přihlášeni k odběru žádné žádosti. Použijte příkaz /subscribe pro přihlášení k odběru.",
   "just_subscribed": "Právě jste se přihlásili k odběru.",
   "unsubscribe": "Úspěšně jste se odhlásili od aktualizací stavu žádostii <b>{app_string}</b>",
   "unsubscribe_failed": "😓 Ups! Nepodařilo se odhlásit, zkuste to prosím za chvíli znovu.",
