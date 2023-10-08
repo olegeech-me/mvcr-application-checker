@@ -108,7 +108,13 @@ class ApplicationProcessor:
                 self.waiting_refresh_requests -= 1
 
             app_status = await self.browser.fetch(self.url, app_details)
-            if app_status:
+
+            # Check if the app number is not in the received_status
+            if app_status and str(number) not in app_status:
+                logger.warning(f"{log_prefix} Retrieved status does not match the expected app number. Requeueing...")
+                queue_name = "ApplicationFetchQueue" if request_type == "fetch" else "RefreshStatusQueue"
+                await self._manage_failed_request(message, queue_name)
+            elif app_status:
                 logger.info("%s Status update succeeded", log_prefix)
                 app_details["status"] = app_status
                 await message.ack()
