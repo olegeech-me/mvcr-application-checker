@@ -494,7 +494,7 @@ def _generate_buttons_from_subscriptions(prefix, subscriptions):
 
     for sub in subscriptions:
         # Construct button label
-        suffix_part = f"-{sub['application_suffix']}" if sub["application_suffix"] != 0 else ""
+        suffix_part = f"-{sub['application_suffix']}" if sub["application_suffix"] != "0" else ""
         button_label = f"OAM-{sub['application_number']}{suffix_part}/{sub['application_type']}-{sub['application_year']}"
 
         # Construct button callback data
@@ -578,8 +578,8 @@ async def _publish_force_request(update, caller, lang, app_details):
 
     try:
         request = create_request(update.effective_chat.id, app_details, True)
-
-        logger.info(f"Publishing force refresh for {request}")
+        oam_full_string = generate_oam_full_string(request)
+        logger.info(f"Publishing force refresh for {oam_full_string}, user: {request['chat_id']}")
         await rabbit.publish_message(request)
 
         if caller == "button":
