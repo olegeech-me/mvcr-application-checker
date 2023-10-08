@@ -383,6 +383,52 @@ class Database:
                 logger.error(f"Error while fetching all chat IDs. Error: {e}")
                 return []
 
+    async def fetch_user_reminders(self, chat_id):
+        """Fetch all reminders for a specific user based on chat_id"""
+        query = """
+            SELECT r.reminder_id, r.reminder_time
+            FROM Reminders r
+            JOIN Users u ON r.user_id = u.user_id
+            WHERE u.chat_id = $1;
+        """
+        async with self.pool.acquire() as conn:
+            try:
+                rows = await conn.fetch(query, chat_id)
+                return [dict(row) for row in rows]  # Convert the records to dictionaries
+            except Exception as e:
+                logger.error(f"Error while fetching reminders for chat ID: {chat_id}. Error: {e}")
+                return []
+
+    async def insert_reminder(self, chat_id, time_input):
+        """Insert a new reminder for a specific user based on chat_id and time"""
+        query = """
+            INSERT INTO Reminders (user_id, reminder_time)
+            SELECT user_id, $2
+            FROM Users
+            WHERE chat_id = $1;
+        """
+        async with self.pool.acquire() as conn:
+            try:
+                await conn.execute(query, chat_id, time_input)
+                return True
+            except asyncpg.UniqueViolationError:
+                logger.error(f"Attempt to insert duplicate reminder for chat ID {chat_id}")
+                return False
+            except Exception as e:
+                logger.error(f"Error while inserting reminder for chat ID: {chat_id}. Error: {e}")
+                return False
+
+    async def delete_reminder(self, reminder_id):
+        """Delete a specific reminder based on reminder_id"""
+        query = "DELETE FROM Reminders WHERE reminder_id = $1"
+        async with self.pool.acquire() as conn:
+            try:
+                await conn.execute(query, reminder_id)
+                return True
+            except Exception as e:
+                logger.error(f"Error while deleting reminder with ID: {reminder_id}. Error: {e}")
+                return False
+
     async def close(self):
         logger.info("Shutting down DB connection")
         try:

@@ -18,3 +18,11 @@ CREATE TABLE IF NOT EXISTS Applications (
     last_updated TIMESTAMP,
     is_resolved BOOLEAN NOT NULL DEFAULT FALSE
 );
+
+CREATE TABLE IF NOT EXISTS Reminders (
+    reminder_id SERIAL PRIMARY KEY,
+    user_id INT REFERENCES Users(user_id),
+    reminder_time TIME NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+

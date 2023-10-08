@@ -12,7 +12,7 @@ from bot.utils import generate_oam_full_string
 SUBSCRIPTIONS_LIMIT = 5
 BUTTON_WAIT_SECONDS = 1
 FORCE_FETCH_LIMIT_SECONDS = 86400
-COMMANDS_LIST = ["status", "subscribe", "unsubscribe", "force_refresh", "lang", "start", "help"]
+COMMANDS_LIST = ["status", "subscribe", "unsubscribe", "force_refresh", "lang", "start", "help", "remind"]
 ADMIN_COMMANDS = ["admin_stats", "admin_broadcast"]
 DEFAULT_LANGUAGE = "EN"
 LANGUAGE_LIST = ["EN 🏴󠁧󠁢󠁥󠁮󠁧󠁿|🇺🇸", "RU 🇷🇺", "CZ 🇨🇿", "UA 🇺🇦"]
@@ -24,6 +24,7 @@ ALLOWED_YEARS = [y for y in range(datetime.datetime.today().year - 3, datetime.d
 
 START, NUMBER, TYPE, YEAR, VALIDATE = range(5)
 BROADCAST_TEXT, BROADCAST_CONFIRM = range(2)
+REMINDER_ADD, REMINDER_DELETE = range(2)
 
 
 logger = logging.getLogger(__name__)
@@ -756,7 +757,6 @@ async def admin_broadcast_confirm(update: Update, context: ContextTypes.DEFAULT_
     user_message = context.user_data.get("broadcast_message")
 
     if query.data == "confirm_broadcast":
-        # TODO implement this DB method
         chat_ids = await db.fetch_all_chat_ids()
 
         for chat_id in chat_ids:
@@ -772,6 +772,110 @@ async def admin_broadcast_confirm(update: Update, context: ContextTypes.DEFAULT_
 
     # Clear the stored broadcast message from the context
     context.user_data.pop("broadcast_message", None)
+
+    return ConversationHandler.END
+
+
+# Handler for /reminder
+async def reminder_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handles the /reminder command."""
+    logger.info(f"💻 Received /reminder command from {user_info(update)}")
+    chat_id = update.effective_chat.id
+    lang = await _get_user_language(update, context)
+
+    # Fetch existing reminders from the DB
+    reminders = await db.fetch_user_reminders(chat_id)
+
+    # If user already has reminders
+    if reminders:
+        # Prompt to either add a new reminder or delete an existing one
+        keyboard = [
+            [InlineKeyboardButton(button_texts[lang]["add_reminder"], callback_data="add_reminder")],
+            [InlineKeyboardButton(button_texts[lang]["delete_reminder"], callback_data="delete_reminder")],
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text(message_texts[lang]["reminder_decision"], reply_markup=reply_markup)
+        return
+
+    # If no existing reminders, directly prompt to add
+    await update.message.reply_text(message_texts[lang]["enter_reminder_time"])
+    return REMINDER_ADD
+
+
+async def reminder_button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Reminder button callback"""
+    query = update.callback_query
+    lang = await _get_user_language(update, context)
+
+    if await _is_button_click_abused(update, context):
+        return
+    await query.answer()
+
+    # If user chose to delete reminders
+    if query.data == "delete_reminder":
+        # Fetch user reminders
+        reminders = await db.fetch_user_reminders(query.message.chat_id)
+
+        keyboard = []
+        for reminder in reminders:
+            callback_data = f"delete_{reminder['reminder_id']}"
+            button_label = str(reminder["reminder_time"])
+            keyboard.append([InlineKeyboardButton(button_label, callback_data=callback_data)])
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(message_texts[lang]["select_reminder_to_delete"], reply_markup=reply_markup)
+        return REMINDER_DELETE
+
+    # If user chose to add a new reminder
+    elif query.data == "add_reminder":
+        await query.edit_message_text(message_texts[lang]["enter_reminder_time"])
+        return REMINDER_ADD
+
+
+async def delete_reminder_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Delete reminder callback"""
+    query = update.callback_query
+    lang = await _get_user_language(update, context)
+
+    if await _is_button_click_abused(update, context):
+        return
+    await query.answer()
+
+    # Extract the reminder_id from the callback data
+    _, reminder_id = query.data.split("_")
+
+    # Delete from DB
+    success = await db.delete_reminder(reminder_id)
+
+    if success:
+        await query.edit_message_text(message_texts[lang]["reminder_deleted"])
+    else:
+        await query.edit_message_text(message_texts[lang]["reminder_delete_failed"])
+
+    return ConversationHandler.END
+
+
+def validate_time_format(time_str: str) -> bool:
+    """Validates time format HH:MM"""
+    return bool(re.match(r"^([01]\d|2[0-3]):?([0-5]\d)$", time_str))
+
+
+async def add_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Adds reminder to the database"""
+    lang = await _get_user_language(update, context)
+    time_input = update.message.text.strip()
+
+    if not validate_time_format(time_input):
+        await update.message.reply_text(message_texts[lang]["invalid_time_format"])
+        return REMINDER_ADD
+
+    chat_id = update.effective_chat.id
+    success = await db.insert_reminder(chat_id, time_input)
+
+    if success:
+        await update.message.reply_text(message_texts[lang]["reminder_added"])
+    else:
+        await update.message.reply_text(message_texts[lang]["reminder_add_failed"])
 
     return ConversationHandler.END
 

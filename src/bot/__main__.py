@@ -24,6 +24,12 @@ from bot.handlers import (
     admin_broadcast_command,
     admin_broadcast_text,
     admin_broadcast_confirm,
+    REMINDER_ADD,
+    REMINDER_DELETE,
+    reminder_command,
+    add_reminder,
+    reminder_button_callback,
+    delete_reminder_callback,
 )
 from bot import monitor
 
@@ -112,6 +118,19 @@ async def main():
         fallbacks=[],
     )
     bot.add_handler(broadcast_handler)
+    reminder_handler = ConversationHandler(
+        entry_points=[CommandHandler("reminder", reminder_command)],
+        states={
+            REMINDER_ADD: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, add_reminder),
+                CallbackQueryHandler(reminder_button_callback),
+            ],
+            REMINDER_DELETE: [CallbackQueryHandler(delete_reminder_callback, pattern="^delete_")],
+        },
+        fallbacks=[],
+        map_to_parent={ConversationHandler.END: START},
+    )
+    bot.add_handler(reminder_handler)
     bot.add_handler(MessageHandler(filters.TEXT, unknown_text))
     bot.add_handler(MessageHandler(filters.COMMAND, unknown_command))
 
