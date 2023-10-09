@@ -386,6 +386,8 @@ class Database:
 
     async def fetch_user_reminders(self, chat_id):
         """Fetch all reminders for a specific user based on chat_id"""
+
+        logger.debug(f"Fetching all user {chat_id} reminders")
         query = """
             SELECT r.reminder_id, r.reminder_time
             FROM Reminders r
@@ -402,6 +404,8 @@ class Database:
 
     async def insert_reminder(self, chat_id, time_input):
         """Insert a new reminder for a specific user based on chat_id and time"""
+        logger.info(f"Add reminder at {time_input} for user {chat_id}")
+
         try:
             # Convert the string to a time object
             time_obj = datetime.datetime.strptime(time_input, "%H:%M").time()
@@ -426,8 +430,10 @@ class Database:
                 logger.error(f"Error while inserting reminder for chat ID: {chat_id}. Error: {e}")
                 return False
 
-    async def delete_reminder(self, reminder_id):
+    async def delete_reminder(self, chat_id, reminder_id):
         """Delete a specific reminder based on reminder_id"""
+        logger.info(f"Removing reminder {reminder_id} for user {chat_id}")
+
         query = "DELETE FROM Reminders WHERE reminder_id = $1"
         async with self.pool.acquire() as conn:
             try:

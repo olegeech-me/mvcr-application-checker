@@ -793,10 +793,10 @@ async def reminder_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton(button_texts[lang]["add_reminder"], callback_data="add_reminder"),
             InlineKeyboardButton(button_texts[lang]["delete_reminder"], callback_data="delete_reminder"),
         ]
-        keyboard = [row]
+        keyboard = [row, [InlineKeyboardButton(button_texts[lang]["cancel"], callback_data="cancel")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await update.message.reply_text(message_texts[lang]["reminder_decision"], reply_markup=reply_markup)
-        return
+        return REMINDER_ADD
 
     # If no existing reminders, directly prompt to add
     await update.message.reply_text(message_texts[lang]["enter_reminder_time"])
@@ -833,11 +833,17 @@ async def reminder_button_callback(update: Update, context: ContextTypes.DEFAULT
         await query.edit_message_text(message_texts[lang]["enter_reminder_time"])
         return REMINDER_ADD
 
+    # User doesn't know what to do
+    elif query.data == "cancel":
+        await query.edit_message_text(message_texts[lang]["action_canceled"])
+        return ConversationHandler.END
+
 
 async def delete_reminder_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Delete reminder callback"""
     query = update.callback_query
     lang = await _get_user_language(update, context)
+    chat_id = update.effective_chat.id
 
     if await _is_button_click_abused(update, context):
         return
@@ -847,7 +853,7 @@ async def delete_reminder_callback(update: Update, context: ContextTypes.DEFAULT
     _, reminder_id = query.data.split("_")
 
     # Delete from DB
-    success = await db.delete_reminder(reminder_id)
+    success = await db.delete_reminder(chat_id, int(reminder_id))
 
     if success:
         await query.edit_message_text(message_texts[lang]["reminder_deleted"])
