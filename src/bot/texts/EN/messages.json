@@ -25,7 +25,7 @@
   "current_status_empty": "Current status is empty. Please wait some time and try again.",
   "cizi_problem_promo": "Waiting for more than 60 days? 🤔 Maybe it's time to <a href='https://ciziproblem.cz/necinnost_Nin1'>file a complaint</a> 📝",
   "language_selected": "Language set to {lang}.",
-  "dialog_app_number": "Hey there!👋 Let's get started.\n\nPlease take a look at your Číslo Jednací, or č. j 🔢\nCan you tell me all numbers after \"<i>OAM-</i>\" but before \"<i>/ XX-2023</i>\"?\nLike in <code>OAM-12345-6/TP-2023</code>, it's <b>12345-6</b>.\n\n💡 Note:\n- Enter the number without leading zeros, i.e., for <code>OAM-00345-6/TP-2023</code> your number would be <b>345-6</b>.\n- The suffix of your application (i.e., the <b>6</b> in <code>OAM-12345-6</code>) is optional and isn't considered by the Czech MoI verification website.",
+  "dialog_app_number": "Hey there!👋 Let's get started.\n\nPlease take a look at your Číslo Jednací, or č. j 🔢\nCan you tell me all numbers after \"<i>OAM-</i>\" but before \"<i>/ XX-2023</i>\"?\nLike in <code>OAM-12345-6/TP-2023</code>, it's <b>12345-6</b>.\n\n💡 Note:\n- The suffix of your application (i.e., the <b>6</b> in <code>OAM-12345-6</code>) is optional and isn't considered by the Czech MoI verification website.",
   "dialog_type": "Now, please chose your application type📄:",
   "dialog_year": "Next, choose your application year📅:",
   "dialog_confirmation": "Alright, your application is <b>OAM-{number}-{suffix}/{type}-{year}</b>. Is this correct?🤔",

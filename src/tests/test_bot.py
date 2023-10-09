@@ -38,6 +38,7 @@ from bot.handlers import (
         ("BAD-NUMBER/MK-2023", None, None, None, None),
         ("oam-4242-6/MK-1999", None, None, None, None),
         ("oam-4242-6/NT-2021", None, None, None, None),
+        ("OAM-00004-1/MK-2020", "4", "1", "MK", "2020"),
     ],
 )
 def test__parse_application_number_full(num_str, app_num, app_suffix, app_type, app_year):
@@ -55,12 +56,13 @@ def test__parse_application_number_full(num_str, app_num, app_suffix, app_type, 
         ("4242-5/DO-2020", "4242", "5"),
         ("oAM-12345-9/MK-2023", "12345", "9"),
         ("BAD-NUMBER/MK-2023", None, None),
+        ("OAM-00004-1", "4", "1"),
     ],
 )
 def test__parse_application_number(num_str, app_num, app_suffix):
     res = _parse_application_number(num_str)
     if res:
-        assert res == (app_num, app_suffix, app_type, app_year)
+        assert res == (app_num, app_suffix)
     else:
         assert res is None
 
