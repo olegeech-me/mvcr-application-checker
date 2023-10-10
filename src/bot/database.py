@@ -477,6 +477,30 @@ class Database:
                 logger.error(f"Error while fetching due reminders. Error: {e}")
                 return []
 
+    async def count_all_reminders(self):
+        """Count the total number of reminders in the database"""
+
+        query = "SELECT COUNT(*) FROM Reminders"
+        async with self.pool.acquire() as conn:
+            try:
+                count = await conn.fetchval(query)
+                return count
+            except Exception as e:
+                logger.error(f"Error while fetching total reminders count. Error: {e}")
+                return None
+
+    async def count_all_subscriptions(self):
+        """Count the total number of subscriptions (applications) in the database"""
+
+        query = "SELECT COUNT(*) FROM Applications"
+        async with self.pool.acquire() as conn:
+            try:
+                count = await conn.fetchval(query)
+                return count
+            except Exception as e:
+                logger.error(f"Error while fetching total subscriptions count. Error: {e}")
+                return None
+
     async def close(self):
         logger.info("Shutting down DB connection")
         try:

@@ -705,14 +705,16 @@ async def admin_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     user_count = await db.count_users_total()
     subscribed_users = await db.count_subscribed_users()
     active_users = await db.count_active_users()
-    if user_count is not None:
-        await update.message.reply_text(
-            f"👥 Total users: <b>{user_count}</b>\n"
-            f"✉️ Subscribed users: <b>{subscribed_users}</b>\n"
-            f"🔍 Users with active (non-resolved) subscriptions: <b>{active_users}</b>\n"
-        )
-    else:
-        await update.message.reply_text("Error retrieving statistics.")
+    subscriptions_count = await db.count_all_subscriptions()
+    reminders_count = await db.count_all_reminders()
+
+    await update.message.reply_text(
+        f"👥 Total users: <b>{user_count}</b>\n"
+        f"✉️ Subscribed users: <b>{subscribed_users}</b>\n"
+        f"🔍 Users with active (non-resolved) subscriptions: <b>{active_users}</b>\n"
+        f"📑 Total subscriptions: <b>{subscriptions_count}</b>\n"
+        f"⏰ Total reminders set up: <b>{reminders_count}</b>\n"
+    )
 
 
 # Handler for /admin_broadcast
