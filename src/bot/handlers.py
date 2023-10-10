@@ -776,6 +776,26 @@ async def admin_broadcast_confirm(update: Update, context: ContextTypes.DEFAULT_
     return ConversationHandler.END
 
 
+async def _generate_application_buttons(chat_id, lang):
+    """Generate buttons for user subscription reminders"""
+    applications = await db.fetch_user_subscriptions(chat_id)
+
+    # If no applications/subscriptions, return a message
+    if not applications:
+        return None, message_texts[lang]["not_subscribed"]
+
+    # Display list of user applications for selection
+    keyboard = []
+    for app in applications:
+        app_details = generate_oam_full_string(app)
+        button = InlineKeyboardButton(app_details, callback_data=f"selectapp_{app['application_id']}")
+        keyboard.append([button])
+
+    keyboard.append([InlineKeyboardButton(button_texts[lang]["cancel"], callback_data="cancel")])
+
+    return InlineKeyboardMarkup(keyboard), None
+
+
 # Handler for /reminder
 async def reminder_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handles the /reminder command."""
@@ -811,24 +831,10 @@ async def reminder_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return REMINDER_ADD
     else:
-        # Fetch user applications (subscriptions) from the DB
-        applications = await db.fetch_user_subscriptions(chat_id)
-
-        # If no applications/subscriptions, notify the user
-        if not applications:
-            await update.message.reply_text(message_texts[lang]["not_subscribed"])
+        reply_markup, error_message = await _generate_application_buttons(chat_id, lang)
+        if error_message:
+            await update.message.reply_text(error_message)
             return ConversationHandler.END
-
-        # Display list of user applications for selection
-        keyboard = []
-        for app in applications:
-            oam_full_string = generate_oam_full_string(app)
-            button = InlineKeyboardButton(oam_full_string, callback_data=f"selectapp_{app['application_id']}")
-            keyboard.append([button])
-
-        keyboard.append([InlineKeyboardButton(button_texts[lang]["cancel"], callback_data="cancel")])
-
-        reply_markup = InlineKeyboardMarkup(keyboard)
         await update.message.reply_text(message_texts[lang]["select_application_for_reminder"], reply_markup=reply_markup)
         return REMINDER_ADD
 
@@ -848,14 +854,14 @@ async def reminder_button_callback(update: Update, context: ContextTypes.DEFAULT
         # Fetch user reminders
         reminders = await db.fetch_user_reminders(chat_id)
 
-        row = []
+        keyboard = []
         for reminder in reminders:
             callback_data = f"delete_{reminder['reminder_id']}"
             oam_full_string = generate_oam_full_string(reminder)
             button_label = str(reminder["reminder_time"])[:-3] + f" {oam_full_string}"
-            row.append(InlineKeyboardButton(button_label, callback_data=callback_data))
+            keyboard.append([InlineKeyboardButton(button_label, callback_data=callback_data)])
 
-        keyboard = [row, [InlineKeyboardButton(button_texts[lang]["cancel"], callback_data="cancel")]]
+        keyboard.append([InlineKeyboardButton(button_texts[lang]["cancel"], callback_data="cancel")])
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(message_texts[lang]["select_reminder_to_delete"], reply_markup=reply_markup)
         return REMINDER_DELETE
@@ -868,24 +874,10 @@ async def reminder_button_callback(update: Update, context: ContextTypes.DEFAULT
             await query.edit_message_text(message_texts[lang]["max_reminders_reached"])
             return ConversationHandler.END
         else:
-            # Instead of directly prompting for time, let's first choose an application
-            applications = await db.fetch_user_subscriptions(chat_id)
-
-            # If no applications/subscriptions, notify the user
-            if not applications:
-                await query.edit_message_text(message_texts[lang]["not_subscribed"])
+            reply_markup, error_message = await _generate_application_buttons(chat_id, lang)
+            if error_message:
+                await query.edit_message_text(error_message)
                 return ConversationHandler.END
-
-            # Display list of user applications for selection
-            keyboard = []
-            for app in applications:
-                app_details = generate_oam_full_string(app)
-                button = InlineKeyboardButton(app_details, callback_data=f"selectapp_{app['application_id']}")
-                keyboard.append([button])
-
-            keyboard.append([InlineKeyboardButton(button_texts[lang]["cancel"], callback_data="cancel")])
-
-            reply_markup = InlineKeyboardMarkup(keyboard)
             await query.edit_message_text(message_texts[lang]["select_application_for_reminder"], reply_markup=reply_markup)
             return REMINDER_ADD
 
@@ -927,6 +919,7 @@ async def delete_reminder_callback(update: Update, context: ContextTypes.DEFAULT
         else:
             await query.edit_message_text(message_texts[lang]["reminder_delete_failed"])
 
+    context.user_data.pop("selected_app_id", None)
     return ConversationHandler.END
 
 

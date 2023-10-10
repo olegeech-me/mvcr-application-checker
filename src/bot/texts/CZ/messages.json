@@ -36,7 +36,7 @@
   "error_generic": "😓 Oj! Něco se pokazilo. Zkuste to prosím později. Pokud problém přetrvává, obraťte se na vývojáře.",
   "dialog_completion": "Skvělé! 🌟 Vše je připraveno. Budu vás informovat o aktualizacích vaší žádosti!",
   "reminder_decision": "Již máte aktivní připomínky. Chcete přidat další nebo smazat stávající?\n\n🔔 Aktivní připomínky:\n\n{reminders_str}",
-  "enter_reminder_time": "🕰️ Zadejte prosím čas, kdy chcete vynuceně obnovit a dostávat stav vaší žádosti.\n\nNapříklad pokud chcete upozornění v 16:00, zadejte <code>16:00</code>.\n\n💡 Čas by měl být ve 24hodinovém formátu a v časovém pásmu Evropa/Praha.",
+  "enter_reminder_time": "🕰️ Zadejte prosím čas, kdy chcete vynuceně obnovit a dostat stav vaší žádosti.\n\nNapříklad, pokud chcete upozornění v 16:00, zadejte <code>16:00</code>.\n\n💡 Čas by měl být ve 24hodinovém formátu a v časovém pásmu Evropa/Praha.",
   "select_reminder_to_delete": "🗑️ Vyberte připomínku, kterou chcete smazat:",
   "reminder_deleted": "Připomenutí smazáno ✅",
   "reminder_delete_failed": "😓 Ups! Nepodařilo se smazat připomenutí. Zkuste to prosím později.",
