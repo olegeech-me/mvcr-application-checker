@@ -45,6 +45,8 @@
   "reminder_add_failed": "😓 Ups! Nepodařilo se přidat připomenutí. Zkuste to prosím později.",
   "reminder_time_exists": "🚫 Připomenutí na tento čas již existuje.",
   "max_reminders_reached": "🚫 Dosaženo maximálního počtu připomenutí: 2.",
+  "select_application_for_reminder": "🔔 Vyberte žádost, pro kterou chcete přidat připomenutí:",
+  "application_not_selected": "🚫 Nejprve vyberte žádost.",
   "action_canceled": "Akce zrušena.",
   "unknown_command": "🤔 Omlouváme se, neznám tento příkaz.",
   "unknown_input": "Chtěl jsi něco?😊 Prosím, klepni na /help pro seznam dostupných příkazů",

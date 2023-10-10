@@ -45,6 +45,8 @@
   "reminder_add_failed": "😓 Oops! Failed to add the reminder. Please try again later.",
   "reminder_time_exists": "🚫 A reminder for this time already exists.",
   "max_reminders_reached": "🚫 Maximum reminders reached: 2.",
+  "select_application_for_reminder": "🔔 Please select the application you want to add a reminder for:",
+  "application_not_selected": "🚫 You haven't selected an application.",
   "action_canceled": "Action canceled.",
   "unknown_command": "🤔 Sorry, I don't know this command.",
   "unknown_input": "You wanted something?😊 Please tap on /help to get the list of available commands",
