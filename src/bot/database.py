@@ -462,7 +462,7 @@ class Database:
 
         query = """
             SELECT r.reminder_id, u.chat_id, r.reminder_time, a.application_number,
-            a.application_suffix, a.application_type, a.application_year
+            a.application_suffix, a.application_type, a.application_year, a.last_updated
             FROM Reminders r
             INNER JOIN Users u ON r.user_id = u.user_id
             INNER JOIN Applications a ON r.application_id = a.application_id

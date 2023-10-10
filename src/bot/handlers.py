@@ -822,8 +822,8 @@ async def reminder_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Display list of user applications for selection
         keyboard = []
         for app in applications:
-            app_details = generate_oam_full_string(app)
-            button = InlineKeyboardButton(app_details, callback_data=f"selectapp_{app['application_id']}")
+            oam_full_string = generate_oam_full_string(app)
+            button = InlineKeyboardButton(oam_full_string, callback_data=f"selectapp_{app['application_id']}")
             keyboard.append([button])
 
         keyboard.append([InlineKeyboardButton(button_texts[lang]["cancel"], callback_data="cancel")])
@@ -836,6 +836,7 @@ async def reminder_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def reminder_button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Reminder button callback"""
     query = update.callback_query
+    chat_id = update.effective_chat.id
     lang = await _get_user_language(update, context)
 
     if await _is_button_click_abused(update, context):
@@ -845,12 +846,13 @@ async def reminder_button_callback(update: Update, context: ContextTypes.DEFAULT
     # If user chose to delete reminders
     if query.data == "delete_reminder":
         # Fetch user reminders
-        reminders = await db.fetch_user_reminders(query.message.chat_id)
+        reminders = await db.fetch_user_reminders(chat_id)
 
         row = []
         for reminder in reminders:
             callback_data = f"delete_{reminder['reminder_id']}"
-            button_label = str(reminder["reminder_time"])[:-3]
+            oam_full_string = generate_oam_full_string(reminder)
+            button_label = str(reminder["reminder_time"])[:-3] + f" {oam_full_string}"
             row.append(InlineKeyboardButton(button_label, callback_data=callback_data))
 
         keyboard = [row, [InlineKeyboardButton(button_texts[lang]["cancel"], callback_data="cancel")]]
@@ -860,13 +862,31 @@ async def reminder_button_callback(update: Update, context: ContextTypes.DEFAULT
 
     # If user chose to add a new reminder
     elif query.data == "add_reminder":
-        reminders = await db.fetch_user_reminders(query.message.chat_id)
+        reminders = await db.fetch_user_reminders(chat_id)
         # Check if user already has 2 reminders
         if len(reminders) >= 2:
             await query.edit_message_text(message_texts[lang]["max_reminders_reached"])
             return ConversationHandler.END
         else:
-            await query.edit_message_text(message_texts[lang]["enter_reminder_time"])
+            # Instead of directly prompting for time, let's first choose an application
+            applications = await db.fetch_user_subscriptions(chat_id)
+
+            # If no applications/subscriptions, notify the user
+            if not applications:
+                await query.edit_message_text(message_texts[lang]["not_subscribed"])
+                return ConversationHandler.END
+
+            # Display list of user applications for selection
+            keyboard = []
+            for app in applications:
+                app_details = generate_oam_full_string(app)
+                button = InlineKeyboardButton(app_details, callback_data=f"selectapp_{app['application_id']}")
+                keyboard.append([button])
+
+            keyboard.append([InlineKeyboardButton(button_texts[lang]["cancel"], callback_data="cancel")])
+
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.edit_message_text(message_texts[lang]["select_application_for_reminder"], reply_markup=reply_markup)
             return REMINDER_ADD
 
     # User chose appcalition to create reminder for
@@ -950,6 +970,7 @@ async def add_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Failed to add reminder {time_input}, application_id: {application_id}, user {user_info(update)}")
         await update.message.reply_text(message_texts[lang]["reminder_add_failed"])
 
+    context.user_data.pop("selected_app_id", None)
     return ConversationHandler.END
 
 
