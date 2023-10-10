@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS Applications (
 CREATE TABLE IF NOT EXISTS Reminders (
     reminder_id SERIAL PRIMARY KEY,
     user_id INT REFERENCES Users(user_id),
+    application_id INT REFERENCES Applications(application_id),
     reminder_time TIME NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

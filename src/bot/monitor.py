@@ -54,3 +54,49 @@ class ApplicationMonitor:
 
     def stop(self):
         self.shutdown_event.set()
+
+
+class ReminderMonitor:
+    def __init__(self, db, rabbit):
+        self.db = db
+        self.rabbit = rabbit
+        self.shutdown_event = asyncio.Event()
+
+    async def start(self):
+        logger.info("Reminder monitor started")
+        while not self.shutdown_event.is_set():
+            logger.debug("Checking for reminders to execute...")
+            await self.trigger_reminders()
+            try:
+                # Reminders are set with precision to minute
+                await asyncio.wait_for(self.shutdown_event.wait(), timeout=60)
+            except asyncio.TimeoutError:
+                pass
+
+    async def trigger_reminders(self):
+        # Fetch reminders that need to be executed at the current time.
+        reminders_to_trigger = await self.db.fetch_due_reminders()
+
+        if not reminders_to_trigger:
+            logger.info("No reminders to execute at this time")
+        else:
+            logger.info(f"{len(reminders_to_trigger)} reminder(s) are due to execute")
+
+        for reminder in reminders_to_trigger:
+            message = {
+                "chat_id": reminder["chat_id"],
+                "number": reminder["application_number"],
+                "suffix": reminder["application_suffix"],
+                "type": reminder["application_type"],
+                "year": reminder["application_year"],
+                "force_refresh": True,
+                "failed": False,
+                "request_type": "fetch",
+                "last_updated": reminder["last_updated"].isoformat() if reminder["last_updated"] else "0",
+            }
+            oam_full_string = generate_oam_full_string(reminder)
+            logger.info(f"[REMINDER] Force refreshing status for {oam_full_string}, user: {reminder['chat_id']}")
+            await self.rabbit.publish_message(message, routing_key="RefreshStatusQueue")
+
+    def stop(self):
+        self.shutdown_event.set()

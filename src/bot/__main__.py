@@ -51,6 +51,9 @@ rabbit = loader.rabbit
 # Instantiate application scheduler
 app_monitor = monitor.ApplicationMonitor(db=db, rabbit=rabbit)
 
+# Instantiate reminder scheduler
+reminder_monitor = monitor.ReminderMonitor(db=db, rabbit=rabbit)
+
 
 async def shutdown():
     logger.info("Shutting down scheduler...")
@@ -158,9 +161,9 @@ async def main():
     # Run RabbitMQ consumer
     await rabbit.consume_messages()
 
-    # Start ApplicationMonitor
-    await asyncio.sleep(15)  # wait some time before running scheduler
-    await app_monitor.start()
+    # Start ApplicationMonitor and ReminderMonitor
+    await asyncio.sleep(15)  # wait some time before running schedulers
+    await asyncio.gather(app_monitor.start(), reminder_monitor.start())
 
     logger.info("Main loop has exited")
 

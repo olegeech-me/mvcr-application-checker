@@ -385,13 +385,16 @@ class Database:
                 return []
 
     async def fetch_user_reminders(self, chat_id):
-        """Fetch all reminders for a specific user based on chat_id"""
+        """Fetch all reminders for a specific user based on chat_id along with associated application data"""
 
-        logger.debug(f"Fetching all user {chat_id} reminders")
+        logger.debug(f"Fetching all user {chat_id} reminders with associated applications")
         query = """
-            SELECT r.reminder_id, r.reminder_time
+            SELECT
+                r.reminder_id, r.reminder_time,
+                a.application_id, a.application_number, a.application_type, a.application_year
             FROM Reminders r
             JOIN Users u ON r.user_id = u.user_id
+            JOIN Applications a ON r.application_id = a.application_id
             WHERE u.chat_id = $1;
         """
         async with self.pool.acquire() as conn:
@@ -402,9 +405,10 @@ class Database:
                 logger.error(f"Error while fetching reminders for chat ID: {chat_id}. Error: {e}")
                 return []
 
-    async def insert_reminder(self, chat_id, time_input):
-        """Insert a new reminder for a specific user based on chat_id and time"""
-        logger.debug(f"Add reminder at {time_input} for user {chat_id}")
+    async def insert_reminder(self, chat_id: int, time_input: str, application_id: int):
+        """Inserts a new reminder into the database"""
+
+        logger.debug(f"Add reminder at {time_input} for user {chat_id}, application_id: {application_id}")
 
         try:
             # Convert the string to a time object
@@ -414,14 +418,14 @@ class Database:
             return False
 
         query = """
-            INSERT INTO Reminders (user_id, reminder_time)
-            SELECT user_id, $2
+            INSERT INTO Reminders (user_id, reminder_time, application_id)
+            SELECT user_id, $2, $3
             FROM Users
             WHERE chat_id = $1;
         """
         async with self.pool.acquire() as conn:
             try:
-                await conn.execute(query, chat_id, time_obj)
+                await conn.execute(query, chat_id, time_obj, application_id)
                 return True
             except asyncpg.UniqueViolationError:
                 logger.error(f"Attempt to insert duplicate reminder for chat ID {chat_id}")
@@ -442,6 +446,36 @@ class Database:
             except Exception as e:
                 logger.error(f"Error while deleting reminder with ID: {reminder_id}. Error: {e}")
                 return False
+
+    async def fetch_due_reminders(self):
+        """Fetch reminders that are due to execute at the current time"""
+
+        # Get current time in UTC
+        current_utc_time = datetime.datetime.utcnow()
+
+        # Convert UTC time to Europe/Prague timezone
+        prague_timezone = pytz.timezone("Europe/Prague")
+        current_prague_time = current_utc_time.astimezone(prague_timezone)
+
+        # Extract the hour and minute
+        hour, minute = current_prague_time.hour, current_prague_time.minute
+
+        query = """
+            SELECT r.reminder_id, u.chat_id, r.reminder_time, a.application_number,
+            a.application_suffix, a.application_type, a.application_year
+            FROM Reminders r
+            INNER JOIN Users u ON r.user_id = u.user_id
+            INNER JOIN Applications a ON r.application_id = a.application_id
+            WHERE EXTRACT(HOUR FROM r.reminder_time) = $1
+            AND EXTRACT(MINUTE FROM r.reminder_time) = $2;
+        """
+        async with self.pool.acquire() as conn:
+            try:
+                rows = await conn.fetch(query, hour, minute)
+                return [dict(row) for row in rows]  # Convert the records to dictionaries
+            except Exception as e:
+                logger.error(f"Error while fetching due reminders. Error: {e}")
+                return []
 
     async def close(self):
         logger.info("Shutting down DB connection")

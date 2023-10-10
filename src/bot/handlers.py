@@ -788,8 +788,13 @@ async def reminder_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # If user already has reminders
     if reminders:
+        formatted_reminders = []
+
         # Create a list of all the reminders in a readable format
-        formatted_reminders = ["- " + str(reminder["reminder_time"])[:-3] for reminder in reminders]
+        for reminder in reminders:
+            oam_full_string = generate_oam_full_string(reminder)
+            reminder_string = "- " + str(reminder["reminder_time"])[:-3] + f" {oam_full_string}"
+            formatted_reminders.append(reminder_string)
 
         # Join the reminders into a single string, separated by newlines
         reminders_str = "\n".join(formatted_reminders)
@@ -805,10 +810,27 @@ async def reminder_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             message_texts[lang]["reminder_decision"].format(reminders_str=reminders_str), reply_markup=reply_markup
         )
         return REMINDER_ADD
+    else:
+        # Fetch user applications (subscriptions) from the DB
+        applications = await db.fetch_user_subscriptions(chat_id)
 
-    # If no existing reminders, directly prompt to add
-    await update.message.reply_text(message_texts[lang]["enter_reminder_time"])
-    return REMINDER_ADD
+        # If no applications/subscriptions, notify the user
+        if not applications:
+            await update.message.reply_text(message_texts[lang]["not_subscribed"])
+            return ConversationHandler.END
+
+        # Display list of user applications for selection
+        keyboard = []
+        for app in applications:
+            app_details = generate_oam_full_string(app)
+            button = InlineKeyboardButton(app_details, callback_data=f"selectapp_{app['application_id']}")
+            keyboard.append([button])
+
+        keyboard.append([InlineKeyboardButton(button_texts[lang]["cancel"], callback_data="cancel")])
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text(message_texts[lang]["select_application_for_reminder"], reply_markup=reply_markup)
+        return REMINDER_ADD
 
 
 async def reminder_button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -846,6 +868,14 @@ async def reminder_button_callback(update: Update, context: ContextTypes.DEFAULT
         else:
             await query.edit_message_text(message_texts[lang]["enter_reminder_time"])
             return REMINDER_ADD
+
+    # User chose appcalition to create reminder for
+    elif query.data.startswith("selectapp_"):
+        _, app_id = query.data.split("_")
+        # Save application ID in context for use in the next step
+        context.user_data["selected_app_id"] = int(app_id)
+        await query.edit_message_text(message_texts[lang]["enter_reminder_time"])
+        return REMINDER_ADD
 
     # User doesn't know what to do
     elif query.data == "cancel":
@@ -905,13 +935,19 @@ async def add_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(message_texts[lang]["reminder_time_exists"])
         return REMINDER_ADD
 
-    success = await db.insert_reminder(chat_id, time_input)
+    # Get the stored application ID from context
+    application_id = context.user_data.get("selected_app_id", None)
+    if not application_id:
+        await update.message.reply_text(message_texts[lang]["application_not_selected"])
+        return ConversationHandler.END
+
+    success = await db.insert_reminder(chat_id, time_input, application_id)
 
     if success:
-        logger.info(f"Reminder added for {time_input}, user {user_info(update)}")
+        logger.info(f"Reminder added for {time_input}, application_id: {application_id}, user {user_info(update)}")
         await update.message.reply_text(message_texts[lang]["reminder_added"])
     else:
-        logger.error(f"Failed to add reminder {time_input}, user {user_info(update)}")
+        logger.error(f"Failed to add reminder {time_input}, application_id: {application_id}, user {user_info(update)}")
         await update.message.reply_text(message_texts[lang]["reminder_add_failed"])
 
     return ConversationHandler.END
