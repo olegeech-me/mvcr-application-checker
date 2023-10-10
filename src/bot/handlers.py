@@ -12,7 +12,7 @@ from bot.utils import generate_oam_full_string
 SUBSCRIPTIONS_LIMIT = 5
 BUTTON_WAIT_SECONDS = 1
 FORCE_FETCH_LIMIT_SECONDS = 86400
-COMMANDS_LIST = ["status", "subscribe", "unsubscribe", "force_refresh", "lang", "start", "help"]
+COMMANDS_LIST = ["status", "subscribe", "unsubscribe", "force_refresh", "lang", "start", "help", "reminder"]
 ADMIN_COMMANDS = ["admin_stats", "admin_broadcast"]
 DEFAULT_LANGUAGE = "EN"
 LANGUAGE_LIST = ["EN 🏴󠁧󠁢󠁥󠁮󠁧󠁿|🇺🇸", "RU 🇷🇺", "CZ 🇨🇿", "UA 🇺🇦"]
@@ -24,6 +24,7 @@ ALLOWED_YEARS = [y for y in range(datetime.datetime.today().year - 3, datetime.d
 
 START, NUMBER, TYPE, YEAR, VALIDATE = range(5)
 BROADCAST_TEXT, BROADCAST_CONFIRM = range(2)
+REMINDER_ADD, REMINDER_DELETE = range(2)
 
 
 logger = logging.getLogger(__name__)
@@ -756,7 +757,6 @@ async def admin_broadcast_confirm(update: Update, context: ContextTypes.DEFAULT_
     user_message = context.user_data.get("broadcast_message")
 
     if query.data == "confirm_broadcast":
-        # TODO implement this DB method
         chat_ids = await db.fetch_all_chat_ids()
 
         for chat_id in chat_ids:
@@ -773,6 +773,197 @@ async def admin_broadcast_confirm(update: Update, context: ContextTypes.DEFAULT_
     # Clear the stored broadcast message from the context
     context.user_data.pop("broadcast_message", None)
 
+    return ConversationHandler.END
+
+
+async def _generate_application_buttons(chat_id, lang):
+    """Generate buttons for user subscription reminders"""
+    applications = await db.fetch_user_subscriptions(chat_id)
+
+    # If no applications/subscriptions, return a message
+    if not applications:
+        return None, message_texts[lang]["not_subscribed"]
+
+    # Display list of user applications for selection
+    keyboard = []
+    for app in applications:
+        app_details = generate_oam_full_string(app)
+        button = InlineKeyboardButton(app_details, callback_data=f"selectapp_{app['application_id']}")
+        keyboard.append([button])
+
+    keyboard.append([InlineKeyboardButton(button_texts[lang]["cancel"], callback_data="cancel")])
+
+    return InlineKeyboardMarkup(keyboard), None
+
+
+# Handler for /reminder
+async def reminder_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handles the /reminder command"""
+    logger.info(f"💻 Received /reminder command from {user_info(update)}")
+    chat_id = update.effective_chat.id
+    lang = await _get_user_language(update, context)
+
+    # Fetch existing reminders from the DB
+    reminders = await db.fetch_user_reminders(chat_id)
+
+    # If user already has reminders
+    if reminders:
+        formatted_reminders = []
+
+        # Create a list of all the reminders in a readable format
+        for reminder in reminders:
+            oam_full_string = generate_oam_full_string(reminder)
+            reminder_string = "- " + str(reminder["reminder_time"])[:-3] + f" {oam_full_string}"
+            formatted_reminders.append(reminder_string)
+
+        # Join the reminders into a single string, separated by newlines
+        reminders_str = "\n".join(formatted_reminders)
+
+        # Prompt to either add a new reminder or delete an existing one
+        row = [
+            InlineKeyboardButton(button_texts[lang]["add_reminder"], callback_data="add_reminder"),
+            InlineKeyboardButton(button_texts[lang]["delete_reminder"], callback_data="delete_reminder"),
+        ]
+        keyboard = [row, [InlineKeyboardButton(button_texts[lang]["cancel"], callback_data="cancel")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text(
+            message_texts[lang]["reminder_decision"].format(reminders_str=reminders_str), reply_markup=reply_markup
+        )
+        return REMINDER_ADD
+    else:
+        reply_markup, error_message = await _generate_application_buttons(chat_id, lang)
+        if error_message:
+            await update.message.reply_text(error_message)
+            return ConversationHandler.END
+        await update.message.reply_text(message_texts[lang]["select_application_for_reminder"], reply_markup=reply_markup)
+        return REMINDER_ADD
+
+
+async def reminder_button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Reminder button callback"""
+    query = update.callback_query
+    chat_id = update.effective_chat.id
+    lang = await _get_user_language(update, context)
+
+    if await _is_button_click_abused(update, context):
+        return
+    await query.answer()
+
+    # If user chose to delete reminders
+    if query.data == "delete_reminder":
+        # Fetch user reminders
+        reminders = await db.fetch_user_reminders(chat_id)
+
+        keyboard = []
+        for reminder in reminders:
+            callback_data = f"delete_{reminder['reminder_id']}"
+            oam_full_string = generate_oam_full_string(reminder)
+            button_label = str(reminder["reminder_time"])[:-3] + f" {oam_full_string}"
+            keyboard.append([InlineKeyboardButton(button_label, callback_data=callback_data)])
+
+        keyboard.append([InlineKeyboardButton(button_texts[lang]["cancel"], callback_data="cancel")])
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(message_texts[lang]["select_reminder_to_delete"], reply_markup=reply_markup)
+        return REMINDER_DELETE
+
+    # If user chose to add a new reminder
+    elif query.data == "add_reminder":
+        reminders = await db.fetch_user_reminders(chat_id)
+        # Check if user already has 2 reminders
+        if len(reminders) >= 2:
+            await query.edit_message_text(message_texts[lang]["max_reminders_reached"])
+            return ConversationHandler.END
+        else:
+            reply_markup, error_message = await _generate_application_buttons(chat_id, lang)
+            if error_message:
+                await query.edit_message_text(error_message)
+                return ConversationHandler.END
+            await query.edit_message_text(message_texts[lang]["select_application_for_reminder"], reply_markup=reply_markup)
+            return REMINDER_ADD
+
+    # User chose appcalition to create reminder for
+    elif query.data.startswith("selectapp_"):
+        _, app_id = query.data.split("_")
+        # Save application ID in context for use in the next step
+        context.user_data["selected_app_id"] = int(app_id)
+        await query.edit_message_text(message_texts[lang]["enter_reminder_time"])
+        return REMINDER_ADD
+
+    # User doesn't know what to do
+    elif query.data == "cancel":
+        await query.edit_message_text(message_texts[lang]["action_canceled"])
+        return ConversationHandler.END
+
+
+async def delete_reminder_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Delete reminder callback"""
+    query = update.callback_query
+    lang = await _get_user_language(update, context)
+    chat_id = update.effective_chat.id
+
+    if await _is_button_click_abused(update, context):
+        return
+    await query.answer()
+
+    if query.data == "cancel":
+        await query.edit_message_text(message_texts[lang]["action_canceled"])
+    else:
+        # Extract the reminder_id from the callback data
+        _, reminder_id = query.data.split("_")
+
+        # Delete from DB
+        success = await db.delete_reminder(chat_id, int(reminder_id))
+
+        if success:
+            await query.edit_message_text(message_texts[lang]["reminder_deleted"])
+        else:
+            await query.edit_message_text(message_texts[lang]["reminder_delete_failed"])
+
+    context.user_data.pop("selected_app_id", None)
+    return ConversationHandler.END
+
+
+def validate_time_format(time_str: str) -> bool:
+    """Validates time format HH:MM"""
+    return bool(re.match(r"^([01]\d|2[0-3]):?([0-5]\d)$", time_str))
+
+
+async def add_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Adds reminder to the database"""
+    lang = await _get_user_language(update, context)
+    time_input = update.message.text.strip()
+
+    if not validate_time_format(time_input):
+        await update.message.reply_text(message_texts[lang]["invalid_time_format"])
+        return REMINDER_ADD
+
+    chat_id = update.effective_chat.id
+
+    # Fetch existing reminders from the DB
+    reminders = await db.fetch_user_reminders(chat_id)
+    existing_times = [str(reminder["reminder_time"])[:-3] for reminder in reminders]
+
+    # Check if time_input already exists for this user
+    if time_input in existing_times:
+        await update.message.reply_text(message_texts[lang]["reminder_time_exists"])
+        return REMINDER_ADD
+
+    # Get the stored application ID from context
+    application_id = context.user_data.get("selected_app_id", None)
+    if not application_id:
+        await update.message.reply_text(message_texts[lang]["application_not_selected"])
+        return ConversationHandler.END
+
+    success = await db.insert_reminder(chat_id, time_input, application_id)
+
+    if success:
+        logger.info(f"Reminder added for {time_input}, application_id: {application_id}, user {user_info(update)}")
+        await update.message.reply_text(message_texts[lang]["reminder_added"])
+    else:
+        logger.error(f"Failed to add reminder {time_input}, application_id: {application_id}, user {user_info(update)}")
+        await update.message.reply_text(message_texts[lang]["reminder_add_failed"])
+
+    context.user_data.pop("selected_app_id", None)
     return ConversationHandler.END
 
 

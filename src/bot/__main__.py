@@ -24,6 +24,12 @@ from bot.handlers import (
     admin_broadcast_command,
     admin_broadcast_text,
     admin_broadcast_confirm,
+    REMINDER_ADD,
+    REMINDER_DELETE,
+    reminder_command,
+    add_reminder,
+    reminder_button_callback,
+    delete_reminder_callback,
 )
 from bot import monitor
 
@@ -45,10 +51,14 @@ rabbit = loader.rabbit
 # Instantiate application scheduler
 app_monitor = monitor.ApplicationMonitor(db=db, rabbit=rabbit)
 
+# Instantiate reminder scheduler
+reminder_monitor = monitor.ReminderMonitor(db=db, rabbit=rabbit)
+
 
 async def shutdown():
-    logger.info("Shutting down scheduler...")
+    logger.info("Shutting down schedulers...")
     app_monitor.stop()
+    reminder_monitor.stop()
     # Stop bot
     logger.info("Shutting down bot...")
     await bot.updater.stop()
@@ -103,6 +113,7 @@ async def main():
         fallbacks=[CommandHandler("subscribe", subscribe_command), CommandHandler("start", start_command, has_args=False)],
     )
     bot.add_handler(conv_handler)
+    # Handler to admin broadcast dialog
     broadcast_handler = ConversationHandler(
         entry_points=[CommandHandler("admin_broadcast", admin_broadcast_command)],
         states={
@@ -112,6 +123,22 @@ async def main():
         fallbacks=[],
     )
     bot.add_handler(broadcast_handler)
+    # Handler for /reminder dialog
+    reminder_handler = ConversationHandler(
+        entry_points=[CommandHandler("reminder", reminder_command)],
+        states={
+            REMINDER_ADD: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, add_reminder),
+                CallbackQueryHandler(reminder_button_callback),
+            ],
+            REMINDER_DELETE: [
+                CallbackQueryHandler(delete_reminder_callback, pattern="^delete_*"),
+                CallbackQueryHandler(reminder_button_callback, pattern="^cancel$"),
+            ],
+        },
+        fallbacks=[CommandHandler("reminder", reminder_command)],
+    )
+    bot.add_handler(reminder_handler)
     bot.add_handler(MessageHandler(filters.TEXT, unknown_text))
     bot.add_handler(MessageHandler(filters.COMMAND, unknown_command))
 
@@ -135,9 +162,9 @@ async def main():
     # Run RabbitMQ consumer
     await rabbit.consume_messages()
 
-    # Start ApplicationMonitor
-    await asyncio.sleep(15)  # wait some time before running scheduler
-    await app_monitor.start()
+    # Start ApplicationMonitor and ReminderMonitor
+    await asyncio.sleep(15)  # wait some time before running schedulers
+    await asyncio.gather(app_monitor.start(), reminder_monitor.start())
 
     logger.info("Main loop has exited")
 
