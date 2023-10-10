@@ -78,7 +78,7 @@ class ReminderMonitor:
         reminders_to_trigger = await self.db.fetch_due_reminders()
 
         if not reminders_to_trigger:
-            logger.info("No reminders to execute at this time")
+            logger.debug("No reminders to execute at this time")
         else:
             logger.info(f"{len(reminders_to_trigger)} reminder(s) are due to execute")
 
