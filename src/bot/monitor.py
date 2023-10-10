@@ -96,7 +96,7 @@ class ReminderMonitor:
             }
             oam_full_string = generate_oam_full_string(reminder)
             logger.info(f"[REMINDER] Force refreshing status for {oam_full_string}, user: {reminder['chat_id']}")
-            await self.rabbit.publish_message(message, routing_key="RefreshStatusQueue")
+            await self.rabbit.publish_message(message, routing_key="ApplicationFetchQueue")
 
     def stop(self):
         self.shutdown_event.set()

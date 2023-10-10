@@ -798,7 +798,7 @@ async def _generate_application_buttons(chat_id, lang):
 
 # Handler for /reminder
 async def reminder_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handles the /reminder command."""
+    """Handles the /reminder command"""
     logger.info(f"💻 Received /reminder command from {user_info(update)}")
     chat_id = update.effective_chat.id
     lang = await _get_user_language(update, context)

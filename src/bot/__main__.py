@@ -56,8 +56,9 @@ reminder_monitor = monitor.ReminderMonitor(db=db, rabbit=rabbit)
 
 
 async def shutdown():
-    logger.info("Shutting down scheduler...")
+    logger.info("Shutting down schedulers...")
     app_monitor.stop()
+    reminder_monitor.stop()
     # Stop bot
     logger.info("Shutting down bot...")
     await bot.updater.stop()
