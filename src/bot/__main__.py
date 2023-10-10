@@ -127,9 +127,12 @@ async def main():
                 MessageHandler(filters.TEXT & ~filters.COMMAND, add_reminder),
                 CallbackQueryHandler(reminder_button_callback),
             ],
-            REMINDER_DELETE: [CallbackQueryHandler(delete_reminder_callback, pattern="delete_*")],
+            REMINDER_DELETE: [
+                CallbackQueryHandler(delete_reminder_callback, pattern="^delete_*"),
+                CallbackQueryHandler(reminder_button_callback, pattern="^cancel$"),
+            ],
         },
-        fallbacks=[],
+        fallbacks=[CommandHandler("reminder", reminder_command)],
     )
     bot.add_handler(reminder_handler)
     bot.add_handler(MessageHandler(filters.TEXT, unknown_text))

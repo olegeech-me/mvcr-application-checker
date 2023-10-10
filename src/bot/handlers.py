@@ -788,6 +788,12 @@ async def reminder_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # If user already has reminders
     if reminders:
+        # Create a list of all the reminders in a readable format
+        formatted_reminders = ["- " + str(reminder["reminder_time"])[:-3] for reminder in reminders]
+
+        # Join the reminders into a single string, separated by newlines
+        reminders_str = "\n".join(formatted_reminders)
+
         # Prompt to either add a new reminder or delete an existing one
         row = [
             InlineKeyboardButton(button_texts[lang]["add_reminder"], callback_data="add_reminder"),
@@ -795,7 +801,9 @@ async def reminder_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         keyboard = [row, [InlineKeyboardButton(button_texts[lang]["cancel"], callback_data="cancel")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.message.reply_text(message_texts[lang]["reminder_decision"], reply_markup=reply_markup)
+        await update.message.reply_text(
+            message_texts[lang]["reminder_decision"].format(reminders_str=reminders_str), reply_markup=reply_markup
+        )
         return REMINDER_ADD
 
     # If no existing reminders, directly prompt to add
@@ -820,18 +828,24 @@ async def reminder_button_callback(update: Update, context: ContextTypes.DEFAULT
         row = []
         for reminder in reminders:
             callback_data = f"delete_{reminder['reminder_id']}"
-            button_label = str(reminder["reminder_time"])
+            button_label = str(reminder["reminder_time"])[:-3]
             row.append(InlineKeyboardButton(button_label, callback_data=callback_data))
 
-        keyboard = [row]
+        keyboard = [row, [InlineKeyboardButton(button_texts[lang]["cancel"], callback_data="cancel")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(message_texts[lang]["select_reminder_to_delete"], reply_markup=reply_markup)
         return REMINDER_DELETE
 
     # If user chose to add a new reminder
     elif query.data == "add_reminder":
-        await query.edit_message_text(message_texts[lang]["enter_reminder_time"])
-        return REMINDER_ADD
+        reminders = await db.fetch_user_reminders(query.message.chat_id)
+        # Check if user already has 2 reminders
+        if len(reminders) >= 2:
+            await query.edit_message_text(message_texts[lang]["max_reminders_reached"])
+            return ConversationHandler.END
+        else:
+            await query.edit_message_text(message_texts[lang]["enter_reminder_time"])
+            return REMINDER_ADD
 
     # User doesn't know what to do
     elif query.data == "cancel":
@@ -849,16 +863,19 @@ async def delete_reminder_callback(update: Update, context: ContextTypes.DEFAULT
         return
     await query.answer()
 
-    # Extract the reminder_id from the callback data
-    _, reminder_id = query.data.split("_")
-
-    # Delete from DB
-    success = await db.delete_reminder(chat_id, int(reminder_id))
-
-    if success:
-        await query.edit_message_text(message_texts[lang]["reminder_deleted"])
+    if query.data == "cancel":
+        await query.edit_message_text(message_texts[lang]["action_canceled"])
     else:
-        await query.edit_message_text(message_texts[lang]["reminder_delete_failed"])
+        # Extract the reminder_id from the callback data
+        _, reminder_id = query.data.split("_")
+
+        # Delete from DB
+        success = await db.delete_reminder(chat_id, int(reminder_id))
+
+        if success:
+            await query.edit_message_text(message_texts[lang]["reminder_deleted"])
+        else:
+            await query.edit_message_text(message_texts[lang]["reminder_delete_failed"])
 
     return ConversationHandler.END
 
@@ -878,6 +895,16 @@ async def add_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return REMINDER_ADD
 
     chat_id = update.effective_chat.id
+
+    # Fetch existing reminders from the DB
+    reminders = await db.fetch_user_reminders(chat_id)
+    existing_times = [str(reminder["reminder_time"])[:-3] for reminder in reminders]
+
+    # Check if time_input already exists for this user
+    if time_input in existing_times:
+        await update.message.reply_text(message_texts[lang]["reminder_time_exists"])
+        return REMINDER_ADD
+
     success = await db.insert_reminder(chat_id, time_input)
 
     if success:

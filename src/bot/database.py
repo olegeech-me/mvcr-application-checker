@@ -404,7 +404,7 @@ class Database:
 
     async def insert_reminder(self, chat_id, time_input):
         """Insert a new reminder for a specific user based on chat_id and time"""
-        logger.info(f"Add reminder at {time_input} for user {chat_id}")
+        logger.debug(f"Add reminder at {time_input} for user {chat_id}")
 
         try:
             # Convert the string to a time object
