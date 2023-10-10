@@ -1,5 +1,8 @@
 {
   "subscribe_button": "📩 Subscribe",
   "subscribe_correct": "✅ Yes, the data is correct",
-  "subscribe_incorrect": "❌ No, the data is incorrect"
+  "subscribe_incorrect": "❌ No, the data is incorrect",
+  "add_reminder": "➕ Add",
+  "delete_reminder": "➖ Delete",
+  "cancel": "❌ Cancel"
 }

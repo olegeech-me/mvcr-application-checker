@@ -1,5 +1,8 @@
 {
   "subscribe_button": "📩 Přihlásit k odběru",
   "subscribe_correct": "✅ Ano, údaje jsou správné",
-  "subscribe_incorrect": "❌ Ne, údaje nejsou správné"
+  "subscribe_incorrect": "❌ Ne, údaje nejsou správné",
+  "add_reminder": "➕ Přidat",
+  "delete_reminder": "➖ Odstranit",
+  "cancel": "❌ Zrušit"
 }

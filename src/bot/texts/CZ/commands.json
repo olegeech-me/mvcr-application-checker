@@ -6,6 +6,7 @@
   "lang": "Vybrat jazyk bota",
   "start": "Vstoupit do hlavního menu",
   "help": "Získat nápovědu k příkazům",
+  "reminder": "Nastavit připomenutí",
   "admin_stats": "Zobrazit statistiky bota",
   "admin_broadcast": "Poslat zprávu všem uživatelům"
 }
