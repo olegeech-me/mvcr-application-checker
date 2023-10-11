@@ -10,7 +10,6 @@ import random
 import os
 from pyvirtualdisplay import Display
 from selenium import webdriver
-from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -57,9 +56,6 @@ class Browser:
         self.display = Display(visible=0, size=(1420, 1080))
         self.display.start()
         self._log(logging.INFO, "Initialized virtual display")
-
-        caps = DesiredCapabilities.FIREFOX
-        caps["loggingPrefs"] = {"browser": "ALL"}
         options = webdriver.firefox.options.Options()
         options.set_preference("intl.accept_languages", "cs-CZ")
         options.set_preference("http.response.timeout", PAGE_LOAD_LIMIT_SECONDS)
@@ -67,7 +63,7 @@ class Browser:
         options.set_preference("dom.webdriver.enabled", False)
         options.set_preference("useAutomationExtension", False)
         options.headless = False
-        self.browser = webdriver.Firefox(options=options, capabilities=caps)
+        self.browser = webdriver.Firefox(options=options)
         self.browser.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
         # emulate some user actions tbd
         # self.BROWSER.maximize_window()
@@ -132,12 +128,6 @@ class Browser:
         # Locate the submit button and click it to submit the form
         submit_button = self.browser.find_element(By.CSS_SELECTOR, 'button[type="submit"]')
         submit_button.click()
-
-        # Check for browser logs if logging level is INFO or lower.
-        if logger.getEffectiveLevel() <= logging.INFO:
-            logs = self.browser.get_log("browser")
-            for log in logs:
-                self._log(logging.INFO, f"Browser Log: {log}")
 
     async def _do_fetch_with_browser(self, url, app_details):
         def _has_recaptcha(browser):
