@@ -42,8 +42,10 @@ ENV APP_HOME /code
 WORKDIR /$APP_HOME
 
 COPY requirements-fetcher.txt requirements.txt
-RUN pip install -r requirements.txt
+RUN pip install -r requirements.txt tox
 
 COPY . $APP_HOME/
+
+COPY tox-docker.ini tox.ini
 
 CMD ["python3", "-m", "fetcher"]
