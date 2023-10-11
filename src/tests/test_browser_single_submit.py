@@ -22,10 +22,19 @@ import fake_useragent
 
 class TestMVCR:
     def setup_method(self, method):
-        user_agent = fake_useragent.UserAgent(browsers=["chrome"]).random
-        chrome_options = webdriver.ChromeOptions()
-        chrome_options.add_argument(f"user-agent={user_agent}")
-        self.driver = webdriver.Chrome(options=chrome_options)
+        useragent = fake_useragent.UserAgent(browsers=["firefox"]).random
+        # chrome_options = webdriver.ChromeOptions()
+        # chrome_options.add_argument(f"user-agent={user_agent}")
+        # self.driver = webdriver.Chrome(options=chrome_options)
+
+        # configure display & options
+        options = webdriver.firefox.options.Options()
+        options.set_preference("intl.accept_languages", "cs-CZ")
+        options.set_preference("http.response.timeout", 10)
+        options.set_preference("general.useragent.override", useragent)
+        options.set_preference("dom.webdriver.enabled", False)
+        options.set_preference("useAutomationExtension", False)
+        self.driver = webdriver.Firefox(options=options)
         self.vars = {}
 
     def teardown_method(self, method):
@@ -35,7 +44,10 @@ class TestMVCR:
         self.driver.set_window_size(1936, 1056)
         # self.driver.set_window_size(1420, 1080)
         self.driver.get("https://frs.gov.cz/informace-o-stavu-rizeni/")
-        time.sleep(2)
+        WebDriverWait(self.driver, 10).until(
+            lambda x: x.find_element(By.CLASS_NAME, "wrapper__form"),
+            message="Body didn't load in time",
+        )
         cookies = self.driver.find_element_by_xpath('//button[@class="button button__primary" and text()="Souhlasím se všemi"]')
         try:
             cookies.click()
