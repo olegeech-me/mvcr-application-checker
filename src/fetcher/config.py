@@ -1,5 +1,7 @@
 import os
 
+# Fetcher ID
+ID = os.getenv("ID", "fetcher")
 # The URL to fetch
 URL = os.getenv("URL", "https://frs.gov.cz/informace-o-stavu-rizeni/")
 # The maximum number of retries to connect to RabbitMQ

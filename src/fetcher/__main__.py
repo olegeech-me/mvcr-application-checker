@@ -8,10 +8,11 @@ import asyncio
 import uvloop
 
 from fetcher.config import URL, RABBIT_HOST, RABBIT_SSL_PORT, RABBIT_USER, RABBIT_PASSWORD, LOG_LEVEL
-from fetcher.config import RABBIT_SSL_CACERTFILE, RABBIT_SSL_CERTFILE, RABBIT_SSL_KEYFILE
+from fetcher.config import RABBIT_SSL_CACERTFILE, RABBIT_SSL_CERTFILE, RABBIT_SSL_KEYFILE, ID
 from fetcher.browser import Browser
 from fetcher.messaging import Messaging
 from fetcher.application_processor import ApplicationProcessor
+from fetcher.metrics_collector import MetricsCollector
 
 
 # Set up logging
@@ -41,7 +42,8 @@ async def main():
 
     browser_instance = Browser()
     messaging_instance = Messaging(RABBIT_HOST, RABBIT_USER, RABBIT_PASSWORD)
-    processor = ApplicationProcessor(messaging=messaging_instance, browser=browser_instance, url=URL)
+    metrics_collector = MetricsCollector(fetcher_id=ID, messaging=messaging_instance, url=URL)
+    processor = ApplicationProcessor(messaging=messaging_instance, browser=browser_instance, metrics=metrics_collector, url=URL)
 
     # Register the signal handlers
     signal.signal(signal.SIGINT, lambda s, f: shutdown_event.set())
@@ -50,11 +52,14 @@ async def main():
     # Connect to RabbitMQ & set up queues
     await messaging_instance.connect(ssl_params=rabbit_ssl_params())
     await messaging_instance.setup_queues("ApplicationFetchQueue", "StatusUpdateQueue", "RefreshStatusQueue")
+    # not durable for fetcher metric queue
+    await messaging_instance.setup_queues("FetcherMetricsQueue", durable=False)
 
     # Start processing requests in the background
     asyncio.gather(
         messaging_instance.consume_messages("ApplicationFetchQueue", processor.fetch_callback),
         messaging_instance.consume_messages("RefreshStatusQueue", processor.refresh_callback),
+        metrics_collector.send_metrics(),
     )
 
     # Keep the loop running until a shutdown signal is received

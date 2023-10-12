@@ -69,6 +69,12 @@ class Messaging:
         await self.channel.default_exchange.publish(message, routing_key=queue_name)
         logger.info(f"Successfully published message to {queue_name}")
 
+    async def publish_service_message(self, message_body, queue_name="FetcherMetricsQueue", expiration=50, headers=None):
+        """Publish a short-lived service message"""
+        message = aio_pika.Message(body=json.dumps(message_body).encode(), expiration=expiration, headers=headers)
+        await self.channel.default_exchange.publish(message, routing_key=queue_name)
+        logger.info(f"Successfully published message to {queue_name}")
+
     async def consume_messages(self, queue_name, callback_func):
         """Consume messages from the specified queue"""
         queue = await self.channel.declare_queue(queue_name, durable=True)
