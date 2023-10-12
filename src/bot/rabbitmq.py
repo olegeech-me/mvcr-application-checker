@@ -3,6 +3,7 @@ import aio_pika
 import asyncio
 import logging
 import hashlib
+import cachetools
 from aiormq.exceptions import AMQPConnectionError
 from bot.texts import message_texts
 from bot.utils import generate_oam_full_string
@@ -16,18 +17,18 @@ logger = logging.getLogger(__name__)
 
 
 class RabbitMQ:
-    def __init__(self, host, user, password, bot, db, loop):
+    def __init__(self, host, user, password, bot, db, requeue_ttl, loop):
         self.host = host
         self.user = user
         self.password = password
         self.bot = bot
         self.db = db
         self.loop = loop
-        self.published_messages = set()
         self.connection = None
         self.channel = None
         self.queue = None
         self.default_exchange = None
+        self.published_messages = cachetools.TTLCache(maxsize=10000, ttl=requeue_ttl)
 
     async def connect(self):
         """Establishes a connection to RabbitMQ and initializes the channel and queue."""
@@ -65,12 +66,12 @@ class RabbitMQ:
 
     def mark_message_as_published(self, unique_id):
         """Mark the message with the given unique ID as published"""
-        self.published_messages.add(unique_id)
+        self.published_messages[unique_id] = True
 
     def discard_message_id(self, unique_id):
         """Discard the message ID if it exists"""
         if unique_id in self.published_messages:
-            self.published_messages.remove(unique_id)
+            self.published_messages.pop(unique_id, None)
             logger.debug(f"Reply received for message ID {unique_id}")
 
     def is_resolved(self, status):
