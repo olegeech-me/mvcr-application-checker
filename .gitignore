@@ -172,3 +172,8 @@ ssl/*.crt
 # k8s configs
 k8s/fetcher.yaml
 k8s/bot.yaml
+
+# cookies
+chrome-cookies.sql
+all_cookies.json
+mvcr_cookies.json

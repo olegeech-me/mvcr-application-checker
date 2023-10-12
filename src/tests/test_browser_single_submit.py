@@ -3,12 +3,17 @@ from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
 import time
+import json
 import pytest
 from selenium.common.exceptions import (
     ElementClickInterceptedException,
 )
 import random
 import fake_useragent
+import logging
+
+logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
 
 
 test_data = [
@@ -37,6 +42,26 @@ class TestMVCR:
         chosen_resolution = random.choice(resolutions)
         self.driver.set_window_size(chosen_resolution[0], chosen_resolution[1])
 
+    def clean_cookies(self, cookies):
+        for cookie in cookies:
+            samesite = cookie.get("sameSite", "None")
+            if samesite:
+                samesite = samesite.capitalize()
+            if samesite not in ["None", "Lax", "Strict"]:
+                cookie["sameSite"] = "None"
+            else:
+                cookie["sameSite"] = samesite
+        logger.debug(f"Cookies: {cookies}")
+        return cookies
+
+    def load_cookies(self, filepath="all_cookies.json"):
+        """Load cookies from a file and add them to the Selenium browser"""
+        with open(filepath, "r") as file:
+            cookies = json.load(file)
+            cleaned_cookies = self.clean_cookies(cookies)
+            for cookie in cleaned_cookies:
+                self.driver.add_cookie(cookie)
+
     def setup_method(self, method):
         useragent = fake_useragent.UserAgent(browsers=["firefox"]).random
         # chrome_options = webdriver.ChromeOptions()
@@ -51,6 +76,7 @@ class TestMVCR:
         options.set_preference("dom.webdriver.enabled", False)
         options.set_preference("useAutomationExtension", False)
         self.driver = webdriver.Firefox(options=options)
+        self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
         self.vars = {}
 
     def teardown_method(self, method):
@@ -65,6 +91,7 @@ class TestMVCR:
 
         self.set_random_resolution()
         self.driver.get("https://frs.gov.cz/informace-o-stavu-rizeni/")
+        self.load_cookies("mvcr_cookies.json")
         WebDriverWait(self.driver, 10).until(
             lambda x: x.find_element(By.CLASS_NAME, "wrapper__form"),
             message="Body didn't load in time",
@@ -114,6 +141,7 @@ class TestMVCR:
         actions.move_to_element(submit_button).perform()
         self.random_sleep()
         self.driver.execute_script("arguments[0].click();", submit_button)
+        self.driver.execute_script("window.scrollTo(0, 0);")
 
         # submit_button.click()
 
@@ -121,6 +149,5 @@ class TestMVCR:
             lambda x: x.find_element(By.CLASS_NAME, "alert__content"),
             message="Status field wasn't found",
         )
-        self.driver.execute_script("window.scrollTo(0, 0);")
         self.driver.execute_script("window.scrollBy(0, -document.body.scrollHeight);")
         time.sleep(5)
