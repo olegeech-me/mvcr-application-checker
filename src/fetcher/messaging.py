@@ -58,10 +58,10 @@ class Messaging:
                     logger.error("Max retries reached. Could not connect to RabbitMQ.")
                     raise
 
-    async def setup_queues(self, *queues):
-        """Declare necessary queues"""
-        for queue_name in queues:
-            await self.channel.declare_queue(queue_name, durable=True)
+    async def setup_queues(self, **queues):
+        """Declare necessary queues and thier durability"""
+        for queue_name, durable in queues.items():
+            await self.channel.declare_queue(queue_name, durable=durable)
 
     async def publish_message(self, queue_name, message_body, headers=None):
         """Publish a message to the specified queue"""

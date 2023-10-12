@@ -35,7 +35,7 @@ class ApplicationProcessor:
         async with self.lock:
             logger.info(f"[{app_number}/{app_type}-{app_year}][{request_type.upper()}] Locking for processing")
             self.processing_apps[request_type][key] = True
-            self.metrics_collector.increment_request_status("locked")
+            self.metrics_collector.increment_request_state("locked")
 
     async def end_processing(self, request_type, app_number, app_type, app_year):
         """Mark an application as done processing"""
@@ -44,7 +44,7 @@ class ApplicationProcessor:
             if key in self.processing_apps[request_type]:
                 logger.info(f"[{app_number}/{app_type}-{app_year}][{request_type.upper()}] Unlocking, processing finished")
                 del self.processing_apps[request_type][key]
-                self.metrics_collector.decrement_request_status("locked")
+                self.metrics_collector.decrement_request_state("locked")
 
     def _get_app_details_from_message(self, message):
         """Extract application details from message body"""
@@ -110,10 +110,10 @@ class ApplicationProcessor:
 
                 # TODO clean up old lame stats
                 self.waiting_refresh_requests += 1
-                self.metrics_collector.increment_request_status("waiting")
+                self.metrics_collector.increment_request_state("waiting")
                 await asyncio.sleep(sleep_time)
                 self.waiting_refresh_requests -= 1
-                self.metrics_collector.decrement_request_status("waiting")
+                self.metrics_collector.decrement_request_state("waiting")
 
             app_status = await self.browser.fetch(self.url, app_details)
 

@@ -49,11 +49,15 @@ async def main():
     signal.signal(signal.SIGINT, lambda s, f: shutdown_event.set())
     signal.signal(signal.SIGTERM, lambda s, f: shutdown_event.set())
 
-    # Connect to RabbitMQ & set up queues
+    # Connect to RabbitMQ & set up queues with their respective durability
     await messaging_instance.connect(ssl_params=rabbit_ssl_params())
-    await messaging_instance.setup_queues("ApplicationFetchQueue", "StatusUpdateQueue", "RefreshStatusQueue")
+    await messaging_instance.setup_queues(
+        ApplicationFetchQueue=True,
+        StatusUpdateQueue=True,
+        RefreshStatusQueue=True,
+    )
     # not durable for fetcher metric queue
-    await messaging_instance.setup_queues("FetcherMetricsQueue", durable=False)
+    await messaging_instance.setup_queues(FetcherMetricsQueue=False)
 
     # Start processing requests in the background
     asyncio.gather(
