@@ -1,4 +1,5 @@
 import logging
+import cachetools
 
 logger = logging.getLogger(__name__)
 
@@ -6,7 +7,7 @@ logger = logging.getLogger(__name__)
 class Metrics:
     def __init__(self):
         self._bot_data = {}
-        self._fetcher_data = {}
+        self._fetcher_data = cachetools.TTLCache(maxsize=10000, ttl=300)
 
     def update_fetcher_metrics(self, fetcher_id, metrics_data):
         """Update metrics for a specific fetcher"""
