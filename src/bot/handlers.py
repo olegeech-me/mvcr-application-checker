@@ -730,6 +730,9 @@ async def fetcher_stats_command(update: Update, context: ContextTypes.DEFAULT_TY
         for fetcher_id, data in metrics.items():
             interval = int(data["rate_interval"] / 60)
             ttl = int(data["ttl"] / 60)
+            uptime_minutes = int(data["uptime"] / 60)
+            uptime_hours = uptime_minutes // 60
+            uptime_minutes %= 60
             fetcher_stats = (
                 f"🤖 Fetcher ID: <b>{fetcher_id}</b>\n"
                 f"🕐 Average latency to frs.gov.cz: <b>{data['average_latency']:.2f}</b> seconds\n"
@@ -741,6 +744,7 @@ async def fetcher_stats_command(update: Update, context: ContextTypes.DEFAULT_TY
                 f"📊 Success rate: <b>{data['rates']['success_rate']:.2f}</b>/{interval} min(s)\n"
                 f"📊 Failure rate: <b>{data['rates']['failure_rate']:.2f}</b>/{interval} min(s)\n"
                 f"📊 Retry rate: <b>{data['rates']['retry_rate']:.2f}</b>/{interval} min(s)\n"
+                f"⏱ Uptime: <b>{uptime_hours}h {uptime_minutes}m</b>\n"
             )
 
             await update.message.reply_text(fetcher_stats)
