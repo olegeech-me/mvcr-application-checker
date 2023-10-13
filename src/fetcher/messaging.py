@@ -58,16 +58,22 @@ class Messaging:
                     logger.error("Max retries reached. Could not connect to RabbitMQ.")
                     raise
 
-    async def setup_queues(self, *queues):
-        """Declare necessary queues"""
-        for queue_name in queues:
-            await self.channel.declare_queue(queue_name, durable=True)
+    async def setup_queues(self, **queues):
+        """Declare necessary queues and thier durability"""
+        for queue_name, durable in queues.items():
+            await self.channel.declare_queue(queue_name, durable=durable)
 
     async def publish_message(self, queue_name, message_body, headers=None):
         """Publish a message to the specified queue"""
         message = aio_pika.Message(body=json.dumps(message_body).encode(), headers=headers)
         await self.channel.default_exchange.publish(message, routing_key=queue_name)
-        logger.info(f"Successfully published message to {queue_name}")
+        logger.debug(f"Successfully published message to {queue_name}")
+
+    async def publish_service_message(self, message_body, queue_name="FetcherMetricsQueue", expiration=30, headers=None):
+        """Publish a short-lived service message"""
+        message = aio_pika.Message(body=json.dumps(message_body).encode(), expiration=expiration, headers=headers)
+        await self.channel.default_exchange.publish(message, routing_key=queue_name)
+        logger.debug(f"Successfully published message to {queue_name}")
 
     async def consume_messages(self, queue_name, callback_func):
         """Consume messages from the specified queue"""

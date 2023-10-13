@@ -8,5 +8,6 @@
   "help": "Získat nápovědu k příkazům",
   "reminder": "Nastavit připomenutí",
   "admin_stats": "Zobrazit statistiky bota",
+  "fetcher_stats": "Zobrazit statistiky o fetcherech",
   "admin_broadcast": "Poslat zprávu všem uživatelům"
 }

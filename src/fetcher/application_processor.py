@@ -9,12 +9,12 @@ logger = logging.getLogger(__name__)
 
 
 class ApplicationProcessor:
-    def __init__(self, messaging, browser, url):
+    def __init__(self, messaging, browser, metrics, url):
         self.messaging = messaging
         self.browser = browser
+        self.metrics_collector = metrics
         self.url = url
         self.current_message = None
-        self.waiting_refresh_requests = 0
         self.processing_apps = {"fetch": {}, "refresh": {}}
         self.lock = asyncio.Lock()
 
@@ -34,6 +34,7 @@ class ApplicationProcessor:
         async with self.lock:
             logger.info(f"[{app_number}/{app_type}-{app_year}][{request_type.upper()}] Locking for processing")
             self.processing_apps[request_type][key] = True
+            self.metrics_collector.increment_request_state("locked")
 
     async def end_processing(self, request_type, app_number, app_type, app_year):
         """Mark an application as done processing"""
@@ -42,6 +43,7 @@ class ApplicationProcessor:
             if key in self.processing_apps[request_type]:
                 logger.info(f"[{app_number}/{app_type}-{app_year}][{request_type.upper()}] Unlocking, processing finished")
                 del self.processing_apps[request_type][key]
+                self.metrics_collector.decrement_request_state("locked")
 
     def _get_app_details_from_message(self, message):
         """Extract application details from message body"""
@@ -58,10 +60,12 @@ class ApplicationProcessor:
             app_details["failed"] = True
             await self.messaging.publish_message("StatusUpdateQueue", app_details)
             await message.ack()
+            self.metrics_collector.record_fetch_status("failed")
         else:
             logger.info("Rescheduling message, x-retry-count: %d", retry_count)
             await self.messaging.publish_message(queue_name, app_details, headers={"x-retry-count": retry_count})
             await message.ack()
+            self.metrics_collector.record_fetch_status("retried")
 
     def _generate_error_message(self, app_details):
         """Generate an error message for an application number"""
@@ -103,9 +107,9 @@ class ApplicationProcessor:
                 sleep_time = self._get_sleep_time()
                 logger.info("%s Sleeping for %d seconds before processing request", log_prefix, sleep_time)
 
-                self.waiting_refresh_requests += 1
+                self.metrics_collector.increment_request_state("waiting")
                 await asyncio.sleep(sleep_time)
-                self.waiting_refresh_requests -= 1
+                self.metrics_collector.decrement_request_state("waiting")
 
             app_status = await self.browser.fetch(self.url, app_details)
 
@@ -120,6 +124,7 @@ class ApplicationProcessor:
                 await message.ack()
                 await self.messaging.publish_message("StatusUpdateQueue", app_details)
                 logger.debug("%s Update message was pushed to StateUpdateQueue", log_prefix)
+                self.metrics_collector.record_fetch_status("success")
             else:
                 logger.error("%s Status update failed", log_prefix)
                 queue_name = "ApplicationFetchQueue" if request_type == "fetch" else "RefreshStatusQueue"
@@ -127,6 +132,7 @@ class ApplicationProcessor:
 
         except Exception as e:
             logger.error("%s Error processing request: %s", log_prefix, e)
+            self.metrics_collector.record_fetch_status("failed")
         finally:
             await self.end_processing(request_type, number, type_, year)
 

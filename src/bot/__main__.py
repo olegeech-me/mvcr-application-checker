@@ -6,7 +6,7 @@ import signal
 
 from bot.loader import loader, loop, LOG_LEVEL, ADMIN_CHAT_IDS
 from bot.handlers import start_command, help_command, unknown_text, unknown_command, status_command
-from bot.handlers import unsubscribe_command, subscribe_command, admin_stats_command
+from bot.handlers import unsubscribe_command, subscribe_command, admin_stats_command, fetcher_stats_command
 from bot.handlers import force_refresh_command, subscribe_button, lang_command, set_language_startup, set_language_cmd
 from bot.handlers import status_button, unsubscribe_button, force_refresh_button
 from bot.handlers import (
@@ -90,6 +90,7 @@ async def main():
     bot.add_handler(CommandHandler("force_refresh", force_refresh_command, has_args=False))
     bot.add_handler(CallbackQueryHandler(force_refresh_button, pattern="force_refresh_*"))
     bot.add_handler(CommandHandler("admin_stats", admin_stats_command, has_args=False))
+    bot.add_handler(CommandHandler("fetcher_stats", fetcher_stats_command, has_args=False))
     bot.add_handler(CommandHandler("lang", lang_command, has_args=False))
     bot.add_handler(CallbackQueryHandler(set_language_cmd, pattern="set_lang_cmd_*"))
     bot.add_handler(CommandHandler("help", help_command, has_args=False))
@@ -159,8 +160,11 @@ async def main():
                 raise
     logger.info(f"Admins are: {ADMIN_CHAT_IDS}")
 
-    # Run RabbitMQ consumer
-    await rabbit.consume_messages()
+    # Run RabbitMQ consumers
+    asyncio.gather(
+        rabbit.consume_messages(),
+        rabbit.consume_service_messages(),
+    )
 
     # Start ApplicationMonitor and ReminderMonitor
     await asyncio.sleep(15)  # wait some time before running schedulers
