@@ -7,12 +7,16 @@ from collections import deque
 logger = logging.getLogger(__name__)
 
 
+# per 10 minutes
+RATE_INTERVAL_SECONDS = 600
+
+
 class MetricsCollector:
-    def __init__(self, fetcher_id, messaging, url, max_latencies=5, duration=1800):  # default is 30 minutes
+    def __init__(self, fetcher_id, messaging, url, max_latencies=5, ttl=1800):  # default is to keep metrics for 30 minutes
         self.fetcher_id = fetcher_id
         self.messaging = messaging
         self.url = url
-        self.duration = duration
+        self.ttl = ttl
         self.latency_data = deque(maxlen=max_latencies)
         self.fetch_status = {"success": deque(), "failed": deque(), "retried": deque()}
         self.request_state = {"waiting": 0, "locked": 0}
@@ -56,16 +60,16 @@ class MetricsCollector:
     def get_metrics(self):
         """Retrieve the collected metrics"""
         current_time = time.time()
-        past_time = current_time - self.duration
+        past_time = current_time - self.ttl
 
         recent_successes = len([t for t in self.fetch_status["success"] if t >= past_time])
         recent_failures = len([t for t in self.fetch_status["failed"] if t >= past_time])
         recent_retries = len([t for t in self.fetch_status["retried"] if t >= past_time])
 
         rates = {
-            "success_rate": recent_successes / (self.duration / 60),  # per minute
-            "failure_rate": recent_failures / (self.duration / 60),
-            "retry_rate": recent_retries / (self.duration / 60),
+            "success_rate": recent_successes / (self.ttl / RATE_INTERVAL_SECONDS),
+            "failure_rate": recent_failures / (self.ttl / RATE_INTERVAL_SECONDS),
+            "retry_rate": recent_retries / (self.ttl / RATE_INTERVAL_SECONDS),
         }
 
         # Remove entries older than the report period
@@ -79,6 +83,8 @@ class MetricsCollector:
             "fetch_status": {"success": recent_successes, "failed": recent_failures, "retries": recent_retries},
             "request_state": self.request_state,
             "rates": rates,
+            "rate_interval": RATE_INTERVAL_SECONDS,
+            "ttl": self.ttl,
         }
 
     async def send_metrics(self, interval=60):

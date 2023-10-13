@@ -5,6 +5,7 @@ from telegram.ext import Application, Defaults
 from telegram.constants import ParseMode
 from bot import database
 from bot import rabbitmq
+from bot import metrics
 
 # Telegram bot config
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -69,6 +70,7 @@ class Loader:
                 bot=self.bot,
                 db=self.db,
                 requeue_ttl=REQUEUE_THRESHOLD_SECONDS,
+                metrics=metrics.Metrics(),
                 loop=loop,
             )
         return self._rabbit
