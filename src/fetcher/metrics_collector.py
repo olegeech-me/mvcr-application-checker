@@ -19,6 +19,7 @@ class MetricsCollector:
         self.fetch_status = {"success": deque(), "failed": deque(), "retried": deque()}
         self.request_state = {"waiting": 0, "locked": 0}
         self.last_report_time = time.time()
+        self.start_time = time.time()
 
     async def get_website_latency(self):
         """Measure latency to the target website"""
@@ -59,6 +60,7 @@ class MetricsCollector:
         """Retrieve the collected metrics"""
         current_time = time.time()
         past_time = current_time - self.ttl
+        uptime = current_time - self.start_time
 
         recent_successes = len([t for t in self.fetch_status["success"] if t >= past_time])
         recent_failures = len([t for t in self.fetch_status["failed"] if t >= past_time])
@@ -83,6 +85,7 @@ class MetricsCollector:
             "rates": rates,
             "rate_interval": self.rate,
             "ttl": self.ttl,
+            "uptime": uptime,
         }
 
     async def send_metrics(self):
