@@ -15,7 +15,6 @@ class ApplicationProcessor:
         self.metrics_collector = metrics
         self.url = url
         self.current_message = None
-        self.waiting_refresh_requests = 0
         self.processing_apps = {"fetch": {}, "refresh": {}}
         self.lock = asyncio.Lock()
 
@@ -108,11 +107,8 @@ class ApplicationProcessor:
                 sleep_time = self._get_sleep_time()
                 logger.info("%s Sleeping for %d seconds before processing request", log_prefix, sleep_time)
 
-                # TODO clean up old lame stats
-                self.waiting_refresh_requests += 1
                 self.metrics_collector.increment_request_state("waiting")
                 await asyncio.sleep(sleep_time)
-                self.waiting_refresh_requests -= 1
                 self.metrics_collector.decrement_request_state("waiting")
 
             app_status = await self.browser.fetch(self.url, app_details)

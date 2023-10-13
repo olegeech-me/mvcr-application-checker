@@ -7,16 +7,14 @@ from collections import deque
 logger = logging.getLogger(__name__)
 
 
-# per 10 minutes
-RATE_INTERVAL_SECONDS = 600
-
-
 class MetricsCollector:
-    def __init__(self, fetcher_id, messaging, url, max_latencies=5, ttl=1800):  # default is to keep metrics for 30 minutes
+    def __init__(self, fetcher_id, messaging, url, max_latencies=5, ttl=1800, rate=600, send_interval=60):
         self.fetcher_id = fetcher_id
         self.messaging = messaging
         self.url = url
         self.ttl = ttl
+        self.rate = rate
+        self.send_interval = send_interval
         self.latency_data = deque(maxlen=max_latencies)
         self.fetch_status = {"success": deque(), "failed": deque(), "retried": deque()}
         self.request_state = {"waiting": 0, "locked": 0}
@@ -67,9 +65,9 @@ class MetricsCollector:
         recent_retries = len([t for t in self.fetch_status["retried"] if t >= past_time])
 
         rates = {
-            "success_rate": recent_successes / (self.ttl / RATE_INTERVAL_SECONDS),
-            "failure_rate": recent_failures / (self.ttl / RATE_INTERVAL_SECONDS),
-            "retry_rate": recent_retries / (self.ttl / RATE_INTERVAL_SECONDS),
+            "success_rate": recent_successes / (self.ttl / self.rate),
+            "failure_rate": recent_failures / (self.ttl / self.rate),
+            "retry_rate": recent_retries / (self.ttl / self.rate),
         }
 
         # Remove entries older than the report period
@@ -83,14 +81,14 @@ class MetricsCollector:
             "fetch_status": {"success": recent_successes, "failed": recent_failures, "retries": recent_retries},
             "request_state": self.request_state,
             "rates": rates,
-            "rate_interval": RATE_INTERVAL_SECONDS,
+            "rate_interval": self.rate,
             "ttl": self.ttl,
         }
 
-    async def send_metrics(self, interval=60):
+    async def send_metrics(self):
         while True:
-            await asyncio.sleep(interval)
+            await asyncio.sleep(self.send_interval)
             await self.get_website_latency()
             metrics = self.get_metrics()
-            logger.info(f"Sending metrics: {metrics}")
+            logger.debug(f"Sending metrics: {metrics}")
             await self.messaging.publish_service_message(metrics)

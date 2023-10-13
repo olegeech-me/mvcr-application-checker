@@ -8,7 +8,8 @@ import asyncio
 import uvloop
 
 from fetcher.config import URL, RABBIT_HOST, RABBIT_SSL_PORT, RABBIT_USER, RABBIT_PASSWORD, LOG_LEVEL
-from fetcher.config import RABBIT_SSL_CACERTFILE, RABBIT_SSL_CERTFILE, RABBIT_SSL_KEYFILE, ID
+from fetcher.config import RABBIT_SSL_CACERTFILE, RABBIT_SSL_CERTFILE, RABBIT_SSL_KEYFILE
+from fetcher.config import ID, METRICS_TTL, METRICS_RATE, METRICS_SEND_INTERVAL
 from fetcher.browser import Browser
 from fetcher.messaging import Messaging
 from fetcher.application_processor import ApplicationProcessor
@@ -42,7 +43,14 @@ async def main():
 
     browser_instance = Browser()
     messaging_instance = Messaging(RABBIT_HOST, RABBIT_USER, RABBIT_PASSWORD)
-    metrics_collector = MetricsCollector(fetcher_id=ID, messaging=messaging_instance, url=URL)
+    metrics_collector = MetricsCollector(
+        fetcher_id=ID,
+        messaging=messaging_instance,
+        url=URL,
+        ttl=METRICS_TTL,
+        rate=METRICS_RATE,
+        send_interval=METRICS_SEND_INTERVAL,
+    )
     processor = ApplicationProcessor(messaging=messaging_instance, browser=browser_instance, metrics=metrics_collector, url=URL)
 
     # Register the signal handlers
@@ -69,11 +77,8 @@ async def main():
     # Keep the loop running until a shutdown signal is received
     while not shutdown_event.is_set():
         try:
-            if processor.waiting_refresh_requests:
-                requests_list_str = ", ".join([f"{key[0]}/{key[1]}-{key[2]}" for key in processor.processing_apps["refresh"]])
-                logger.info(
-                    f"{processor.waiting_refresh_requests} refresh request(s) waiting for execution: [{requests_list_str}]"
-                )
+            metrics = metrics_collector.get_metrics()
+            logger.info(f"Fetcher metrics: {metrics}")
             await asyncio.wait_for(shutdown_event.wait(), timeout=300)
         except asyncio.TimeoutError:
             pass
