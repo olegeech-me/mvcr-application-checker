@@ -6,7 +6,7 @@ logger = logging.getLogger(__name__)
 
 class Metrics:
     def __init__(self):
-        self._bot_data = {}
+        self._bot_data = cachetools.TTLCache(maxsize=10000, ttl=300)
         self._fetcher_data = cachetools.TTLCache(maxsize=10000, ttl=300)
 
     def update_fetcher_metrics(self, fetcher_id, metrics_data):
@@ -26,3 +26,8 @@ class Metrics:
         """Reset metrics for a specific fetcher"""
         if fetcher_id in self._fetcher_data:
             del self._fetcher_data[fetcher_id]
+
+    def update_bot_metrics(self, metrics_data):
+        """Update metrics for the bot"""
+        logger.debug("Updating bot metrics")
+        self._bot_data["metrics"] = metrics_data

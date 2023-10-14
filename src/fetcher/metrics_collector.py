@@ -24,12 +24,19 @@ class MetricsCollector:
     async def get_website_latency(self):
         """Measure latency to the target website"""
         start_time = time.time()
-        async with aiohttp.ClientSession() as session:
-            async with session.get(self.url) as response:
-                latency = time.time() - start_time
-                self.record_latency(latency)
-                if response.status != 200:
-                    logger.error(f"HTTP latency checked failed: {response.status}")
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(self.url) as response:
+                    latency = time.time() - start_time
+                    self.record_latency(latency)
+                    if response.status != 200:
+                        logger.error(f"HTTP latency checked failed: {response.status}")
+        except aiohttp.client_exceptions.ClientConnectorError as e:
+            latency = time.time() - start_time
+            logger.error(f"Failed to connect to {self.url}. Error: {e}. Latency: {latency}s")
+        except Exception as e:
+            latency = time.time() - start_time
+            logger.error(f"An unexpected error occurred while connecting to {self.url}. Error: {e}. Latency: {latency}s")
 
     def record_latency(self, latency):
         """Record the latency data"""
