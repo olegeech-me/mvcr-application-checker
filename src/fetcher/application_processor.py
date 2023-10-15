@@ -132,7 +132,8 @@ class ApplicationProcessor:
 
         except Exception as e:
             logger.error("%s Error processing request: %s", log_prefix, e)
-            self.metrics_collector.record_fetch_status("failed")
+            queue_name = "ApplicationFetchQueue" if request_type == "fetch" else "RefreshStatusQueue"
+            await self._manage_failed_request(message, queue_name)
         finally:
             await self.end_processing(request_type, number, type_, year)
 
