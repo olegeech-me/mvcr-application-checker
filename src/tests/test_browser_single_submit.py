@@ -11,6 +11,7 @@ from selenium.common.exceptions import (
 import random
 import fake_useragent
 import logging
+import pyautogui
 
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -26,6 +27,34 @@ test_data = [
 
 
 class TestMVCR:
+
+    def smooth_move_mouse(x, y, duration=1):
+        """Move the mouse to a point smoothly over a specified duration"""
+        # Get the current mouse position
+        start_x, start_y = pyautogui.position()
+        
+        # Calculate the distance to move in both the x and y directions
+        distance_x = x - start_x
+        distance_y = y - start_y
+        
+        # Define the number of "steps" or "segments" the movement will be broken into
+        steps = random.randint(20, 30)  # you can adjust these numbers
+        sleep_per_step = duration / steps
+
+        for i in range(steps):
+            # Calculate step size for this iteration
+            step_x = start_x + (distance_x * (i/steps)) + random.uniform(-5, 5)  # added randomness
+            step_y = start_y + (distance_y * (i/steps)) + random.uniform(-5, 5)  # added randomness
+            
+            # Move the mouse to the new position
+            pyautogui.moveTo(step_x, step_y, duration=sleep_per_step)
+
+        # Ensure the final position is the target position
+        pyautogui.moveTo(x, y, duration=sleep_per_step)
+
+    # Test the function
+    smooth_move_mouse(500, 500, 2)  # Move the mouse to position (500, 500) over 2 seconds
+
     def random_sleep(self, min_seconds=0.5, max_seconds=1.5):
         """Sleep for a random amount of time"""
         time.sleep(random.uniform(min_seconds, max_seconds))

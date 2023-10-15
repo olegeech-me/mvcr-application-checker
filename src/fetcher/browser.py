@@ -87,8 +87,10 @@ class Browser:
 
     def set_random_resolution(self):
         """Pick one of popular resolutions"""
-        resolutions = [(1936, 1056), (1920, 1080), (1366, 768), (1440, 900), (1420, 1080), (1600, 900)]
-        chosen_resolution = random.choice(resolutions)
+        #resolutions = [(1936, 1056), (1920, 1080), (1366, 768), (1440, 900), (1420, 1080), (1600, 900)]
+        #chosen_resolution = random.choice(resolutions)
+        # olegeech: for now, just use the most popular resolution
+        chosen_resolution = (1420, 1080)
         self._log(logging.INFO, "Setting resolution to %s", chosen_resolution)
         return chosen_resolution
 
