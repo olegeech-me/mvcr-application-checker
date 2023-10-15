@@ -5,6 +5,7 @@ from telegram.ext import Application, Defaults
 from telegram.constants import ParseMode
 from bot import database
 from bot import rabbitmq
+from bot import metrics
 
 # Telegram bot config
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -21,6 +22,8 @@ DB_PORT = os.getenv("DB_PORT", 5432)
 RABBIT_HOST = os.getenv("RABBIT_HOST", "localhost")
 RABBIT_USER = os.getenv("RABBIT_USER", "bunny_admin")
 RABBIT_PASSWORD = os.getenv("RABBIT_PASSWORD", "password")
+# Time in seconds before an application request can be requeued
+REQUEUE_THRESHOLD_SECONDS = int(os.getenv("REQUEUE_THRESHOLD_SECONDS", 3600))
 # Application monitor config
 REFRESH_PERIOD = int(os.getenv("REFRESH_PERIOD", 3600))
 SCHEDULER_PERIOD = int(os.getenv("SCHEDULER_PERIOD", 300))
@@ -66,6 +69,8 @@ class Loader:
                 password=RABBIT_PASSWORD,
                 bot=self.bot,
                 db=self.db,
+                requeue_ttl=REQUEUE_THRESHOLD_SECONDS,
+                metrics=metrics.Metrics(),
                 loop=loop,
             )
         return self._rabbit

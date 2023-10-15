@@ -8,5 +8,6 @@
   "help": "Get help with commands",
   "reminder": "Set reminder",
   "admin_stats": "Display bot statistics",
+  "fetcher_stats": "Display fetchers statistics",
   "admin_broadcast": "Send message to all users"
 }

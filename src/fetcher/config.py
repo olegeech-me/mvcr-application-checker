@@ -27,3 +27,8 @@ RABBIT_SSL_PORT = int(os.getenv("RABBIT_SSL_PORT", 5671))
 RABBIT_SSL_CACERTFILE = os.getenv("RABBIT_SSL_CACERTFILE", "")
 RABBIT_SSL_CERTFILE = os.getenv("RABBIT_SSL_CERTFILE", "")
 RABBIT_SSL_KEYFILE = os.getenv("RABBIT_SSL_KEYFILE", "")
+# Metrics settings
+ID = os.getenv("ID", "fetcher")
+METRICS_TTL = int(os.getenv("METRICS_TTL", 1800))
+METRICS_RATE = int(os.getenv("METRICS_RATE", 600))
+METRICS_SEND_INTERVAL = int(os.getenv("METRICS_SEND_INTERVAL", 30))

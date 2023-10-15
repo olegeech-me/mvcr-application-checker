@@ -13,7 +13,7 @@ SUBSCRIPTIONS_LIMIT = 5
 BUTTON_WAIT_SECONDS = 1
 FORCE_FETCH_LIMIT_SECONDS = 86400
 COMMANDS_LIST = ["status", "subscribe", "unsubscribe", "force_refresh", "lang", "start", "help", "reminder"]
-ADMIN_COMMANDS = ["admin_stats", "admin_broadcast"]
+ADMIN_COMMANDS = ["admin_stats", "fetcher_stats", "admin_broadcast"]
 DEFAULT_LANGUAGE = "EN"
 LANGUAGE_LIST = ["EN 🏴󠁧󠁢󠁥󠁮󠁧󠁿|🇺🇸", "RU 🇷🇺", "CZ 🇨🇿", "UA 🇺🇦"]
 IETF_LANGUAGE_MAP = {"en": "EN", "ru": "RU", "cs": "CZ", "uk": "UA"}
@@ -438,7 +438,7 @@ async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     Subscribes user for application status updates.
 
     If the command has no arguments, then an interactive dialog is started.
-    [TBD] If an argument is passed then an attempt to parse it will be made and upon success it will be treated as
+    If an argument is passed then an attempt to parse it will be made and upon success it will be treated as
     application number.
     """
     logger.info(f"💻 Received /subscribe command from {user_info(update)}")
@@ -715,6 +715,41 @@ async def admin_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         f"📑 Total subscriptions: <b>{subscriptions_count}</b>\n"
         f"⏰ Total reminders set up: <b>{reminders_count}</b>\n"
     )
+
+
+# handler for /fetcher_stats
+async def fetcher_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Return fetcher statistics."""
+    logging.info(f"💻 Received /fetcher_stats command from {user_info(update)}")
+    if not _is_admin(update.effective_chat.id):
+        await update.message.reply_text("Unauthorized. This command is only for admins.")
+        return
+
+    metrics = await rabbit.metrics.get_all_fetcher_metrics()
+    if metrics:
+        for fetcher_id, data in metrics.items():
+            interval = int(data["rate_interval"] / 60)
+            ttl = int(data["ttl"] / 60)
+            uptime_minutes = int(data["uptime"] / 60)
+            uptime_hours = uptime_minutes // 60
+            uptime_minutes %= 60
+            fetcher_stats = (
+                f"🤖 Fetcher ID: <b>{fetcher_id}</b>\n"
+                f"🕐 Average latency to frs.gov.cz: <b>{data['average_latency']:.2f}</b> seconds\n"
+                f"✅ Successes (last {ttl} mins): <b>{data['fetch_status']['success']}</b>\n"
+                f"❌ Failures (last {ttl} mins): <b>{data['fetch_status']['failed']}</b>\n"
+                f"🔄 Retries (last {ttl} mins): <b>{data['fetch_status']['retries']}</b>\n"
+                f"📤 Requests state - Waiting: <b>{data['request_state']['waiting']}</b> |"
+                f" Locked: <b>{data['request_state']['locked']}</b>\n"
+                f"📊 Success rate: <b>{data['rates']['success_rate']:.2f}</b>/{interval} min(s)\n"
+                f"📊 Failure rate: <b>{data['rates']['failure_rate']:.2f}</b>/{interval} min(s)\n"
+                f"📊 Retry rate: <b>{data['rates']['retry_rate']:.2f}</b>/{interval} min(s)\n"
+                f"⏱ Uptime: <b>{uptime_hours}h {uptime_minutes}m</b>\n"
+            )
+
+            await update.message.reply_text(fetcher_stats)
+    else:
+        await update.message.reply_text("No fetcher metrics available for now.")
 
 
 # Handler for /admin_broadcast
