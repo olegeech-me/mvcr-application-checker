@@ -5,3 +5,7 @@ uvloop==0.17.0
 selenium==3.141.0
 pyvirtualdisplay==2.2
 aiohttp==3.8.6
+#for tests
+pytest
+pytest-asyncio
+pytest-mock
