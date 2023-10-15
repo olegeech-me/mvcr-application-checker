@@ -91,7 +91,7 @@ class TestMVCR:
 
         self.set_random_resolution()
         self.driver.get("https://frs.gov.cz/informace-o-stavu-rizeni/")
-        self.load_cookies("mvcr_cookies.json")
+        #self.load_cookies("mvcr_cookies.json")
         WebDriverWait(self.driver, 10).until(
             lambda x: x.find_element(By.CLASS_NAME, "wrapper__form"),
             message="Body didn't load in time",
