@@ -8,6 +8,9 @@ import logging
 import asyncio
 import random
 import os
+import time
+import json
+import hashlib
 from pyvirtualdisplay import Display
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -19,6 +22,7 @@ from selenium.common.exceptions import (
     TimeoutException,
     NoSuchElementException,
 )
+from selenium.webdriver.common.action_chains import ActionChains
 import fake_useragent
 
 from fetcher.config import PAGE_LOAD_LIMIT_SECONDS, CAPTCHA_WAIT_SECONDS, OUTPUT_DIR, RETRY_INTERVAL
@@ -36,6 +40,7 @@ class Browser:
     def __init__(self, retries=3):
         self.display = None
         self.browser = None
+        self.useragent = None
         self.retries = retries
         self.app_details = {}
 
@@ -44,29 +49,53 @@ class Browser:
         msg = f"[{self.app_details['number']}] {message}"
         logger.log(log_level, msg, *args)
 
-    def _get_useragent(self):
-        ua = fake_useragent.UserAgent(browsers=["firefox"])
-        return ua.random
+    def _set_useragent(self):
+        useragent = fake_useragent.UserAgent(browsers=["firefox"]).random
+        self._log(logging.INFO, "User-Agent for this session will be %s", useragent)
+        self.useragent = useragent
+
+    def _get_ua_hash(self):
+        """Return a hash of the user-agent string"""
+        return hashlib.sha256(self.useragent.encode("utf-8")).hexdigest()
+
+    def save_cookies(self):
+        """Save cookies to a file"""
+        cookies = self.browser.get_cookies()
+        if not os.path.exists("cookies"):
+            os.makedirs("cookies")
+        ua_hash = self._get_ua_hash()
+        with open(f'cookies/{ua_hash}.json', 'w') as f:
+            json.dump(cookies, f)
+
+    def load_cookies(self):
+        """Load cookies from a file and add them to the Selenium browser"""
+        ua_hash = self._get_ua_hash()
+        cookie_file = f'cookies/{ua_hash}.json'
+        if os.path.exists(cookie_file):
+            self._log(logging.INFO, "Found cookies for the current User-Agent, loading from %s", cookie_file)
+            with open(cookie_file, 'r') as f:
+                cookies = json.load(f)
+                for cookie in cookies:
+                    self.browser.add_cookie(cookie)
 
     def _init_browser(self):
         # set user-agent
-        useragent = self._get_useragent()
-        self._log(logging.INFO, "User-Agent for this request will be %s", useragent)
+        self._set_useragent()
         # configure display & options
-        self.display = Display(visible=0, size=(1420, 1080))
+        resolution = self.set_random_resolution()
+        self.display = Display(visible=0, size=resolution)
         self.display.start()
         self._log(logging.INFO, "Initialized virtual display")
         options = webdriver.firefox.options.Options()
         options.set_preference("intl.accept_languages", "cs-CZ")
         options.set_preference("http.response.timeout", PAGE_LOAD_LIMIT_SECONDS)
-        options.set_preference("general.useragent.override", useragent)
+        options.set_preference("general.useragent.override", self.useragent)
         options.set_preference("dom.webdriver.enabled", False)
         options.set_preference("useAutomationExtension", False)
         options.headless = False
         self.browser = webdriver.Firefox(options=options)
         self.browser.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-        # emulate some user actions tbd
-        # self.BROWSER.maximize_window()
+        self.load_cookies()
 
     def _get_browser(self, force=False):
         if not force and self.browser:
@@ -74,7 +103,24 @@ class Browser:
         self._init_browser()
         return self.browser
 
-    # All the other browser related functions, for example: submit_form
+    def random_sleep(self, min_seconds=0.5, max_seconds=1.5):
+        """Sleep for a random amount of time"""
+        time.sleep(random.uniform(min_seconds, max_seconds))
+
+    def type_with_delay(self, element, text, min_delay=0.05, max_delay=0.15):
+        """Type text into an element one character at a time with a delay"""
+        for char in str(text):
+            element.send_keys(char)
+            self.random_sleep(min_delay, max_delay)
+
+    def set_random_resolution(self):
+        """Pick one of popular resolutions"""
+        # resolutions = [(1936, 1056), (1920, 1080), (1366, 768), (1440, 900), (1420, 1080), (1600, 900)]
+        # chosen_resolution = random.choice(resolutions)
+        # olegeech: for now, just use the most popular resolution
+        chosen_resolution = (1420, 1080)
+        self._log(logging.INFO, "Setting resolution to %s", chosen_resolution)
+        return chosen_resolution
 
     def _submit_form(self, app_details):
         """Submit application details into the form"""
@@ -91,17 +137,19 @@ class Browser:
             cookies.click()
             self._log(logging.INFO, "Cookies button found, clicked.")
         except ElementClickInterceptedException:
-            self._log(logging.DEBUG, "Cookies button is not active")
+            self._log(logging.INFO, "Cookies button is not active")
 
         # Locate and fill out the application number field by its placeholder
         application_number_field = self.browser.find_element(By.XPATH, "//input[@placeholder='12345']")
+        self.random_sleep()
         application_number_field.clear()
-        application_number_field.send_keys(app_details["number"])
+        self.type_with_delay(application_number_field, app_details["number"])
 
         # Locate and fill out the application type field by its placeholder
         application_suffix_field = self.browser.find_element(By.XPATH, "//input[@placeholder='XX']")
         application_suffix_field.clear()
-        application_suffix_field.send_keys(app_details["suffix"])
+        self.random_sleep()
+        self.type_with_delay(application_suffix_field, app_details["suffix"])
 
         # Trigger type dropdown menu to appear
         menu1 = self.browser.find_element_by_xpath(
@@ -110,24 +158,31 @@ class Browser:
         menu1.find_element_by_xpath("//div[contains(@class, 'react-select__control')]").click()
 
         # Locate and select the type dropdown by placeholder
+        self.random_sleep()
         scroll1 = self.browser.find_element_by_xpath("//div[contains(@class, 'react-select__menu')]")
         scroll1_option = scroll1.find_element_by_xpath(f".//div[text()='{app_details['type']}']")
         self.browser.execute_script("arguments[0].click();", scroll1_option)
 
         # Trigger year dropdown menu to appear
+        self.random_sleep()
         menu2 = self.browser.find_element_by_xpath(
             "//div[contains(@class, 'react-select') and ancestor::div[contains(@style, 'width: 100px;')]]"
         )
         menu2.find_element_by_xpath(".//div[contains(@class, 'react-select__control')]").click()
 
         # Locate and select the year dropdown by placeholder
+        self.random_sleep()
         scroll2 = menu2.find_element_by_xpath(".//div[contains(@class, 'react-select__menu')]")
         scroll2_option = scroll2.find_element_by_xpath(f".//div[text()='{app_details['year']}']")
         self.browser.execute_script("arguments[0].click();", scroll2_option)
 
         # Locate the submit button and click it to submit the form
         submit_button = self.browser.find_element(By.CSS_SELECTOR, 'button[type="submit"]')
-        submit_button.click()
+        self.random_sleep()
+        self.browser.execute_script("arguments[0].scrollIntoView();", submit_button)
+        actions = ActionChains(self.browser)
+        actions.move_to_element(submit_button).perform()
+        self.browser.execute_script("arguments[0].click();", submit_button)
 
     async def _do_fetch_with_browser(self, url, app_details):
         def _has_recaptcha(browser):
@@ -135,7 +190,11 @@ class Browser:
             #    By.CSS_SELECTOR, "iframe[name^='a-'][src^='https://www.google.com/recaptcha/api2/anchor?']"
             # )
             # return bool(captcha)
-            # olegeech: never caught captcha for now, so this is just a stub for now
+            #
+            # olegeech: MVCR website uses invisible recaptcha, so we can't detect it.
+            # It can only be detected by the fact there is no results after submitting the form.
+            # Also the POST request is being denyed with the statement "Recaptcha verification failed"
+            # It's not possible to easily see the POST reply in Selenium, so we just check for the results.
             return False
 
         def _save_page_source(browser):
@@ -185,6 +244,7 @@ class Browser:
             if application_status:
                 application_status_text = application_status.get_attribute("innerHTML")
                 self._log(logging.INFO, "Application status fetched")
+                self.save_cookies()
             else:
                 raise CustomMaxRetryError(url=url, msg="Couldn't fetch application status")
 
