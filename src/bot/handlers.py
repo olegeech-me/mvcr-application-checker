@@ -438,7 +438,7 @@ async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     Subscribes user for application status updates.
 
     If the command has no arguments, then an interactive dialog is started.
-    [TBD] If an argument is passed then an attempt to parse it will be made and upon success it will be treated as
+    If an argument is passed then an attempt to parse it will be made and upon success it will be treated as
     application number.
     """
     logger.info(f"💻 Received /subscribe command from {user_info(update)}")
