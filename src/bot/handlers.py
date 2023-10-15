@@ -725,7 +725,7 @@ async def fetcher_stats_command(update: Update, context: ContextTypes.DEFAULT_TY
         await update.message.reply_text("Unauthorized. This command is only for admins.")
         return
 
-    metrics = rabbit.metrics.get_all_fetcher_metrics()
+    metrics = await rabbit.metrics.get_all_fetcher_metrics()
     if metrics:
         for fetcher_id, data in metrics.items():
             interval = int(data["rate_interval"] / 60)
