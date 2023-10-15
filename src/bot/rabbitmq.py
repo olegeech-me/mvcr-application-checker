@@ -195,7 +195,7 @@ class RabbitMQ:
             logger.debug(f"Received metrics message: {msg_data}")
             fetcher_id = msg_data.get("fetcher_id", None)
             if fetcher_id:
-                self.metrics.update_fetcher_metrics(fetcher_id, msg_data)
+                await self.metrics.update_fetcher_metrics(fetcher_id, msg_data)
             else:
                 logger.error(f"Couldn't find fetcher ID in the service message: {msg_data}")
 
