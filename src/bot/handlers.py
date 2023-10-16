@@ -227,7 +227,7 @@ def _parse_application_number_full(num_str: str):
     This function returns a tuple (number, suffix, type, year) in case of success or None otherwise.
     """
     num_str = num_str.replace(" ", "").upper()
-    num_regex = r"^(OAM-){0,1}0{0,5}([1-9]{1}[0-9]{0,4})(-[0-9]+){0,1}/([A-Z]{2})-([0-9]{4})$"
+    num_regex = r"^(OAM-){0,1}0{0,5}([1-9]{1}[0-9]{0,4})(-[0-9]{1,2}){0,1}/([A-Z]{2})-([0-9]{4})$"
     matched = re.match(num_regex, num_str)
     if not matched:
         return
@@ -246,7 +246,7 @@ def _parse_application_number(num_str: str):
     This function returns a tuple (number, suffix) in case of success or None otherwise.
     """
     num_str = num_str.replace(" ", "").upper()
-    num_regex = r"^(OAM-){0,1}0{0,5}([1-9]{1}[0-9]{0,4})(-[0-9]+){0,1}$"
+    num_regex = r"^(OAM-){0,1}0{0,5}([1-9]{1}[0-9]{0,4})(-[0-9]{1,2}){0,1}$"
     matched = re.match(num_regex, num_str)
     if not matched:
         return

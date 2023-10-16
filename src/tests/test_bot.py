@@ -33,12 +33,16 @@ from bot.handlers import (
     "num_str, app_num, app_suffix, app_type, app_year",
     [
         ("OAM-4242/TP-2042", "4242", "0", "TP", "2042"),
+        ("12345/TP-2023", "12345", "0", "TP", "2023"),
         ("4242-5/DO-2020", "4242", "5", "DO", "2020"),
         ("oAM-12345-9/MK-2023", "12345", "9", "MK", "2023"),
         ("BAD-NUMBER/MK-2023", None, None, None, None),
         ("oam-4242-6/MK-1999", None, None, None, None),
         ("oam-4242-6/NT-2021", None, None, None, None),
         ("OAM-00004-1/MK-2020", "4", "1", "MK", "2020"),
+        ("OAM-00004-99/MK-2020", "4", "99", "MK", "2020"),
+        # suffix too long
+        ("oAM-12345-911/MK-2023", None, None, None, None),
     ],
 )
 def test__parse_application_number_full(num_str, app_num, app_suffix, app_type, app_year):
@@ -53,10 +57,14 @@ def test__parse_application_number_full(num_str, app_num, app_suffix, app_type, 
     "num_str, app_num, app_suffix",
     [
         ("OAM-4242/TP-2042", "4242", "0"),
+        ("12345/TP-2023", "12345", "0"),
         ("4242-5/DO-2020", "4242", "5"),
         ("oAM-12345-9/MK-2023", "12345", "9"),
         ("BAD-NUMBER/MK-2023", None, None),
         ("OAM-00004-1", "4", "1"),
+        ("OAM-00004-99", "4", "99"),
+        # suffix too long
+        ("OAM-00004-108", None, None),
     ],
 )
 def test__parse_application_number(num_str, app_num, app_suffix):
