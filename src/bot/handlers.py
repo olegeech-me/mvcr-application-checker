@@ -19,7 +19,6 @@ LANGUAGE_LIST = ["EN 🏴󠁧󠁢󠁥󠁮󠁧󠁿|🇺🇸", "RU 🇷🇺", "CZ 
 IETF_LANGUAGE_MAP = {"en": "EN", "ru": "RU", "cs": "CZ", "uk": "UA"}
 ALLOWED_TYPES = ["CD", "DO", "DP", "DV", "MK", "PP", "ST", "TP", "VP", "ZK", "ZM"]
 POPULAR_ALLOWED_TYPES = ["DP", "TP", "ZM", "ST", "MK", "DV"]
-ALLOWED_YEARS = [y for y in range(datetime.datetime.today().year - 3, datetime.datetime.today().year + 1)]
 
 
 START, NUMBER, TYPE, YEAR, VALIDATE = range(5)
@@ -32,6 +31,11 @@ logger = logging.getLogger(__name__)
 # Get instances of database and rabbitmq (lazy init)
 db = loader.db
 rabbit = loader.rabbit
+
+def get_allowed_years():
+    """Compute allowed years to select"""
+    current_year = datetime.datetime.today().year
+    return [y for y in range(current_year - 3, current_year + 1)]
 
 
 async def _set_menu_commands(update: Update, context: ContextTypes.DEFAULT_TYPE, lang="EN"):
@@ -232,7 +236,7 @@ def _parse_application_number_full(num_str: str):
     if not matched:
         return
     # check that type and number are among allowed
-    if matched[4] not in ALLOWED_TYPES or int(matched[5]) not in ALLOWED_YEARS:
+    if matched[4] not in ALLOWED_TYPES or int(matched[5]) not in get_allowed_years():
         logger.info("Application type %s or year %s are unsupported", matched[4], matched[5])
         return
     return matched[2], (matched[3] or "0").lstrip("-"), matched[4], matched[5]
@@ -316,7 +320,7 @@ async def application_dialog_type(update: Update, context: ContextTypes.DEFAULT_
         # XXX FIXME(fernflower) Later switch to i18n message
         await query.edit_message_text(f"Unsupported application type {app_type}")
     # Show keyboard for application year selection
-    keyboard = [[InlineKeyboardButton(str(year), callback_data=f"application_dialog_year_{year}") for year in ALLOWED_YEARS]]
+    keyboard = [[InlineKeyboardButton(str(year), callback_data=f"application_dialog_year_{year}") for year in get_allowed_years()]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(message_texts[lang]["dialog_year"], reply_markup=reply_markup)
     return YEAR
