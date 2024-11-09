@@ -27,7 +27,7 @@ from bot.handlers import (
 )
 
 
-@patch("bot.handlers.ALLOWED_YEARS", [2020, 2021, 2022, 2023, 2042])
+@patch("bot.handlers.get_allowed_years", return_value=[2020, 2021, 2022, 2023, 2042])
 @patch("bot.handlers.ALLOWED_TYPES", ["MK", "DO", "TP"])
 @pytest.mark.parametrize(
     "num_str, app_num, app_suffix, app_type, app_year",
