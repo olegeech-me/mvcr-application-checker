@@ -11,6 +11,7 @@ import os
 import time
 import json
 import hashlib
+from bs4 import BeautifulSoup
 from pyvirtualdisplay import Display
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -77,6 +78,59 @@ class Browser:
                 cookies = json.load(f)
                 for cookie in cookies:
                     self.browser.add_cookie(cookie)
+
+    def clean_html(self, html_content):
+        """Filter out unsupported TG html tags"""
+        # https://core.telegram.org/bots/api#html-style
+        allowed_tags = {
+            'b': [],
+            'strong': [],
+            'i': [],
+            'em': [],
+            'u': [],
+            'ins': [],
+            's': [],
+            'strike': [],
+            'del': [],
+            'span': ['class'],
+            'tg-spoiler': [],
+            'a': ['href'],
+            'code': ['class'],
+            'pre': [],
+            'blockquote': ['expandable'],
+            'tg-emoji': ['emoji-id'],
+        }
+
+        soup = BeautifulSoup(html_content, 'html.parser')
+
+        # Replace <br> tags with newline characters
+        for br in soup.find_all('br'):
+            br.replace_with('\n')
+
+        # Remove unwanted tags and attributes
+        for tag in soup.find_all():
+            if tag.name not in allowed_tags:
+                tag.unwrap()
+            else:
+                # Clean attributes
+                allowed_attrs = allowed_tags[tag.name]
+                attrs = dict(tag.attrs)
+                for attr in attrs:
+                    if attr not in allowed_attrs:
+                        del tag.attrs[attr]
+                # Additional check for <span class="tg-spoiler">
+                if tag.name == 'span':
+                    if 'class' in tag.attrs and 'tg-spoiler' in tag['class']:
+                        continue
+                    else:
+                        tag.unwrap()
+                # Additional check for <code class="language-...">
+                if tag.name == 'code' and 'class' in tag.attrs:
+                    classes = tag['class']
+                    if not any(cls.startswith('language-') for cls in classes):
+                        del tag.attrs['class']
+
+        return str(soup)
 
     def _init_browser(self):
         # set user-agent
@@ -305,6 +359,8 @@ class Browser:
                 application_status_text = application_status.get_attribute("innerHTML")
                 self._log(logging.INFO, "Application status fetched")
                 self.save_cookies()
+                # Filter out / replace unsupported HTML tags
+                application_status_text = self.clean_html(application_status_text)
             else:
                 raise CustomMaxRetryError(url=url, msg="Couldn't fetch application status")
 

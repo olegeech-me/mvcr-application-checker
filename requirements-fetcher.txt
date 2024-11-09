@@ -1,3 +1,4 @@
+beautifulsoup4==4.12.3
 fake-useragent==1.2.1
 aio-pika==9.2.2
 urllib3==1.26.8
