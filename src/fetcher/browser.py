@@ -140,41 +140,101 @@ class Browser:
             self._log(logging.INFO, "Cookies button is not active")
 
         # Locate and fill out the application number field by its placeholder
-        application_number_field = self.browser.find_element(By.XPATH, "//input[@placeholder='12345']")
+        application_number_field = self.browser.find_element(By.NAME, "proceedings.referenceNumber")
         self.random_sleep()
         application_number_field.clear()
         self.type_with_delay(application_number_field, app_details["number"])
 
         # Locate and fill out the application type field by its placeholder
-        application_suffix_field = self.browser.find_element(By.XPATH, "//input[@placeholder='XX']")
+        application_suffix_field = self.browser.find_element(By.NAME, "proceedings.additionalSuffix")
         application_suffix_field.clear()
         self.random_sleep()
         self.type_with_delay(application_suffix_field, app_details["suffix"])
 
-        # Trigger type dropdown menu to appear
-        menu1 = self.browser.find_element_by_xpath(
-            "//div[contains(@class, 'react-select') and ancestor::div[contains(@style, 'width: 140px;')]]"
-        )
-        menu1.find_element_by_xpath("//div[contains(@class, 'react-select__control')]").click()
+        # Select the "Type" from the dropdown
+        try:
+            # Locate the select wrapper containing 'proceedings.category'
+            type_select_wrapper = self.browser.find_element(
+                By.XPATH,
+                "//div[contains(@class, 'select__wrapper') and .//input[@name='proceedings.category']]"
+            )
+            # Find the 'react-select__control' inside the wrapper
+            type_dropdown = type_select_wrapper.find_element(
+                By.XPATH,
+                ".//div[contains(@class, 'react-select__control')]"
+            )
+            self.random_sleep()
+            type_dropdown.click()
 
-        # Locate and select the type dropdown by placeholder
-        self.random_sleep()
-        scroll1 = self.browser.find_element_by_xpath("//div[contains(@class, 'react-select__menu')]")
-        scroll1_option = scroll1.find_element_by_xpath(f".//div[text()='{app_details['type']}']")
-        self.browser.execute_script("arguments[0].click();", scroll1_option)
+            # Wait for the options to be present
+            WebDriverWait(self.browser, 3).until(
+                EC.presence_of_element_located((By.CLASS_NAME, "react-select__menu"))
+            )
 
-        # Trigger year dropdown menu to appear
-        self.random_sleep()
-        menu2 = self.browser.find_element_by_xpath(
-            "//div[contains(@class, 'react-select') and ancestor::div[contains(@style, 'width: 100px;')]]"
-        )
-        menu2.find_element_by_xpath(".//div[contains(@class, 'react-select__control')]").click()
+            # Adjusted XPath to locate the option correctly
+            type_option = self.browser.find_element(
+                By.XPATH,
+                f"//div[contains(@class, 'react-select__option') and .//div[normalize-space(text())='{app_details['type']}']]"
+            )
 
-        # Locate and select the year dropdown by placeholder
-        self.random_sleep()
-        scroll2 = menu2.find_element_by_xpath(".//div[contains(@class, 'react-select__menu')]")
-        scroll2_option = scroll2.find_element_by_xpath(f".//div[text()='{app_details['year']}']")
-        self.browser.execute_script("arguments[0].click();", scroll2_option)
+            # Scroll the option into view and click it using JavaScript
+            self.browser.execute_script("arguments[0].scrollIntoView(true);", type_option)
+            self.random_sleep()
+            self.browser.execute_script("arguments[0].click();", type_option)
+
+        except (WebDriverException, CustomMaxRetryError, TimeoutException) as e:
+            self._log(logging.ERROR, "Error waiting for Type list to appear")
+            self.close()
+        except Exception as e:
+            self._log(logging.ERROR, "Error selecting 'Type': %s", e)
+            self.close()
+            raise
+
+        # Select the "Year" from the dropdown
+        try:
+            # Locate the select wrapper containing 'proceedings.year'
+            year_select_wrapper = self.browser.find_element(
+                By.XPATH,
+                "//div[contains(@class, 'select__wrapper') and .//input[@name='proceedings.year']]"
+            )
+            # Find the 'react-select__control' inside the wrapper
+            year_dropdown = year_select_wrapper.find_element(
+                By.XPATH,
+                ".//div[contains(@class, 'react-select__control')]"
+            )
+            self.random_sleep()
+
+            # Scroll the year_dropdown into view before clicking it
+            self.browser.execute_script("arguments[0].scrollIntoView({block: 'center'});", year_dropdown)
+            self.random_sleep()
+            # Click the year_dropdown to open the menu
+            year_dropdown.click()
+
+            # Wait for the menu to be present
+            WebDriverWait(self.browser, 3).until(
+                EC.presence_of_element_located((By.CLASS_NAME, "react-select__menu"))
+            )
+
+            # Locate the desired option
+            year_option = self.browser.find_element(
+                By.XPATH,
+                f"//div[contains(@class, 'react-select__option') and .//div[normalize-space(text())='{app_details['year']}']]"
+            )
+
+            # Scroll the year_option into view before clicking it
+            self.browser.execute_script("arguments[0].scrollIntoView({block: 'center'});", year_option)
+            self.random_sleep()
+            # Click the year_option
+            self.browser.execute_script("arguments[0].click();", year_option)
+
+
+        except (WebDriverException, CustomMaxRetryError, TimeoutException):
+            self._log(logging.ERROR, "Error waiting for year list to appear")
+            self.close()
+        except Exception as e:
+            self._log(logging.ERROR, "Error selecting 'Year': %s", e)
+            self.close()
+            raise
 
         # Locate the submit button and click it to submit the form
         submit_button = self.browser.find_element(By.CSS_SELECTOR, 'button[type="submit"]')
