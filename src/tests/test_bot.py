@@ -26,9 +26,8 @@ from bot.handlers import (
     set_language_startup,
 )
 
-
+@patch("bot.handlers.ALLOWED_TYPES", new=["MK", "DO", "TP"])
 @patch("bot.handlers.get_allowed_years", return_value=[2020, 2021, 2022, 2023, 2042])
-@patch("bot.handlers.ALLOWED_TYPES", ["MK", "DO", "TP"])
 @pytest.mark.parametrize(
     "num_str, app_num, app_suffix, app_type, app_year",
     [
@@ -45,7 +44,7 @@ from bot.handlers import (
         ("oAM-12345-911/MK-2023", None, None, None, None),
     ],
 )
-def test__parse_application_number_full(num_str, app_num, app_suffix, app_type, app_year):
+def test__parse_application_number_full(mock_get_allowed_years, num_str, app_num, app_suffix, app_type, app_year):
     res = _parse_application_number_full(num_str)
     if res:
         assert res == (app_num, app_suffix, app_type, app_year)
