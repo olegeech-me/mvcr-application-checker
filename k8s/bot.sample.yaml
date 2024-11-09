@@ -1,0 +1,310 @@
+# ConfigMap for Bot
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: telegram-bot-config
+data:
+  ADMIN_CHAT_IDS: "12345, 678910"
+  LOG_LEVEL: "INFO"
+  DB_NAME: "AppTrackerDB"
+  DB_USER: "postgres"
+  DB_HOST: "apptrackerdb"
+  DB_PORT: "5432"
+  RABBIT_HOST: "rabbitmq"
+  RABBIT_USER: "bunny_admin"
+  REFRESH_PERIOD: "3600"
+  SCHEDULER_PERIOD: "300"
+  REQUEUE_THRESHOLD_SECONDS: "3600"
+---
+# Secret for Bot
+apiVersion: v1
+kind: Secret
+metadata:
+  name: telegram-bot-secret
+type: Opaque
+stringData:
+  TELEGRAM_BOT_TOKEN: "12345:abcdefg"
+  DB_PASSWORD: "postgres"
+  RABBIT_PASSWORD: "password"
+---
+# ConfigMap for PostgreSQL Initialization Scripts
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-scripts
+data:
+  init.sql: |
+    CREATE TABLE IF NOT EXISTS Users (
+        user_id SERIAL PRIMARY KEY,
+        chat_id BIGINT NOT NULL UNIQUE,
+        username VARCHAR(255),
+        first_name VARCHAR(255) NOT NULL,
+        last_name VARCHAR(255),
+        language VARCHAR(255) NOT NULL DEFAULT 'EN'
+    );
+
+    CREATE TABLE IF NOT EXISTS Applications (
+        application_id SERIAL PRIMARY KEY,
+        user_id INT REFERENCES Users(user_id),
+        application_number VARCHAR(255) NOT NULL,
+        application_suffix VARCHAR(255),
+        application_type VARCHAR(255) NOT NULL,
+        application_year INT NOT NULL,
+        current_status VARCHAR(1000) DEFAULT 'Unknown',
+        last_updated TIMESTAMP,
+        is_resolved BOOLEAN NOT NULL DEFAULT FALSE
+    );
+
+    CREATE TABLE IF NOT EXISTS Reminders (
+        reminder_id SERIAL PRIMARY KEY,
+        user_id INT REFERENCES Users(user_id),
+        application_id INT REFERENCES Applications(application_id) ON DELETE CASCADE,
+        reminder_time TIME NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+---
+# PersistentVolumeClaim for PostgreSQL
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+# Deployment for PostgreSQL
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  labels:
+    app: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:15.4
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: telegram-bot-config
+                  key: DB_NAME
+            - name: POSTGRES_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: telegram-bot-config
+                  key: DB_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: telegram-bot-secret
+                  key: DB_PASSWORD
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "500m"
+              memory: "1Gi"
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+            - name: db-init-scripts
+              mountPath: /docker-entrypoint-initdb.d
+  volumes:
+    - name: postgres-data
+      persistentVolumeClaim:
+        claimName: postgres-pvc
+    - name: db-init-scripts
+      configMap:
+        name: postgres-init-scripts
+---
+# Service for PostgreSQL
+apiVersion: v1
+kind: Service
+metadata:
+  name: apptrackerdb
+  labels:
+    app: postgres
+spec:
+  ports:
+    - port: 5432
+      targetPort: 5432
+  selector:
+    app: postgres
+---
+# ConfigMap for RabbitMQ Config
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rabbitmq-config
+data:
+  rabbitmq.conf: |
+    listeners.ssl.default = 5671
+    ssl_options.verify = verify_peer
+    ssl_options.fail_if_no_peer_cert = true
+    ssl_options.cacertfile = /etc/ssl/ca.crt
+    ssl_options.certfile = /etc/ssl/server.crt
+    ssl_options.keyfile = /etc/ssl/server.key
+---
+# create with
+# kubectl create secret generic rabbitmq-ssl-secret \
+#  --from-file=ca.crt=./ssl/ca.crt \
+#  --from-file=server.crt=./ssl/server.crt \
+#  --from-file=server.key=./ssl/server.key \
+#  --namespace=telegram-bot
+
+# Secret for RabbitMQ SSL Certificates
+apiVersion: v1
+kind: Secret
+metadata:
+  name: rabbitmq-ssl-secret
+type: Opaque
+data:
+  ca.crt: BASE64_ENCODED_CA_CRT
+  server.crt: BASE64_ENCODED_SERVER_CRT
+  server.key: BASE64_ENCODED_SERVER_KEY
+---
+# PersistentVolumeClaim for RabbitMQ
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rabbitmq-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+# Deployment for RabbitMQ
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rabbitmq
+  labels:
+    app: rabbitmq
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rabbitmq
+  template:
+    metadata:
+      labels:
+        app: rabbitmq
+    spec:
+      containers:
+        - name: rabbitmq
+          image: rabbitmq:3.12-management
+          ports:
+            - containerPort: 5671
+            - containerPort: 5672
+            - containerPort: 15672
+          env:
+            - name: RABBITMQ_DEFAULT_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: telegram-bot-config
+                  key: RABBIT_USER
+            - name: RABBITMQ_DEFAULT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: telegram-bot-secret
+                  key: RABBIT_PASSWORD
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "500m"
+              memory: "1Gi"
+          volumeMounts:
+            - name: rabbitmq-data
+              mountPath: /var/lib/rabbitmq
+            - name: rabbitmq-config
+              mountPath: /etc/rabbitmq/conf.d/ssl.conf
+              subPath: rabbitmq.conf
+            - name: rabbitmq-ssl
+              mountPath: /etc/ssl/
+  volumes:
+    - name: rabbitmq-data
+      persistentVolumeClaim:
+        claimName: rabbitmq-pvc
+    - name: rabbitmq-config
+      configMap:
+        name: rabbitmq-config
+    - name: rabbitmq-ssl
+      secret:
+        secretName: rabbitmq-ssl-secret
+---
+# Service for RabbitMQ
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: mvcr.example.com
+  labels:
+    app: rabbitmq
+spec:
+  type: LoadBalancer
+  ports:
+    - name: amqps
+      port: 5671
+      targetPort: 5671
+# BE CAREFUL EXPOSING THAT:
+    - name: management
+      port: 15672
+      targetPort: 15672
+  selector:
+    app: rabbitmq
+---
+# Deployment for Telegram Bot
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: telegram-bot
+  labels:
+    app: telegram-bot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: telegram-bot
+  template:
+    metadata:
+      labels:
+        app: telegram-bot
+    spec:
+      containers:
+        - name: telegram-bot
+          image: olegeech/mvcr-application-checker:bot-latest
+          imagePullPolicy: Always
+          envFrom:
+            - configMapRef:
+                name: telegram-bot-config
+            - secretRef:
+                name: telegram-bot-secret
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "250m"
+              memory: "512Mi"
+      restartPolicy: Always
