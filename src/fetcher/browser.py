@@ -236,7 +236,7 @@ class Browser:
             self.random_sleep()
             self.browser.execute_script("arguments[0].click();", type_option)
 
-        except (WebDriverException, CustomMaxRetryError, TimeoutException) as e:
+        except (WebDriverException, CustomMaxRetryError, TimeoutException):
             self._log(logging.ERROR, "Error waiting for Type list to appear")
             self.close()
         except Exception as e:
