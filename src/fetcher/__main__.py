@@ -54,8 +54,9 @@ async def main():
     processor = ApplicationProcessor(messaging=messaging_instance, browser=browser_instance, metrics=metrics_collector, url=URL)
 
     # Register the signal handlers
-    signal.signal(signal.SIGINT, lambda s, f: shutdown_event.set())
-    signal.signal(signal.SIGTERM, lambda s, f: shutdown_event.set())
+    loop = asyncio.get_running_loop()
+    loop.add_signal_handler(signal.SIGINT, shutdown_event.set)
+    loop.add_signal_handler(signal.SIGTERM, shutdown_event.set)
 
     # Connect to RabbitMQ & set up queues with their respective durability
     await messaging_instance.connect(ssl_params=rabbit_ssl_params())

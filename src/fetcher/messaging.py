@@ -20,6 +20,8 @@ class Messaging:
         self.port = 5672
         self.connection = None
         self.channel = None
+        self.queues = {}
+        self.consumers = {}
 
     def _create_ssl_context(self, ssl_params):
         """Create an SSL context based on provided parameters"""
@@ -44,9 +46,16 @@ class Messaging:
         for retry in range(1, MAX_RETRIES + 1):
             try:
                 logger.info(f"Connecting to {self.host} ...")
-                self.connection = await aio_pika.connect_robust(conn_url, ssl_context=ssl_context)
+                self.connection = await aio_pika.connect_robust(
+                    conn_url,
+                    ssl_context=ssl_context,
+                    heartbeat=60,
+                    timeout=30
+                )
                 self.channel = await self.connection.channel()
                 await self.channel.set_qos(prefetch_count=MAX_MESSAGES)
+                self.connection.add_close_callback(self.on_connection_closed)
+                self.channel.add_close_callback(self.on_channel_closed)
                 logger.info(f"Connected to the RabbitMQ server at {self.host}")
                 break  # Exit the loop if connection is successful
             except AMQPConnectionError as e:
@@ -61,7 +70,8 @@ class Messaging:
     async def setup_queues(self, **queues):
         """Declare necessary queues and thier durability"""
         for queue_name, durable in queues.items():
-            await self.channel.declare_queue(queue_name, durable=durable)
+            queue = await self.channel.declare_queue(queue_name, durable=durable)
+            self.queues[queue_name] = queue
 
     async def publish_message(self, queue_name, message_body, headers=None):
         """Publish a message to the specified queue"""
@@ -77,8 +87,21 @@ class Messaging:
 
     async def consume_messages(self, queue_name, callback_func):
         """Consume messages from the specified queue"""
-        queue = await self.channel.declare_queue(queue_name, durable=True)
-        await queue.consume(callback_func)
+        queue = self.queues.get(queue_name)
+        if not queue:
+            queue = await self.channel.declare_queue(queue_name, durable=True)
+            self.queues[queue_name] = queue
+
+        consumer_tag = await queue.consume(callback_func)
+        # internally used by aio_pika to keep track of consumers
+        self.consumers[queue_name] = (queue, consumer_tag)
+
+    def on_connection_closed(self, connection, exc):
+        logger.warning(f"Connection {connection} to RabbitMQ is closed due to {exc}. Attempting to reconnect...")
+    
+    def on_channel_closed(self, channel, exc):
+        logger.warning(f"RabbitMQ channel {channel} is closed due to {exc}, attempting to reopen...")
+
 
     async def close(self):
         """Close the connection"""
