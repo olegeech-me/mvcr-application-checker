@@ -489,17 +489,20 @@ class Database:
                 logger.error(f"Error while fetching total reminders count. Error: {e}")
                 return None
 
-    async def count_all_subscriptions(self):
-        """Count the total number of subscriptions (applications) in the database"""
-
+    async def count_all_subscriptions(self, active_only=False):
+        """Count the total number of subscriptions (applications) in the database, optionally filtering active ones"""
         query = "SELECT COUNT(*) FROM Applications"
+        if active_only:
+            query += " WHERE is_resolved = FALSE"
+        
         async with self.pool.acquire() as conn:
             try:
                 count = await conn.fetchval(query)
                 return count
             except Exception as e:
-                logger.error(f"Error while fetching total subscriptions count. Error: {e}")
+                logger.error(f"Error while fetching total {'active ' if active_only else ''}subscriptions count. Error: {e}")
                 return None
+
 
     async def close(self):
         logger.info("Shutting down DB connection")

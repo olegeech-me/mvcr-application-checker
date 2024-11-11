@@ -710,6 +710,7 @@ async def admin_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     subscribed_users = await db.count_subscribed_users()
     active_users = await db.count_active_users()
     subscriptions_count = await db.count_all_subscriptions()
+    active_subscriptions_count = await db.count_all_subscriptions(active_only=True)
     reminders_count = await db.count_all_reminders()
 
     await update.message.reply_text(
@@ -717,6 +718,7 @@ async def admin_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         f"✉️ Subscribed users: <b>{subscribed_users}</b>\n"
         f"🔍 Users with active (non-resolved) subscriptions: <b>{active_users}</b>\n"
         f"📑 Total subscriptions: <b>{subscriptions_count}</b>\n"
+        f"🟡 Active (non-resolved) subscriptions: <b>{active_subscriptions_count}</b>\n"
         f"⏰ Total reminders set up: <b>{reminders_count}</b>\n"
     )
 
