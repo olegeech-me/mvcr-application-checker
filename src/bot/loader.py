@@ -7,6 +7,10 @@ from bot import database
 from bot import rabbitmq
 from bot import metrics
 
+# Version information
+BASE_VERSION = os.getenv("BASE_VERSION", "v1.0.0")
+GIT_COMMIT = os.getenv("GIT_COMMIT", "unknown")
+FULL_VERSION = f"{BASE_VERSION}-{GIT_COMMIT}"
 # Telegram bot config
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 ADMIN_CHAT_IDS = os.getenv("ADMIN_CHAT_IDS", "")

@@ -13,6 +13,17 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
 
+    - name: Get the latest Git tag
+      id: get_tag
+      run: |
+        TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+        if [ "$TAG" = "v0.0.0" ]; then
+          echo "No valid Git tags found. Failing the build."
+          exit 1
+        fi
+        echo "Latest tag is $TAG"
+        echo "::set-output name=base_version::$TAG"
+
     # Setup Docker Buildx
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v1
@@ -31,7 +42,12 @@ jobs:
         context: .
         file: ./Dockerfile_bot
         push: true
-        tags: olegeech/mvcr-application-checker:bot-latest
+        tags: |
+          olegeech/mvcr-application-checker:bot-latest
+          olegeech/mvcr-application-checker:bot-${{ steps.get_tag.outputs.base_version }}
+        build-args: |
+          BASE_VERSION=${{ steps.get_tag.outputs.base_version }}
+          GIT_COMMIT=${{ github.sha::5 }}
 
     # Build and push fetcher image
     - name: Build and push fetcher Docker image
@@ -40,4 +56,9 @@ jobs:
         context: .
         file: ./Dockerfile_fetcher
         push: true
-        tags: olegeech/mvcr-application-checker:fetcher-latest
+        tags: |
+          olegeech/mvcr-application-checker:fetcher-latest
+          olegeech/mvcr-application-checker:fetcher-${{ steps.get_tag.outputs.base_version }}
+        build-args: |
+          BASE_VERSION=${{ steps.get_tag.outputs.base_version }}
+          GIT_COMMIT=${{ github.sha::5 }}

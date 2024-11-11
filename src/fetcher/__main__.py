@@ -7,7 +7,8 @@ import signal
 import asyncio
 import uvloop
 
-from fetcher.config import URL, RABBIT_HOST, RABBIT_SSL_PORT, RABBIT_USER, RABBIT_PASSWORD, LOG_LEVEL
+from fetcher.config import FULL_VERSION, URL, LOG_LEVEL
+from fetcher.config import RABBIT_HOST, RABBIT_SSL_PORT, RABBIT_USER, RABBIT_PASSWORD
 from fetcher.config import RABBIT_SSL_CACERTFILE, RABBIT_SSL_CERTFILE, RABBIT_SSL_KEYFILE
 from fetcher.config import ID, METRICS_TTL, METRICS_RATE, METRICS_SEND_INTERVAL
 from fetcher.browser import Browser
@@ -88,6 +89,7 @@ async def main():
 
 
 if __name__ == "__main__":
+    logger.info(f"Starting Fetcher version {FULL_VERSION}")
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
     loop = asyncio.get_event_loop()
     loop.run_until_complete(main())

@@ -1,8 +1,13 @@
+# syntax=docker/dockerfile:1
+
 # Taken from https://github.com/fernflower/trvalypobytexamchecker/blob/main/Dockerfile_fetcher
 
 FROM ubuntu:focal
 
 ARG DEBIAN_FRONTEND=noninteractive
+ARG BASE_VERSION="v1.0.0"
+ARG GIT_COMMIT="unknown"
+
 RUN echo "===> Installing system dependencies..." && \
     BUILD_DEPS="curl unzip" && \
     apt-get update && apt-get install --no-install-recommends -y \
@@ -33,6 +38,8 @@ RUN echo "===> Installing system dependencies..." && \
     rm -rf /var/lib/apt/lists/*
 
 
+ENV BASE_VERSION=$BASE_VERSION
+ENV GIT_COMMIT=$GIT_COMMIT
 ENV LANG C.UTF-8
 ENV LC_ALL C.UTF-8
 ENV PYTHONUNBUFFERED=1
@@ -47,5 +54,10 @@ RUN pip install -r requirements.txt tox
 COPY . $APP_HOME/
 
 COPY tox-docker.ini tox.ini
+
+LABEL org.opencontainers.image.title="Fetcher"
+LABEL org.opencontainers.image.version=${BASE_VERSION}
+LABEL org.opencontainers.image.revision=${GIT_COMMIT}
+LABEL org.opencontainers.image.created="${BUILD_DATE}"
 
 CMD ["python3", "-m", "fetcher"]

@@ -4,7 +4,7 @@ import asyncio
 import logging
 import signal
 
-from bot.loader import loader, loop, LOG_LEVEL, ADMIN_CHAT_IDS
+from bot.loader import loader, loop, FULL_VERSION, LOG_LEVEL, ADMIN_CHAT_IDS
 from bot.handlers import start_command, help_command, unknown_text, unknown_command, status_command
 from bot.handlers import unsubscribe_command, subscribe_command, admin_stats_command, fetcher_stats_command
 from bot.handlers import force_refresh_command, subscribe_button, lang_command, set_language_startup, set_language_cmd
@@ -174,4 +174,5 @@ async def main():
 
 
 if __name__ == "__main__":
+    logger.info(f"Starting Bot version {FULL_VERSION}")
     loop.run_until_complete(main())

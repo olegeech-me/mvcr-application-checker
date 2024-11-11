@@ -1,5 +1,9 @@
 import os
 
+# Version information
+BASE_VERSION = os.getenv("BASE_VERSION", "v1.0.0")
+GIT_COMMIT = os.getenv("GIT_COMMIT", "unknown")
+FULL_VERSION = f"{BASE_VERSION}-{GIT_COMMIT}"
 # The URL to fetch
 URL = os.getenv("URL", "https://frs.gov.cz/informace-o-stavu-rizeni/")
 # The maximum number of retries to connect to RabbitMQ
