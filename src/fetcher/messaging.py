@@ -54,8 +54,6 @@ class Messaging:
                 )
                 self.channel = await self.connection.channel()
                 await self.channel.set_qos(prefetch_count=MAX_MESSAGES)
-                self.connection.add_close_callback(self.on_connection_closed)
-                self.channel.add_close_callback(self.on_channel_closed)
                 logger.info(f"Connected to the RabbitMQ server at {self.host}")
                 break  # Exit the loop if connection is successful
             except AMQPConnectionError as e:
@@ -95,13 +93,6 @@ class Messaging:
         consumer_tag = await queue.consume(callback_func)
         # internally used by aio_pika to keep track of consumers
         self.consumers[queue_name] = (queue, consumer_tag)
-
-    def on_connection_closed(self, connection, exc):
-        logger.warning(f"Connection {connection} to RabbitMQ is closed due to {exc}. Attempting to reconnect...")
-    
-    def on_channel_closed(self, channel, exc):
-        logger.warning(f"RabbitMQ channel {channel} is closed due to {exc}, attempting to reopen...")
-
 
     async def close(self):
         """Close the connection"""
