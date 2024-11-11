@@ -101,4 +101,7 @@ class MetricsCollector:
             await self.get_website_latency()
             metrics = self.get_metrics()
             logger.debug(f"Sending metrics: {metrics}")
-            await self.messaging.publish_service_message(metrics)
+            try:
+                await self.messaging.publish_service_message(metrics)
+            except Exception as e:
+                logger.error(f"Failed to send metrics: {e}")
