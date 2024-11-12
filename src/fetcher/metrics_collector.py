@@ -19,6 +19,7 @@ class MetricsCollector:
         self.latency_data = deque(maxlen=max_latencies)
         self.fetch_status = {"success": deque(), "failed": deque(), "retried": deque()}
         self.request_state = {"waiting": 0, "locked": 0}
+        self.connection_status = "❓ Unknown"
         self.last_report_time = time.time()
         self.start_time = time.time()
 
@@ -30,12 +31,17 @@ class MetricsCollector:
                 async with session.get(self.url) as response:
                     latency = time.time() - start_time
                     self.record_latency(latency)
-                    if response.status != 200:
-                        logger.error(f"HTTP latency checked failed: {response.status}")
+                    if response.status == 200:
+                        self.connection_status = "✅ Connected"
+                    else:
+                        self.connection_status = f"❌ Failed (HTTP {response.status})"
+                        logger.error(f"HTTP latency check failed: {response.status}")
         except aiohttp.client_exceptions.ClientConnectorError as e:
+            self.connection_status = "⚠️ Connection Failed"
             latency = time.time() - start_time
             logger.error(f"Failed to connect to {self.url}. Error: {e}. Latency: {latency}s")
         except Exception as e:
+            self.connection_status = "🚨 Error"
             latency = time.time() - start_time
             logger.error(f"An unexpected error occurred while connecting to {self.url}. Error: {e}. Latency: {latency}s")
 
@@ -87,7 +93,7 @@ class MetricsCollector:
 
         return {
             "fetcher_id": self.fetcher_id,
-            "version": FULL_VERSION,
+            "connection_status": self.connection_status,
             "average_latency": self.get_avg_latency(),
             "fetch_status": {"success": recent_successes, "failed": recent_failures, "retries": recent_retries},
             "request_state": self.request_state,
@@ -95,6 +101,7 @@ class MetricsCollector:
             "rate_interval": self.rate,
             "ttl": self.ttl,
             "uptime": uptime,
+            "version": FULL_VERSION,
         }
 
     async def send_metrics(self):

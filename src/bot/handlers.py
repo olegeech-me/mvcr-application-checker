@@ -742,7 +742,7 @@ async def fetcher_stats_command(update: Update, context: ContextTypes.DEFAULT_TY
             uptime_minutes %= 60
             fetcher_stats = (
                 f"🤖 Fetcher ID: <b>{fetcher_id}</b>\n"
-                f"🛠️ Version: {data['version']}\n"
+                f"🌐 Connection to frs.gov.cz: <b>{data['connection_status']}</b>\n"
                 f"🕐 Average latency to frs.gov.cz: <b>{data['average_latency']:.2f}</b> seconds\n"
                 f"✅ Successes (last {ttl} mins): <b>{data['fetch_status']['success']}</b>\n"
                 f"❌ Failures (last {ttl} mins): <b>{data['fetch_status']['failed']}</b>\n"
@@ -753,6 +753,7 @@ async def fetcher_stats_command(update: Update, context: ContextTypes.DEFAULT_TY
                 f"📊 Failure rate: <b>{data['rates']['failure_rate']:.2f}</b>/{interval} min(s)\n"
                 f"📊 Retry rate: <b>{data['rates']['retry_rate']:.2f}</b>/{interval} min(s)\n"
                 f"⏱ Uptime: <b>{uptime_hours}h {uptime_minutes}m</b>\n"
+                f"🛠️ Version: {data['version']}\n"
             )
 
             await update.message.reply_text(fetcher_stats)
