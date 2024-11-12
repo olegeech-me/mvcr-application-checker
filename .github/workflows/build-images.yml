@@ -28,10 +28,14 @@ jobs:
       run: |
         SHORT_SHA=$(git rev-parse --short ${{ github.sha }})
         echo "Short commit SHA is $SHORT_SHA"
-        echo "SHORT_SHA=$SHORT_SHA"
+        echo "SHORT_SHA=$SHORT_SHA" >> $GITHUB_ENV
 
     - name: Confirm git commit SHA and tag variables
-      run: echo ${{ env.SHORT_SHA }} ${{ env.LATEST_TAG }}
+      run: |
+        if [ -z "${{ env.SHORT_SHA }}" ] || [ -z "${{ env.LATEST_TAG }}" ]; then
+          echo "Error: One of SHORT_SHA, LATEST_TAG is empty"
+          exit 1
+        fi
 
     # Setup Docker Buildx
     - name: Set up Docker Buildx
