@@ -6,6 +6,12 @@ on:
       - main
     tags:
       - '*'
+    paths:
+      - 'Dockerfile_bot'
+      - 'Dockerfile_fetcher'
+      - 'src/**'
+      - 'requirements-bot.txt'
+      - 'requirements-fetcher.txt'
 
 jobs:
   docker:
