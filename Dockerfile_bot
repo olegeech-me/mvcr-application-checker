@@ -2,11 +2,6 @@
 
 FROM python:3.10.5-slim
 
-ARG BASE_VERSION="v1.0.0"
-ARG GIT_COMMIT="unknown"
-
-ENV BASE_VERSION=$BASE_VERSION
-ENV GIT_COMMIT=$GIT_COMMIT
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
 ENV PYTHONUNBUFFERED=1
@@ -19,6 +14,12 @@ COPY requirements-bot.txt requirements.txt
 RUN pip install -r requirements.txt
 
 COPY . $APP_HOME/
+
+ARG BASE_VERSION="v1.0.0"
+ARG GIT_COMMIT="unknown"
+
+ENV BASE_VERSION=$BASE_VERSION
+ENV GIT_COMMIT=$GIT_COMMIT
 
 LABEL org.opencontainers.image.title="Bot"
 LABEL org.opencontainers.image.version=$BASE_VERSION

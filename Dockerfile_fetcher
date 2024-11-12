@@ -5,8 +5,6 @@
 FROM ubuntu:focal
 
 ARG DEBIAN_FRONTEND=noninteractive
-ARG BASE_VERSION="v1.0.0"
-ARG GIT_COMMIT="unknown"
 
 RUN echo "===> Installing system dependencies..." && \
     BUILD_DEPS="curl unzip" && \
@@ -38,8 +36,6 @@ RUN echo "===> Installing system dependencies..." && \
     rm -rf /var/lib/apt/lists/*
 
 
-ENV BASE_VERSION=$BASE_VERSION
-ENV GIT_COMMIT=$GIT_COMMIT
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
 ENV PYTHONUNBUFFERED=1
@@ -54,6 +50,11 @@ RUN pip install -r requirements.txt tox
 COPY . $APP_HOME/
 
 COPY tox-docker.ini tox.ini
+
+ARG BASE_VERSION="v1.0.0"
+ARG GIT_COMMIT="unknown"
+ENV BASE_VERSION=$BASE_VERSION
+ENV GIT_COMMIT=$GIT_COMMIT
 
 LABEL org.opencontainers.image.title="Fetcher"
 LABEL org.opencontainers.image.version=${BASE_VERSION}
