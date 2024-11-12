@@ -40,12 +40,12 @@ RUN echo "===> Installing system dependencies..." && \
 
 ENV BASE_VERSION=$BASE_VERSION
 ENV GIT_COMMIT=$GIT_COMMIT
-ENV LANG C.UTF-8
-ENV LC_ALL C.UTF-8
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
 ENV PYTHONUNBUFFERED=1
-ENV PYTHONPATH $PYTHONPATH:/code/src
+ENV PYTHONPATH=$PYTHONPATH:/code/src
 
-ENV APP_HOME /code
+ENV APP_HOME=/code
 WORKDIR /$APP_HOME
 
 COPY requirements-fetcher.txt requirements.txt
