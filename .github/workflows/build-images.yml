@@ -16,11 +16,7 @@ jobs:
     - name: Get the latest Git tag
       id: get_tag
       run: |
-        TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-        if [ "$TAG" = "v0.0.0" ]; then
-          echo "No valid Git tags found. Failing the build."
-          exit 1
-        fi
+        TAG=$(git describe --tags --abbrev=0)
         echo "Latest tag is $TAG"
         echo "::set-output name=base_version::$TAG"
   
