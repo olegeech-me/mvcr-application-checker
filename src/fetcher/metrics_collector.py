@@ -2,6 +2,7 @@ import aiohttp
 import asyncio
 import time
 import logging
+from fetcher.config import FULL_VERSION
 from collections import deque
 
 logger = logging.getLogger(__name__)
@@ -86,6 +87,7 @@ class MetricsCollector:
 
         return {
             "fetcher_id": self.fetcher_id,
+            "version": FULL_VERSION,
             "average_latency": self.get_avg_latency(),
             "fetch_status": {"success": recent_successes, "failed": recent_failures, "retries": recent_retries},
             "request_state": self.request_state,

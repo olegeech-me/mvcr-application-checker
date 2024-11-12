@@ -5,7 +5,7 @@ import time
 
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, BotCommand, BotCommandScopeChat, ForceReply
 from telegram.ext import ContextTypes, ConversationHandler
-from bot.loader import loader, ADMIN_CHAT_IDS, REFRESH_PERIOD
+from bot.loader import loader, ADMIN_CHAT_IDS, REFRESH_PERIOD, FULL_VERSION
 from bot.texts import button_texts, message_texts, commands_description
 from bot.utils import generate_oam_full_string
 
@@ -720,6 +720,7 @@ async def admin_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         f"📑 Total subscriptions: <b>{subscriptions_count}</b>\n"
         f"🟡 Active (non-resolved) subscriptions: <b>{active_subscriptions_count}</b>\n"
         f"⏰ Total reminders set up: <b>{reminders_count}</b>\n"
+        f"🛠️ Current version: <i>{FULL_VERSION}</i>\n"
     )
 
 
@@ -741,6 +742,7 @@ async def fetcher_stats_command(update: Update, context: ContextTypes.DEFAULT_TY
             uptime_minutes %= 60
             fetcher_stats = (
                 f"🤖 Fetcher ID: <b>{fetcher_id}</b>\n"
+                f"🛠️ Version: {data['version']}\n"
                 f"🕐 Average latency to frs.gov.cz: <b>{data['average_latency']:.2f}</b> seconds\n"
                 f"✅ Successes (last {ttl} mins): <b>{data['fetch_status']['success']}</b>\n"
                 f"❌ Failures (last {ttl} mins): <b>{data['fetch_status']['failed']}</b>\n"
