@@ -18,14 +18,17 @@ jobs:
       run: |
         TAG=$(git describe --tags --abbrev=0)
         echo "Latest tag is $TAG"
-        echo "::set-output name=base_version::$TAG"
+        echo "LATEST_TAG=$TAG" >> $GITHUB_ENV
   
     - name: Set short git commit SHA
       id: get_sha
       run: |
         SHORT_SHA=$(git rev-parse --short ${{ github.sha }})
         echo "Short commit SHA is $SHORT_SHA"
-        echo "::set-output name=short_sha::$SHORT_SHA"
+        echo "SHORT_SHA=$SHORT_SHA"
+
+    - name: Confirm git commit SHA and tag variables
+      run: echo ${{ env.SHORT_SHA }} ${{ env.LATEST_TAG }}
 
     # Setup Docker Buildx
     - name: Set up Docker Buildx
@@ -47,10 +50,10 @@ jobs:
         push: true
         tags: |
           olegeech/mvcr-application-checker:bot-latest
-          olegeech/mvcr-application-checker:bot-${{ steps.get_tag.outputs.base_version }}
+          olegeech/mvcr-application-checker:bot-${{ env.LATEST_TAG }}
         build-args: |
-          BASE_VERSION=${{ steps.get_tag.outputs.base_version }}
-          GIT_COMMIT=${{ steps.get_sha.outputs.short_sha }}
+          BASE_VERSION=${{ env.LATEST_TAG }}
+          GIT_COMMIT=${{ env.SHORT_SHA }}
 
     # Build and push fetcher image
     - name: Build and push fetcher Docker image
@@ -61,7 +64,7 @@ jobs:
         push: true
         tags: |
           olegeech/mvcr-application-checker:fetcher-latest
-          olegeech/mvcr-application-checker:fetcher-${{ steps.get_tag.outputs.base_version }}
+          olegeech/mvcr-application-checker:fetcher-${{ env.LATEST_TAG }}
         build-args: |
-          BASE_VERSION=${{ steps.get_tag.outputs.base_version }}
-          GIT_COMMIT=${{ steps.get_sha.outputs.short_sha }}
+          BASE_VERSION=${{ env.LATEST_TAG }}
+          GIT_COMMIT=${{ env.SHORT_SHA }}
