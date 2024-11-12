@@ -14,8 +14,22 @@ name: "CodeQL Advanced"
 on:
   push:
     branches: [ "main" ]
+    tags:
+      - '*'
+    paths:
+      - 'Dockerfile_bot'
+      - 'Dockerfile_fetcher'
+      - 'src/**'
+      - 'requirements-bot.txt'
+      - 'requirements-fetcher.txt'
   pull_request:
     branches: [ "main" ]
+    paths:
+      - 'Dockerfile_bot'
+      - 'Dockerfile_fetcher'
+      - 'src/**'
+      - 'requirements-bot.txt'
+      - 'requirements-fetcher.txt'
   schedule:
     - cron: '42 22 * * 6'
 
