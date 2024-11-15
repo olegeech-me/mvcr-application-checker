@@ -78,8 +78,8 @@ class Database:
         )
         query = (
             "INSERT INTO Applications "
-            "(user_id, application_number, application_suffix, application_type, application_year) "
-            "SELECT user_id, $2, $3, $4, $5 FROM Users WHERE chat_id = $1"
+            "(user_id, application_number, application_suffix, application_type, application_year, application_state) "
+            "SELECT user_id, $2, $3, $4, $5, 'UNKNOWN' FROM Users WHERE chat_id = $1"
         )
         params = (chat_id, application_number, application_suffix, application_type, application_year)
         async with self.pool.acquire() as conn:
@@ -96,17 +96,17 @@ class Database:
         return True
 
     async def update_application_status(
-        self, chat_id, application_number, application_type, application_year, current_status, is_resolved
+        self, chat_id, application_number, application_type, application_year, current_status, is_resolved, application_state
     ):
-        """Update the status and resolution for a specific application"""
+        """Update status, resolution, and state for a specific application"""
 
         query = """UPDATE Applications
-                   SET current_status = $1, last_updated = CURRENT_TIMESTAMP, is_resolved=$2
-                   WHERE user_id = (SELECT user_id FROM Users WHERE chat_id = $3)
-                   AND application_number = $4
-                   AND application_type = $5
-                   AND application_year = $6"""
-        params = (current_status, is_resolved, chat_id, application_number, application_type, application_year)
+                   SET current_status = $1, last_updated = CURRENT_TIMESTAMP, is_resolved=$2, application_state = $3
+                   WHERE user_id = (SELECT user_id FROM Users WHERE chat_id = $4)
+                   AND application_number = $5
+                   AND application_type = $6
+                   AND application_year = $7"""
+        params = (current_status, is_resolved, application_state, chat_id, application_number, application_type, application_year)
         async with self.pool.acquire() as conn:
             try:
                 await conn.execute(query, *params)

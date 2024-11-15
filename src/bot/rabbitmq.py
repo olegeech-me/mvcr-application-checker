@@ -151,34 +151,44 @@ class RabbitMQ:
                         f"user {chat_id}, status: {received_status}"
                     )
 
+                # Get category and status sign
+                category, emoji_sign = categorize_application_status(received_status)
+                application_state = category.upper() if category else "UNKNOWN"
+
                 # update application status in the DB
-                if await self.db.update_application_status(chat_id, number, type_, year, received_status, is_resolved):
+                if await self.db.update_application_status(chat_id, number, type_, year, received_status, is_resolved, application_state):
                     lang = await self.db.fetch_user_language(chat_id)
 
-                    # if fetch request failed miserably
+                    # if a fetch request failed miserably
                     if failed and request_type == "fetch":
                         logger.warning(f"[FETCH FAILED] Fetch request failed for {oam_full_string}, user {chat_id}")
                         notification_text = self._generate_error_message(msg_data, lang)
                     else:
-                        # Get category and status sign
-                        category, emoji_sign = categorize_application_status(received_status)
-
                         # Log changes only if status has changed
                         if has_changed:
                             if is_resolved:
                                 logger.info(
-                                    f"[RESOLVED][{category.upper()}] Application {oam_full_string}, "
+                                    f"[RESOLVED][{application_state}] Application {oam_full_string}, "
                                     f"user {chat_id} has been resolved to {received_status}"
                                 )
                             elif not force_refresh:
                                 logger.info(
-                                    f"[CHANGED][{category.upper()}] Application status for {oam_full_string},"
+                                    f"[CHANGED][{application_state}] Application status for {oam_full_string},"
                                     f"user {chat_id} has changed to {received_status}"
                                 )
-                        # Since we came to this place, it means either smth has changed
-                        # or it's a force refresh request, so we need to notify the user
+                        # Log an error if the status couldn't be categorized on a non-failed update message
+                        # Here an Admin should probably take a closer look to wtf is happening, might be
+                        # that MVCR's text of response has changed. In any way we let the users know of the change
+                        if not category:
+                            logger.error(
+                                f"[UNRECOGNIZED STATUS] Could not categorize status: {received_status} "
+                                f"for application {oam_full_string}, user {chat_id}"
+                            )
+                            message = message_texts[lang]["application_updated"]
+                        else:
+                            # Fetch the message's text using category
+                            message = message_texts[lang][category].format(status_sign=emoji_sign)
 
-                        message = message_texts[lang][category].format(status_sign=emoji_sign)
                         notification_text = f"{message}\n\n{received_status}"
 
                     # notify the user
