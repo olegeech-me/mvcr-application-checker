@@ -11,7 +11,7 @@ from bot.utils import MVCR_STATUSES, categorize_application_status
 
 MAX_RETRIES = 5  # maximum number of connection retries
 RETRY_DELAY = 5  # delay (in seconds) between retries
-FINAL_STATUSES = [item for key, (value, emoji) in MVCR_STATUSES.items() if key != "application_in_progress" for item in value]
+FINAL_STATUSES = [item for key, (value, emoji) in MVCR_STATUSES.items() if key != "in_progress" for item in value]
 
 logger = logging.getLogger(__name__)
 
