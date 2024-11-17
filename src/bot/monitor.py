@@ -78,7 +78,7 @@ class ApplicationMonitor:
                 "type": app['application_type'],
                 "year": app['application_year'],
                 "request_type": "expire",
-                "last_updated": app["created_at"]
+                "last_updated": app["created_at"].isoformat() if app["created_at"] else "0",
             }
             oam_full_string = generate_oam_full_string(app)
             logger.info(
