@@ -206,7 +206,7 @@ class RabbitMQ:
             msg_data = json.loads(message.body.decode('utf-8'))
             oam_full_string = generate_oam_full_string(msg_data)
             logger.info(
-                f"[EXPIRE] Application {oam_full_string} created at {msg_data['last_updated']} "
+                f"[EXPIRE] Application {oam_full_string} user {chat_id}, created at {msg_data['last_updated']} "
                 "has been too long in the state NOT_FOUND, expiring"
             )
 

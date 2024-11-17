@@ -16,7 +16,7 @@
   "application_updated": "Stav vaší žádosti byl aktualizován!",
   "application_resolved": "Vaše žádost byla vyřešena!",
   "not_found": "❓ Bohužel jsme nemohli najít vaši žádost. Prosím, ujistěte se, že jste zadali správné číslo žádosti a zkuste to znovu. Pokud jste podali žádost teprve nedávno, počkejte chvíli, než Ministerstvo Vnitra zveřejní údaje o ní. Bot bude každý den kontrolovat aktualizace, zda se žádost neobjeví.\n\nAktuální stav {status_sign}:",
-  "not_found_expired": "⚠️ Vaše žádost {app_string} nebyla nalezena během monitorovacího období a byla odstraněna ze sledování. Prosím, ověřte číslo vaší žádosti.",
+  "not_found_expired": "⚠️ Sledování vaší žádosti <b>{app_string}</b> bylo ukončeno, protože po dlouhou dobu nebyla dostupná na webu Ministerstva vnitra ČR. Zkontrolujte prosím číslo vaší žádosti.",
   "in_progress": "⏳ Vaše žádost je stále ve zpracování.\n\nAktuální stav {status_sign}:",
   "approved": "🎉 Gratulujeme! Vaše žádost byla schválena!\n\nAktuální stav {status_sign}:",
   "denied": "😔 Bohužel vaše žádost byla zamítnuta ...\n\nAktuální stav {status_sign}:",

@@ -16,7 +16,7 @@
   "application_updated": "Your application status has been updated!",
   "application_resolved": "Your application has been resolved!",
   "not_found": "❓ Unfortunately, we couldn't find your application. Please ensure you've entered the correct application number and try again. If you've recently submitted the application, please wait for some time until the Ministry of Interior publishes the data about it. The bot will check daily for updates in case your application becomes available.\n\nCurrent status {status_sign}:",
-  "not_found_expired": "⚠️ Your application <b>{app_string}</b> was not found within the monitoring period and has been removed from tracking. Please verify your application number.",
+  "not_found_expired": "⚠️ Tracking of your application <b>{app_string}</b> has been stopped, as it has not become available on the Czech Ministry of Interior's website for an extended period. Please check your application number.",
   "in_progress": "⏳ Your application is still under review.\n\nCurrent status {status_sign}:",
   "approved": "🎉 Congratulations! Your application has been approved!\n\nCurrent status {status_sign}:",
   "denied": "😔 I regret to inform that your application was declined. \n\nCurrent status: {status_sign}",
