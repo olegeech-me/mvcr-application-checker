@@ -5,7 +5,7 @@ import time
 
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, BotCommand, BotCommandScopeChat, ForceReply
 from telegram.ext import ContextTypes, ConversationHandler
-from bot.loader import loader, ADMIN_CHAT_IDS, REFRESH_PERIOD, FULL_VERSION
+from bot.loader import loader, ADMIN_CHAT_IDS, REFRESH_PERIOD, FULL_VERSION, STATISTICS_PERIOD_DAYS
 from bot.texts import button_texts, message_texts, commands_description
 from bot.utils import generate_oam_full_string
 from bot.statistics import Statistics
@@ -1029,7 +1029,7 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # enforce maximum and minimum limits [ 1 - 360]
         period_days = max(1, min(period_days, 360))
     else:
-        period_days = None
+        period_days = STATISTICS_PERIOD_DAYS
 
     # Fetch statistics
     try:
