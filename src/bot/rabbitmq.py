@@ -204,14 +204,13 @@ class RabbitMQ:
         """Async function to handle messages from ExpirationQueue"""
         async with message.process():
             msg_data = json.loads(message.body.decode('utf-8'))
-            oam_full_string = generate_oam_full_string(msg_data)
-            logger.info(
-                f"[EXPIRE] Application {oam_full_string} user {chat_id}, created at {msg_data['last_updated']} "
-                "has been too long in the state NOT_FOUND, expiring"
-            )
-
             application_id = msg_data.get("application_id")
             chat_id = msg_data.get("chat_id")
+            oam_full_string = generate_oam_full_string(msg_data)
+            logger.info(
+                f"[EXPIRE] Application {oam_full_string}, user {chat_id}, created at {msg_data['last_updated']} "
+                "has been too long in the state NOT_FOUND, expiring"
+            )
 
             if await self.db.resolve_application(application_id):
                 lang = await self.db.fetch_user_language(chat_id)
