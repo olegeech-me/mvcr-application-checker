@@ -40,12 +40,15 @@ To start receiving notifications:
 
 <img src="https://private-user-images.githubusercontent.com/21361354/386916774-b7e62b15-7e82-46f4-b6f4-5c91d24b11b2.jpg?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3MzE4MTMxODcsIm5iZiI6MTczMTgxMjg4NywicGF0aCI6Ii8yMTM2MTM1NC8zODY5MTY3NzQtYjdlNjJiMTUtN2U4Mi00NmY0LWI2ZjQtNWM5MWQyNGIxMWIyLmpwZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNDExMTclMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjQxMTE3VDAzMDgwN1omWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPWM3ZTZkYmE5OTcwZTU2YWQ0YzQ4Yzc5MGE5NWVhMWUyMzgxYjg2ZmE4ZDQ2ZmZkMWY3NzgyNjVlZmZjNGU4ZGEmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0In0.cYOJI6WVAtSfo_Vfu1kmvSHWiPnt3p2aih4rPI_5FLo" alt="Bot Screenshot" width="220" />
 
-## Features
+## Bot Features
 
-- **Automated Status Tracking**: Monitors your residential application status and notifies you of any changes.
-- **Multi-language Support**: Available in Czech, English, Russian, and Ukrainian.
-- **Secure Communication**: Uses SSL certificates for encrypted data transfer between services.
-- **Scalable Architecture**: Designed to handle multiple instances of the fetcher module for high availability.
+- 🔄 **Automated Status Checks**: The bot checks your application status every 60 minutes and sends updates if there are any changes.
+- 📌 **Subscription Management**: Start tracking your application with the `/subscribe` command.
+- 🔍 **Current Status Check**: Use `/status` to get the current status of your application at any time.
+- 🚀 **Force Refresh**: Need an immediate update? Use `/force_refresh` (limited to five uses per day for load management). ⏰
+- 🌐 **Language Support**: Change the bot's language with the `/lang` command to suit your preference.
+- ❌ **Unsubscribe**: Stop tracking your application using the `/unsubscribe` command.
+- ⏰ **Custom Reminders**: Set specific times for reminders using the `/reminder` command for forced updates, ensuring you're informed at the most convenient times.
 
 
 ## Acknowledgments
