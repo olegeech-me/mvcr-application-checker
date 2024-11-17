@@ -77,7 +77,8 @@ class ApplicationMonitor:
                 "suffix": app['application_suffix'],
                 "type": app['application_type'],
                 "year": app['application_year'],
-                "created_at": app['created_at']
+                "request_type": "expire",
+                "last_updated": app["created_at"]
             }
             oam_full_string = generate_oam_full_string(app)
             logger.info(
