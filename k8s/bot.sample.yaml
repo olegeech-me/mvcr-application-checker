@@ -312,3 +312,45 @@ spec:
               cpu: "250m"
               memory: "512Mi"
       restartPolicy: Always
+
+# BACK UP DB CRONJOB
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: bot-dump-db-postgres
+spec:
+  schedule: "15 2 * * *"
+  timeZone: "Europe/Prague"
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: postgres-dump
+            image: postgres:15.4
+            imagePullPolicy: IfNotPresent
+            env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: telegram-bot-secret
+                  key: DB_PASSWORD
+            command:
+            - /bin/sh
+            - -c
+            - |
+              DUMP_FILE="/dumps/bot-postgres-dump-$(date +\%F-\%H\%M\%S).sql"
+              pg_dump -h apptrackerdb -U postgres --clean --if-exists -F c -b -v -f $DUMP_FILE AppTrackerDB
+              # Keep only the last 5 dumps
+              ls -1t /dumps/*.sql | tail -n +6 | xargs rm -f
+            volumeMounts:
+            - mountPath: /dumps
+              name: dump-storage
+          restartPolicy: OnFailure
+          volumes:
+          - name: dump-storage
+            persistentVolumeClaim:
+              claimName: postgres-dump-pvc
