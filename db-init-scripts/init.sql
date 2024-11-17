@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS Applications (
     current_status VARCHAR(1000) DEFAULT 'Unknown',
     application_state VARCHAR(50) NOT NULL DEFAULT 'UNKNOWN',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    changed_at TIMESTAMP,
     last_updated TIMESTAMP,
     is_resolved BOOLEAN NOT NULL DEFAULT FALSE
 );

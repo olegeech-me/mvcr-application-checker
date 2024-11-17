@@ -96,17 +96,31 @@ class Database:
         return True
 
     async def update_application_status(
-        self, chat_id, application_number, application_type, application_year, current_status, is_resolved, application_state
+        self, chat_id, application_number, application_type, application_year,
+        current_status, is_resolved, application_state, has_changed
     ):
-        """Update status, resolution, and state for a specific application"""
+        """Update status, is_resolved, changed_at, and state for a specific application"""
 
-        query = """UPDATE Applications
-                   SET current_status = $1, last_updated = CURRENT_TIMESTAMP, is_resolved=$2, application_state = $3
-                   WHERE user_id = (SELECT user_id FROM Users WHERE chat_id = $4)
-                   AND application_number = $5
-                   AND application_type = $6
-                   AND application_year = $7"""
-        params = (current_status, is_resolved, application_state, chat_id, application_number, application_type, application_year)
+        base_query = """
+            UPDATE Applications
+            SET current_status = $1,
+                last_updated = CURRENT_TIMESTAMP,
+                is_resolved = $2,
+                application_state = $3
+                {changed_at_clause}
+            WHERE user_id = (SELECT user_id FROM Users WHERE chat_id = $4)
+              AND application_number = $5
+              AND application_type = $6
+              AND application_year = $7
+        """
+
+        # If the status has changed, add the changed_at clause
+        changed_at_clause = ", changed_at = CURRENT_TIMESTAMP" if has_changed else ""
+        query = base_query.format(changed_at_clause=changed_at_clause)
+
+        params = (
+            current_status, is_resolved, application_state, chat_id, application_number, application_type, application_year
+        )
         async with self.pool.acquire() as conn:
             try:
                 await conn.execute(query, *params)

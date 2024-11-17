@@ -158,7 +158,9 @@ class RabbitMQ:
                 application_state = category.upper() if category else "UNKNOWN"
 
                 # update application status in the DB
-                if await self.db.update_application_status(chat_id, number, type_, year, received_status, is_resolved, application_state):
+                if await self.db.update_application_status(
+                    chat_id, number, type_, year, received_status, is_resolved, application_state, has_changed
+                ):
                     lang = await self.db.fetch_user_language(chat_id)
 
                     # if a fetch request failed miserably
