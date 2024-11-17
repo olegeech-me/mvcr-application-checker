@@ -33,6 +33,8 @@ REFRESH_PERIOD = int(os.getenv("REFRESH_PERIOD", 3600))
 SCHEDULER_PERIOD = int(os.getenv("SCHEDULER_PERIOD", 300))
 NOT_FOUND_MAX_DAYS = int(os.getenv("NOT_FOUND_MAX_DAYS", 30))
 NOT_FOUND_REFRESH_PERIOD = int(os.getenv("NOT_FOUND_REFRESH_PERIOD", 86400))
+# Statistics module config
+STATISTICS_PERIOD_DAYS = int(os.getenv("STATISTICS_PERIOD_DAYS", 60))
 # Run mode for tests
 RUN_MODE = os.getenv("RUN_MODE", "PROD")
 

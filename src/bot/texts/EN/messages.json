@@ -51,5 +51,16 @@
   "action_canceled": "Action canceled.",
   "unknown_command": "🤔 Sorry, I don't know this command.",
   "unknown_input": "You wanted something? 😊 Please tap on /help to get the list of available commands",
-  "unknown_input_funny": "Sometimes I do dream of electric sheep..."
+  "unknown_input_funny": "Sometimes I do dream of electric sheep...",
+  "stats_header": "📊 <b>Application Statistics for the Last {days} Days</b>",
+  "stats_total_applications": "Total applications processed: <b>{count}</b>",
+  "stats_approved": "Applications approved: <b>{count}</b>",
+  "stats_denied": "Applications denied: <b>{count}</b>",
+  "average_processing_time": "Overall average processing time: <b>{days}</b> days",
+  "average_by_category": "<b>Average processing time by application type:</b>",
+  "most_common_update_time": "Most common status update time: around <b>{hour}:00</b>",
+  "your_estimated_times": "🔮 <b>Estimated Approval Times for Your Applications:</b>",
+  "predicted_approval_time": "Application <b>{application_number}</b>: approximately <b>{days_remaining:.2f}</b> days remaining",
+  "no_predictions": "You have no pending applications.",
+  "error_fetching_stats": "An error occurred while fetching statistics. Please try again later."
 }

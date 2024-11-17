@@ -8,11 +8,12 @@ from telegram.ext import ContextTypes, ConversationHandler
 from bot.loader import loader, ADMIN_CHAT_IDS, REFRESH_PERIOD, FULL_VERSION
 from bot.texts import button_texts, message_texts, commands_description
 from bot.utils import generate_oam_full_string
+from bot.statistics import Statistics
 
 SUBSCRIPTIONS_LIMIT = 5
 BUTTON_WAIT_SECONDS = 1
 FORCE_FETCH_LIMIT_SECONDS = 86400
-COMMANDS_LIST = ["status", "subscribe", "unsubscribe", "force_refresh", "lang", "start", "help", "reminder"]
+COMMANDS_LIST = ["status", "subscribe", "unsubscribe", "force_refresh", "lang", "start", "help", "reminder", "stats"]
 ADMIN_COMMANDS = ["admin_stats", "fetcher_stats", "admin_broadcast"]
 DEFAULT_LANGUAGE = "EN"
 LANGUAGE_LIST = ["EN 🏴󠁧󠁢󠁥󠁮󠁧󠁿|🇺🇸", "RU 🇷🇺", "CZ 🇨🇿", "UA 🇺🇦"]
@@ -31,6 +32,7 @@ logger = logging.getLogger(__name__)
 # Get instances of database and rabbitmq (lazy init)
 db = loader.db
 rabbit = loader.rabbit
+stats = Statistics(db)
 
 def get_allowed_years():
     """Compute allowed years to select"""
@@ -1011,6 +1013,70 @@ async def add_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data.pop("selected_app_id", None)
     return ConversationHandler.END
+
+
+# Handler for /stats command
+async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Provides application statistics to the user."""
+    logger.info(f"💻 Received /stats command from {user_info(update)}")
+    chat_id = update.effective_chat.id
+    lang = await _get_user_language(update, context)
+
+    # Parse arguments for period_days (e.g. /stats 30)
+    args = context.args
+    if args and args[0].isdigit():
+        period_days = int(args[0])
+        # enforce maximum and minimum limits [ 1 - 360]
+        period_days = max(1, min(period_days, 360))
+    else:
+        period_days = None
+
+    # Fetch statistics
+    try:
+        general_stats = await stats.get_general_stats(period_days)
+        overall_avg, avg_times_by_category = await stats.calculate_average_processing_times(period_days)
+        common_hour = await stats.get_common_update_time(period_days)
+        predictions = await stats.predict_user_application_time(chat_id, period_days)
+    except Exception as e:
+        logger.error(f"Error fetching statistics: {e}")
+        await update.message.reply_text(message_texts[lang]["error_fetching_stats"])
+        return
+
+    # Prepare the response message
+    message_lines = [
+        message_texts[lang]['stats_header'].format(days=period_days),
+        message_texts[lang]['stats_total_applications'].format(count=general_stats['total_applications']),
+        message_texts[lang]['stats_approved'].format(count=general_stats['approved']),
+        message_texts[lang]['stats_denied'].format(count=general_stats['denied']),
+    ]
+
+    if overall_avg:
+        message_lines.append(
+            message_texts[lang]['average_processing_time'].format(days=round(overall_avg / 86400, 2))
+        )
+
+    if avg_times_by_category:
+        message_lines.append(message_texts[lang]['average_by_category'])
+        for app_type, avg_time in avg_times_by_category.items():
+            message_lines.append(f"- {app_type}: {round(avg_time / 86400, 2)} days")
+
+    if common_hour is not None:
+        message_lines.append(message_texts[lang]['most_common_update_time'].format(hour=common_hour))
+
+    if predictions:
+        message_lines.append(message_texts[lang]['your_estimated_times'])
+        for prediction in predictions:
+            message_lines.append(
+                message_texts[lang]['predicted_approval_time'].format(
+                    application_number=prediction['application_number'],
+                    days_remaining=round(prediction['days_remaining'], 2)
+                )
+            )
+    else:
+        message_lines.append(message_texts[lang]['no_predictions'])
+
+    message = '\n'.join(message_lines)
+    await update.message.reply_text(message)
 
 
 # Handler for /lang command

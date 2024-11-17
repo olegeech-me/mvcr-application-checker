@@ -553,7 +553,7 @@ class Database:
         query = "SELECT COUNT(*) FROM Applications"
         if active_only:
             query += " WHERE is_resolved = FALSE"
-        
+
         async with self.pool.acquire() as conn:
             try:
                 count = await conn.fetchval(query)
@@ -562,6 +562,52 @@ class Database:
                 logger.error(f"Error while fetching total {'active ' if active_only else ''}subscriptions count. Error: {e}")
                 return None
 
+    async def fetch_application_states_within_period(self, start_date, end_date):
+        """Fetch application states within a certain period"""
+        query = """
+            SELECT application_state
+            FROM Applications
+            WHERE created_at BETWEEN $1 AND $2
+        """
+        async with self.pool.acquire() as conn:
+            try:
+                rows = await conn.fetch(query, start_date, end_date)
+                return [dict(row) for row in rows]
+            except Exception as e:
+                logger.error(f"Error fetching applications within period from DB: {e}")
+                return []
+
+    async def fetch_processing_times_within_period(self, start_date, end_date):
+        """Calculates time spent in IN_PROGRESS state for each type of applications within the period"""
+        query = """
+            SELECT application_type, EXTRACT(EPOCH FROM (changed_at - created_at)) AS processing_time
+            FROM Applications
+            WHERE application_state IN ('APPROVED', 'DENIED')
+              AND changed_at IS NOT NULL
+              AND created_at BETWEEN $1 AND $2
+        """
+        async with self.pool.acquire() as conn:
+            try:
+                rows = await conn.fetch(query, start_date, end_date)
+                return [dict(row) for row in rows]
+            except Exception as e:
+                logger.error(f"Error fetching processing times from DB: {e}")
+                return []
+
+    async def fetch_status_change_hours_within_period(self, start_date, end_date):
+        """Get hours when application change occurs within the period"""
+        query = """
+            SELECT EXTRACT(HOUR FROM changed_at AT TIME ZONE 'Europe/Prague') AS hour
+            FROM Applications
+            WHERE changed_at IS NOT NULL AND changed_at BETWEEN $1 AND $2
+        """
+        async with self.pool.acquire() as conn:
+            try:
+                rows = await conn.fetch(query, start_date, end_date)
+                return [row['hour'] for row in rows]
+            except Exception as e:
+                logger.error(f"Error fetching status change times from DB: {e}")
+                return []
 
     async def close(self):
         logger.info("Shutting down DB connection")
