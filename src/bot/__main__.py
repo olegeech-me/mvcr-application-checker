@@ -162,7 +162,8 @@ async def main():
 
     # Run RabbitMQ consumers
     asyncio.gather(
-        rabbit.consume_messages(),
+        rabbit.consume_update_messages(),
+        rabbit.consume_expiration_messages(),
         rabbit.consume_service_messages(),
     )
 

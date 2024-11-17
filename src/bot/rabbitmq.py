@@ -11,7 +11,6 @@ from bot.utils import MVCR_STATUSES, categorize_application_status
 
 MAX_RETRIES = 5  # maximum number of connection retries
 RETRY_DELAY = 5  # delay (in seconds) between retries
-FINAL_STATUSES = [item for key, (value, emoji) in MVCR_STATUSES.items() if key != "in_progress" for item in value]
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +26,7 @@ class RabbitMQ:
         self.connection = None
         self.channel = None
         self.queue = None
+        self.expiration_queue = None
         self.service_queue = None
         self.default_exchange = None
         self.published_messages = cachetools.TTLCache(maxsize=10000, ttl=requeue_ttl)
@@ -42,6 +42,7 @@ class RabbitMQ:
                 )
                 self.channel = await self.connection.channel()
                 self.queue = await self.channel.declare_queue("StatusUpdateQueue", durable=True)
+                self.expiration_queue = await self.channel.declare_queue("ExpirationQueue", durable=True)
                 self.service_queue = await self.channel.declare_queue("FetcherMetricsQueue", durable=False)
                 self.default_exchange = self.channel.default_exchange
                 logger.info("Connected to RabbitMQ")
@@ -79,7 +80,8 @@ class RabbitMQ:
 
     def is_resolved(self, status):
         """Check if the application was resolved to its final status"""
-        return any(phrase in status for phrase in FINAL_STATUSES)
+        final_statuses = MVCR_STATUSES.get('approved')[0] + MVCR_STATUSES.get('denied')[0]
+        return any(final_status in status for final_status in final_statuses)
 
     def _generate_error_message(self, app_details, lang):
         """Generate an error message for an application number"""
@@ -87,7 +89,7 @@ class RabbitMQ:
 
         return message_texts[lang]["application_failed"].format(app_string=app_string)
 
-    async def on_message(self, message: aio_pika.IncomingMessage):
+    async def on_update_message(self, message: aio_pika.IncomingMessage):
         """Async function to handle messages from StatusUpdateQueue"""
         async with message.process():
             msg_data = json.loads(message.body.decode("utf-8"))
@@ -198,6 +200,31 @@ class RabbitMQ:
                     except Exception as e:
                         logger.error(f"Failed to send status update to {chat_id}: {e}")
 
+    async def on_expiration_message(self, message: aio_pika.IncomingMessage):
+        """Async function to handle messages from ExpirationQueue"""
+        async with message.process():
+            msg_data = json.loads(message.body.decode('utf-8'))
+            oam_full_string = generate_oam_full_string(msg_data)
+            logger.info(
+                f"[EXPIRE] Application {oam_full_string} created at {msg_data['created_at']} "
+                "has been too long in the state NOT_FOUND, expiring"
+            )
+
+            application_id = msg_data.get("application_id")
+            chat_id = msg_data.get("chat_id")
+
+            if await self.db.resolve_application(application_id):
+                lang = await self.db.fetch_user_language(chat_id)
+                notification_text = message_texts[lang]["not_found_expired"].format(app_string=oam_full_string)
+
+                # notify the user
+                try:
+                    await self.bot.updater.bot.send_message(chat_id=chat_id, text=notification_text)
+                    logger.debug(f"Notifying user {chat_id} about application {oam_full_string} expiration")
+                except Exception as e:
+                    logger.error(f"Failed to send expiration notification to {chat_id}: {e}")
+
+
     async def on_service_message(self, message: aio_pika.IncomingMessage):
         """Async function to handle service messages from FetcherMetricsQueue"""
         async with message.process():
@@ -209,10 +236,15 @@ class RabbitMQ:
             else:
                 logger.error(f"Couldn't find fetcher ID in the service message: {msg_data}")
 
-    async def consume_messages(self):
-        """Consumes messages from the queue and handles them using on_message"""
-        await self.queue.consume(lambda message: self.on_message(message))
+    async def consume_update_messages(self):
+        """Consumes messages with status updates"""
+        await self.queue.consume(lambda message: self.on_update_message(message))
         logger.info("Started status updates consumer")
+
+    async def consume_expiration_messages(self):
+        """Consumes messages with requests to expire stale NOT_FOUND applications"""
+        await self.expiration_queue.consume(lambda message: self.on_expiration_message(message))
+        logger.info("Started expiration requests consumer")
 
     async def consume_service_messages(self):
         """Consumes service messages (fetcher stats )"""

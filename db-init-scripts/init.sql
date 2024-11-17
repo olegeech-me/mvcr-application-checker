@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS Applications (
     application_year INT NOT NULL,
     current_status VARCHAR(1000) DEFAULT 'Unknown',
     application_state VARCHAR(50) NOT NULL DEFAULT 'UNKNOWN',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_updated TIMESTAMP,
     is_resolved BOOLEAN NOT NULL DEFAULT FALSE
 );

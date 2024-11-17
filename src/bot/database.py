@@ -232,27 +232,72 @@ class Database:
                 )
                 return message_texts[lang]["error_generic"]
 
-    async def fetch_applications_needing_update(self, refresh_period):
-        """Fetch applications that need updates based on the refresh period"""
+    async def fetch_applications_needing_update(self, refresh_period, not_found_refresh_period):
+        """Fetch applications that need updates based on their refresh periods"""
 
-        # Convert the timedelta refresh period to seconds for the SQL interval
-        seconds = refresh_period.total_seconds()
+        refresh_seconds = refresh_period.total_seconds()
+        not_found_seconds = not_found_refresh_period.total_seconds()
 
-        # Fetch rows where the current time minus last_checked is more than the refresh period
         query = """
-            SELECT u.chat_id, a.application_number, a.application_suffix, a.application_type, a.application_year, a.last_updated
+            SELECT u.chat_id, a.application_number, a.application_suffix, a.application_type,
+                   a.application_year, a.last_updated, a.application_state
             FROM Applications a
             JOIN Users u ON a.user_id = u.user_id
-            WHERE EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - COALESCE(a.last_updated, TIMESTAMP '1970-01-01'))) > $1
+            WHERE (
+                (a.application_state != 'NOT_FOUND' AND
+                 EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - COALESCE(a.last_updated, TIMESTAMP '1970-01-01'))) > $1)
+                OR
+                (a.application_state = 'NOT_FOUND' AND
+                 EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - COALESCE(a.last_updated, TIMESTAMP '1970-01-01'))) > $2)
+            )
             AND a.is_resolved = FALSE
         """
 
         async with self.pool.acquire() as conn:
             try:
-                return await conn.fetch(query, seconds)
+                return await conn.fetch(query, refresh_seconds, not_found_seconds)
             except Exception as e:
-                logger.error(f"Error while fetching applications needing update. Error: {e}")
+                logger.error(f"Error while fetching applications needing update from DB: {e}")
                 return []
+
+
+    async def fetch_applications_to_expire(self, not_found_max_age):
+        """Fetch applications in NOT_FOUND state exceeding the max age"""
+        not_found_seconds = not_found_max_age.total_seconds()
+
+        query = """
+            SELECT a.application_id, u.chat_id, a.application_number, a.application_suffix,
+                   a.application_type, a.application_year, a.created_at
+            FROM Applications a
+            JOIN Users u ON a.user_id = u.user_id
+            WHERE a.application_state = 'NOT_FOUND'
+              AND EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - a.created_at)) >= $1
+              AND a.is_resolved = FALSE
+        """
+
+        async with self.pool.acquire() as conn:
+            try:
+                rows = await conn.fetch(query, not_found_seconds)
+                return [dict(row) for row in rows]
+            except Exception as e:
+                logger.error(f"Error while fetching applications to expire from DB: {e}")
+                return []
+
+    async def resolve_application(self, application_id):
+        """Mark application as resolved"""
+
+        query = """
+            UPDATE Applications
+            SET is_resolved = TRUE
+            WHERE application_id = $1
+        """
+        async with self.pool.acquire() as conn:
+            try:
+                await conn.execute(query, application_id)
+                return True
+            except Exception as e:
+                logger.error(f"Error while marking as resolved application with ID {application_id} in DB: {e}")
+                return False
 
     async def user_exists(self, chat_id):
         """Check if a user exists in the database"""
@@ -263,7 +308,7 @@ class Database:
                 exists = await conn.fetchval(query, chat_id)
                 return exists
             except Exception as e:
-                logger.error(f"Error while checking if user with chat_id {chat_id} exists. Error: {e}")
+                logger.error(f"Error while checking if user with chat_id {chat_id} exists in DB: {e}")
                 return False
 
     async def subscription_exists(self, chat_id, application_number, application_type, application_year):

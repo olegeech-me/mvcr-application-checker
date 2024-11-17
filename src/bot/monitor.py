@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from datetime import timedelta
-from bot.loader import REFRESH_PERIOD, SCHEDULER_PERIOD
+from bot.loader import REFRESH_PERIOD, SCHEDULER_PERIOD, NOT_FOUND_REFRESH_PERIOD, NOT_FOUND_MAX_DAYS
 from bot.utils import generate_oam_full_string
 
 logger = logging.getLogger(__name__)
@@ -12,22 +12,31 @@ class ApplicationMonitor:
         self.db = db
         self.rabbit = rabbit
         self.refresh = timedelta(seconds=REFRESH_PERIOD)
+        self.not_found_refresh = timedelta(seconds=NOT_FOUND_REFRESH_PERIOD)
+        self.not_found_max_age = timedelta(days=NOT_FOUND_MAX_DAYS)
         self.shutdown_event = asyncio.Event()
 
     async def start(self):
         logger.info(
-            f"Application status monitor started, refresh_interval={REFRESH_PERIOD}, scheduler_interval={SCHEDULER_PERIOD}"
+            f"Application status monitor started, scheduler_interval={SCHEDULER_PERIOD}, "
+            f"refresh_interval={REFRESH_PERIOD}, not_found_refresh_interval={NOT_FOUND_REFRESH_PERIOD}, "
+            f"not_found_max_age={NOT_FOUND_MAX_DAYS}"
         )
+
         while not self.shutdown_event.is_set():
             logger.info("Running periodic status checks")
             await self.check_for_updates()
+            await self.expire_stale_not_found_applications()
             try:
                 await asyncio.wait_for(self.shutdown_event.wait(), timeout=SCHEDULER_PERIOD)
             except asyncio.TimeoutError:
                 pass
 
     async def check_for_updates(self):
-        applications_to_update = await self.db.fetch_applications_needing_update(self.refresh)
+        applications_to_update = await self.db.fetch_applications_needing_update(
+            self.refresh,
+            self.not_found_refresh
+        )
 
         if not applications_to_update:
             logger.info("No applications need status refresh")
@@ -51,6 +60,33 @@ class ApplicationMonitor:
                 f"Scheduling status refresh for {oam_full_string}, user: {app['chat_id']}, last_updated: {app['last_updated']}"
             )
             await self.rabbit.publish_message(message, routing_key="RefreshStatusQueue")
+
+    async def expire_stale_not_found_applications(self):
+        applications_to_expire = await self.db.fetch_applications_to_expire(self.not_found_max_age)
+        if not applications_to_expire:
+            logger.debug("No applications to expire")
+            return
+
+        logger.info(f"{len(applications_to_expire)} application(s) to expire")
+        for app in applications_to_expire:
+
+            message = {
+                "application_id": app['application_id'],
+                "chat_id": app["chat_id"],
+                "number": app['application_number'],
+                "suffix": app['application_suffix'],
+                "type": app['application_type'],
+                "year": app['application_year'],
+                "created_at": app['created_at']
+            }
+            oam_full_string = generate_oam_full_string(app)
+            logger.info(
+                f"Scheduling expiration for {oam_full_string}, user: {app['chat_id']}, created_at: {app['created_at']}"
+            )
+            await self.rabbit.publish_message(
+                message,
+                routing_key="ExpirationQueue"
+            )
 
     def stop(self):
         self.shutdown_event.set()
