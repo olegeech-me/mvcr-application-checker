@@ -1,6 +1,6 @@
-# MVCR Residential Application Status Notifier
+# MVČR Residential Application Status Notifier
 
-This project offers automation for the residential application status from the Ministry of Interior of the Czech Republic. It diligently tracks changes in status and immediately notifies users of any updates. Users can conveniently subscribe to these notifications via the Telegram bot [MVCR Status Řízení Bot](https://t.me/mvcr_status_rizeni_2024_bot). After providing their application details, the integrated monitor service will fetch and compare the application status at periodic intervals to keep users informed.
+This project offers automation for the residential application status from the Ministry of Interior of the Czech Republic. It diligently tracks changes in status and immediately notifies users of any updates. Users can conveniently subscribe to these notifications via the Telegram bot [MVČR Status Řízení Bot](https://t.me/mvcr_status_rizeni_2024_bot). After providing their application details, the integrated monitor service will fetch and compare the application status at periodic intervals to keep users informed.
 
 ## Modules and Architecture
 
@@ -32,7 +32,7 @@ The project is architecturally divided into two primary modules:
 
 To start receiving notifications:
 
-1. Open the Telegram app and search for [MVCR Status Řízení Bot](https://t.me/mvcr_status_rizeni_2024_bot).
+1. Open the Telegram app and search for [MVČR Stav Řízení Bot](https://t.me/mvcr_status_rizeni_2024_bot).
 2. Click on **Start** or send `/start` to initiate the conversation.
 3. Follow the prompts to enter your application details.
 4. The bot will notify you of any status updates.
