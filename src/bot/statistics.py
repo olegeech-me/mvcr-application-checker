@@ -98,11 +98,12 @@ class Statistics:
                 continue  # Skip if no average time is available for this type
             logger.debug(f"Application {app['application_id']} type: {type}, avg_time: {avg_time}")
             time_elapsed = (datetime.utcnow() - app['created_at']).total_seconds()
+
+            estimated_remaining = float(avg_time) - time_elapsed
             logger.debug(
                 f"Application {app['application_id']} time_elapsed: {time_elapsed} seconds, "
                 f"estimated_remaining: {estimated_remaining} seconds"
             )
-            estimated_remaining = float(avg_time) - time_elapsed
             if estimated_remaining > 0:
                 predictions.append({
                     'application_number': generate_oam_full_string(app),
