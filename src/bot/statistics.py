@@ -87,7 +87,7 @@ class Statistics:
                 continue  # Skip if no average time is available for this type
 
             time_elapsed = (datetime.utcnow() - app['created_at']).total_seconds()
-            estimated_remaining = avg_time - time_elapsed
+            estimated_remaining = float(avg_time) - time_elapsed
             if estimated_remaining > 0:
                 predictions.append({
                     'application_number': generate_oam_full_string(app),
