@@ -86,7 +86,7 @@ class Statistics:
             if not avg_time:
                 continue  # Skip if no average time is available for this type
 
-            time_elapsed = (datetime.now(timezone.utc) - app['created_at']).total_seconds()
+            time_elapsed = (datetime.utcnow() - app['created_at']).total_seconds()
             estimated_remaining = avg_time - time_elapsed
             if estimated_remaining > 0:
                 predictions.append({
