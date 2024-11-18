@@ -1,8 +1,10 @@
 import logging
 from datetime import datetime, timedelta
 from collections import Counter
-from bot.loader import STATISTICS_PERIOD_DAYS
+from bot.loader import STATISTICS_PERIOD_DAYS, STATISTICS_MIN_TRESHOLD_DAYS
 from bot.utils import generate_oam_full_string
+
+MIN_PROCESSING_TIME_SECONDS = STATISTICS_MIN_TRESHOLD_DAYS * 86400
 
 logger = logging.getLogger(__name__)
 
@@ -43,10 +45,19 @@ class Statistics:
         start_date, end_date = self._get_period_dates(period_days)
         processing_times = await self.db.fetch_processing_times_within_period(start_date, end_date)
         if not processing_times:
-            logger.debug("No processing times available")
+            logger.info("No processing times available")
             return None, {}
 
         logger.debug(f"Processing times fetched: {processing_times}")
+
+        # Filter out processing times below the minimum threshold
+        filtered_processing_times = [
+            app for app in processing_times if app['processing_time'] >= MIN_PROCESSING_TIME_SECONDS
+        ]
+        if not filtered_processing_times:
+            logger.info("No processing times above the minimum threshold")
+            return None, {}
+
         total_time = sum(app['processing_time'] for app in processing_times)
         overall_average = total_time / len(processing_times)
         logger.debug(f"Overall average processing time: {overall_average} seconds")
@@ -69,7 +80,7 @@ class Statistics:
         start_date, end_date = self._get_period_dates(period_days)
         hours = await self.db.fetch_status_change_hours_within_period(start_date, end_date)
         if not hours:
-            logger.debug("No status change hours available")
+            logger.info("No status change hours available")
             return None
 
         logger.debug(f"Status change hours fetched: {hours}")
@@ -96,17 +107,19 @@ class Statistics:
             if not avg_time:
                 logger.debug(f"No average time available for application type {type}")
                 continue  # Skip if no average time is available for this type
-            logger.debug(f"Application {app['application_id']} type: {type}, avg_time: {avg_time}")
+
+            logger.info(f"Application {app['application_id']} type: {type}, avg_time: {avg_time}")
             time_elapsed = (datetime.utcnow() - app['created_at']).total_seconds()
 
             estimated_remaining = float(avg_time) - time_elapsed
-            logger.debug(
+            logger.info(
                 f"Application {app['application_id']} time_elapsed: {time_elapsed} seconds, "
-                f"estimated_remaining: {estimated_remaining} seconds"
+                f"estimated_remaining: {estimated_remaining} seconds remaining"
             )
             if estimated_remaining > 0:
                 predictions.append({
                     'application_number': generate_oam_full_string(app),
                     'days_remaining': estimated_remaining / 86400  # Convert seconds to days
                 })
+
         return predictions

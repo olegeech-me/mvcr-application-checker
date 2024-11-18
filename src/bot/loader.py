@@ -35,6 +35,7 @@ NOT_FOUND_MAX_DAYS = int(os.getenv("NOT_FOUND_MAX_DAYS", 30))
 NOT_FOUND_REFRESH_PERIOD = int(os.getenv("NOT_FOUND_REFRESH_PERIOD", 86400))
 # Statistics module config
 STATISTICS_PERIOD_DAYS = int(os.getenv("STATISTICS_PERIOD_DAYS", 60))
+STATISTICS_MIN_TRESHOLD_DAYS = int(os.getenv("STATISTICS_MIN_TRESHOLD_DAYS", 1))
 # Run mode for tests
 RUN_MODE = os.getenv("RUN_MODE", "PROD")
 
