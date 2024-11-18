@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta
 from collections import Counter
 from bot.loader import STATISTICS_PERIOD_DAYS
 from bot.utils import generate_oam_full_string
@@ -15,7 +15,7 @@ class Statistics:
         """Helper method to calculate start and end dates based on period_days"""
         if period_days is None:
             period_days = STATISTICS_PERIOD_DAYS
-        end_date = datetime.now(timezone.utc)
+        end_date = datetime.utcnow()
         start_date = end_date - timedelta(days=period_days)
         return start_date, end_date
 
