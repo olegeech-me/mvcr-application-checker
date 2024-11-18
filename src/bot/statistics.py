@@ -105,7 +105,7 @@ class Statistics:
             type = app['application_type']
             avg_time = avg_times_by_category.get(type)
             if not avg_time:
-                logger.debug(f"No average time available for application type {type}")
+                logger.info(f"No average time available for application type {type}")
                 continue  # Skip if no average time is available for this type
 
             logger.info(f"Application {app['application_id']} type: {type}, avg_time: {avg_time}")
