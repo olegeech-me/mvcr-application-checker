@@ -1,4 +1,4 @@
-name: Build and Push Docker Images
+name: Build and Push Fetcher Docker Image
 
 on:
   push:
@@ -7,11 +7,10 @@ on:
     tags:
       - '*'
     paths:
-      - 'Dockerfile_bot'
       - 'Dockerfile_fetcher'
-      - 'src/**'
-      - 'requirements-bot.txt'
+      - 'src/fetcher/**'
       - 'requirements-fetcher.txt'
+      - 'src/tests/**'
 
 jobs:
   docker:
@@ -55,20 +54,6 @@ jobs:
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-    # Build and push bot image
-    - name: Build and push bot Docker image
-      uses: docker/build-push-action@v2
-      with:
-        context: .
-        file: ./Dockerfile_bot
-        push: true
-        tags: |
-          olegeech/mvcr-application-checker:bot-latest
-          olegeech/mvcr-application-checker:bot-${{ env.LATEST_TAG }}
-        build-args: |
-          BASE_VERSION=${{ env.LATEST_TAG }}
-          GIT_COMMIT=${{ env.SHORT_SHA }}
 
     # Build and push fetcher image
     - name: Build and push fetcher Docker image
