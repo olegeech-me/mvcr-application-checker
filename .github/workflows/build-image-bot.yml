@@ -10,7 +10,12 @@ on:
       - 'Dockerfile_bot'
       - 'src/bot/**'
       - 'requirements-bot.txt'
-      - 'src/tests/**'
+  pull_request:
+    paths:
+      - 'Dockerfile_bot'
+      - 'src/bot/**'
+      - 'requirements-bot.txt'
+
 
 jobs:
   docker:
@@ -50,6 +55,7 @@ jobs:
 
     # Login to Docker Hub
     - name: Login to DockerHub
+      if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
       uses: docker/login-action@v1
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -61,7 +67,7 @@ jobs:
       with:
         context: .
         file: ./Dockerfile_bot
-        push: true
+        push: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) }}
         tags: |
           olegeech/mvcr-application-checker:bot-latest
           olegeech/mvcr-application-checker:bot-${{ env.LATEST_TAG }}
