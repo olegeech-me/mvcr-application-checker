@@ -29,15 +29,15 @@ class Statistics:
         logger.debug(f"Fetched {len(applications)} applications within period")
 
         total_applications = len(applications)
-        status_counts = Counter(app['application_state'] for app in applications)
+        status_counts = Counter(app["application_state"] for app in applications)
         logger.debug(f"Application status counts: {status_counts}")
 
         return {
-            'total_applications': total_applications,
-            'approved': status_counts.get('APPROVED', 0),
-            'denied': status_counts.get('DENIED', 0),
-            'in_progress': status_counts.get('IN_PROGRESS', 0),
-            'not_found': status_counts.get('NOT_FOUND', 0),
+            "total_applications": total_applications,
+            "approved": status_counts.get("APPROVED", 0),
+            "denied": status_counts.get("DENIED", 0),
+            "in_progress": status_counts.get("IN_PROGRESS", 0),
+            "not_found": status_counts.get("NOT_FOUND", 0),
         }
 
     async def calculate_average_processing_times(self, period_days=None):
@@ -51,27 +51,22 @@ class Statistics:
         logger.debug(f"Processing times fetched: {processing_times}")
 
         # Filter out processing times below the minimum threshold
-        filtered_processing_times = [
-            app for app in processing_times if app['processing_time'] >= MIN_PROCESSING_TIME_SECONDS
-        ]
+        filtered_processing_times = [app for app in processing_times if app["processing_time"] >= MIN_PROCESSING_TIME_SECONDS]
         if not filtered_processing_times:
             logger.info("No processing times above the minimum threshold")
             return None, {}
 
-        total_time = sum(app['processing_time'] for app in processing_times)
+        total_time = sum(app["processing_time"] for app in processing_times)
         overall_average = total_time / len(processing_times)
         logger.debug(f"Overall average processing time: {overall_average} seconds")
 
         times_by_category = {}
         for app in processing_times:
-            app_type = app['application_type']
+            app_type = app["application_type"]
             # use setdefault to make sure key exists and initialized
-            times_by_category.setdefault(app_type, []).append(app['processing_time'])
+            times_by_category.setdefault(app_type, []).append(app["processing_time"])
 
-        average_times_by_category = {
-            app_type: sum(times) / len(times)
-            for app_type, times in times_by_category.items()
-        }
+        average_times_by_category = {app_type: sum(times) / len(times) for app_type, times in times_by_category.items()}
         logger.debug(f"Average processing times by category: {average_times_by_category}")
         return overall_average, average_times_by_category
 
@@ -99,17 +94,17 @@ class Statistics:
 
         predictions = []
         for app in applications:
-            if app['is_resolved']:
+            if app["is_resolved"]:
                 continue  # Skip resolved
 
-            type = app['application_type']
+            type = app["application_type"]
             avg_time = avg_times_by_category.get(type)
             if not avg_time:
                 logger.info(f"No average time available for application type {type}")
                 continue  # Skip if no average time is available for this type
 
             logger.info(f"Application {app['application_id']} type: {type}, avg_time: {avg_time}")
-            time_elapsed = (datetime.utcnow() - app['created_at']).total_seconds()
+            time_elapsed = (datetime.utcnow() - app["created_at"]).total_seconds()
 
             estimated_remaining = float(avg_time) - time_elapsed
             logger.info(
@@ -117,9 +112,11 @@ class Statistics:
                 f"estimated_remaining: {estimated_remaining} seconds remaining"
             )
             if estimated_remaining > 0:
-                predictions.append({
-                    'application_number': generate_oam_full_string(app),
-                    'days_remaining': estimated_remaining / 86400  # Convert seconds to days
-                })
+                predictions.append(
+                    {
+                        "application_number": generate_oam_full_string(app),
+                        "days_remaining": estimated_remaining / 86400,  # Convert seconds to days
+                    }
+                )
 
         return predictions
