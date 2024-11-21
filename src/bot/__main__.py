@@ -8,7 +8,7 @@ from bot.loader import loader, loop, FULL_VERSION, LOG_LEVEL, ADMIN_CHAT_IDS
 from bot.handlers import start_command, help_command, unknown_text, unknown_command, status_command
 from bot.handlers import unsubscribe_command, subscribe_command, admin_stats_command, fetcher_stats_command
 from bot.handlers import force_refresh_command, subscribe_button, lang_command, set_language_startup, set_language_cmd
-from bot.handlers import status_button, unsubscribe_button, force_refresh_button
+from bot.handlers import stats_command, status_button, unsubscribe_button, force_refresh_button
 from bot.handlers import (
     application_dialog_number,
     application_dialog_year,
@@ -93,6 +93,7 @@ async def main():
     bot.add_handler(CommandHandler("fetcher_stats", fetcher_stats_command, has_args=False))
     bot.add_handler(CommandHandler("lang", lang_command, has_args=False))
     bot.add_handler(CallbackQueryHandler(set_language_cmd, pattern="set_lang_cmd_*"))
+    bot.add_handler(CommandHandler("stats", stats_command))
     bot.add_handler(CommandHandler("help", help_command, has_args=False))
     # Define conversatinal handler for user-friendly application dialog
     conv_handler = ConversationHandler(
