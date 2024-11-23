@@ -96,8 +96,15 @@ class Database:
         return True
 
     async def update_application_status(
-        self, chat_id, application_number, application_type, application_year,
-        current_status, is_resolved, application_state, has_changed
+        self,
+        chat_id,
+        application_number,
+        application_type,
+        application_year,
+        current_status,
+        is_resolved,
+        application_state,
+        has_changed,
     ):
         """Update status, is_resolved, changed_at, and state for a specific application"""
 
@@ -118,9 +125,7 @@ class Database:
         changed_at_clause = ", changed_at = CURRENT_TIMESTAMP" if has_changed else ""
         query = base_query.format(changed_at_clause=changed_at_clause)
 
-        params = (
-            current_status, is_resolved, application_state, chat_id, application_number, application_type, application_year
-        )
+        params = (current_status, is_resolved, application_state, chat_id, application_number, application_type, application_year)
         async with self.pool.acquire() as conn:
             try:
                 await conn.execute(query, *params)
@@ -273,7 +278,6 @@ class Database:
             except Exception as e:
                 logger.error(f"Error while fetching applications needing update from DB: {e}")
                 return []
-
 
     async def fetch_applications_to_expire(self, not_found_max_age):
         """Fetch applications in NOT_FOUND state exceeding the max age"""
@@ -525,8 +529,9 @@ class Database:
             FROM Reminders r
             INNER JOIN Users u ON r.user_id = u.user_id
             INNER JOIN Applications a ON r.application_id = a.application_id
-            WHERE EXTRACT(HOUR FROM r.reminder_time) = $1
-            AND EXTRACT(MINUTE FROM r.reminder_time) = $2;
+            WHERE a.application_state != 'APPROVED'
+              AND EXTRACT(HOUR FROM r.reminder_time) = $1
+              AND EXTRACT(MINUTE FROM r.reminder_time) = $2;
         """
         async with self.pool.acquire() as conn:
             try:
@@ -553,7 +558,7 @@ class Database:
         query = "SELECT COUNT(*) FROM Applications"
         if active_only:
             query += " WHERE is_resolved = FALSE"
-        
+
         async with self.pool.acquire() as conn:
             try:
                 count = await conn.fetchval(query)
@@ -561,7 +566,6 @@ class Database:
             except Exception as e:
                 logger.error(f"Error while fetching total {'active ' if active_only else ''}subscriptions count. Error: {e}")
                 return None
-
 
     async def close(self):
         logger.info("Shutting down DB connection")
