@@ -529,7 +529,7 @@ class Database:
             FROM Reminders r
             INNER JOIN Users u ON r.user_id = u.user_id
             INNER JOIN Applications a ON r.application_id = a.application_id
-            WHERE a.application_state != 'APPROVED'
+            WHERE a.is_resolved = FALSE
               AND EXTRACT(HOUR FROM r.reminder_time) = $1
               AND EXTRACT(MINUTE FROM r.reminder_time) = $2;
         """
