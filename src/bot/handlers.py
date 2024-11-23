@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 db = loader.db
 rabbit = loader.rabbit
 
+
 def get_allowed_years():
     """Compute allowed years to select"""
     current_year = datetime.datetime.today().year
@@ -320,7 +321,9 @@ async def application_dialog_type(update: Update, context: ContextTypes.DEFAULT_
         # XXX FIXME(fernflower) Later switch to i18n message
         await query.edit_message_text(f"Unsupported application type {app_type}")
     # Show keyboard for application year selection
-    keyboard = [[InlineKeyboardButton(str(year), callback_data=f"application_dialog_year_{year}") for year in get_allowed_years()]]
+    keyboard = [
+        [InlineKeyboardButton(str(year), callback_data=f"application_dialog_year_{year}") for year in get_allowed_years()]
+    ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(message_texts[lang]["dialog_year"], reply_markup=reply_markup)
     return YEAR
@@ -833,6 +836,10 @@ async def _generate_application_buttons(chat_id, lang):
     # Display list of user applications for selection
     keyboard = []
     for app in applications:
+        # skip resolved applications
+        if app["is_resolved"]:
+            continue
+
         app_details = generate_oam_full_string(app)
         button = InlineKeyboardButton(app_details, callback_data=f"selectapp_{app['application_id']}")
         keyboard.append([button])
