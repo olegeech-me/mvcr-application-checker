@@ -7,6 +7,7 @@ MVCR_STATUSES = {
     "in_progress": (["zpracovává se", "v-prubehu-rizeni"], "🟡"),
     "approved": (["bylo <b>povoleno</b>", "rizeni-povoleno"], "🟢"),
     "denied": (["bylo <b>nepovoleno</b>", "zamítlo", "zastavilo"], "🔴"),
+    "error": (["ERROR"], "🔴"),
 }
 
 

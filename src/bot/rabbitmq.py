@@ -80,7 +80,7 @@ class RabbitMQ:
 
     def is_resolved(self, status):
         """Check if the application was resolved to its final status"""
-        final_statuses = MVCR_STATUSES.get('approved')[0] + MVCR_STATUSES.get('denied')[0]
+        final_statuses = MVCR_STATUSES.get("approved")[0] + MVCR_STATUSES.get("denied")[0]
         return any(final_status in status for final_status in final_statuses)
 
     def _generate_error_message(self, app_details, lang):
@@ -102,6 +102,7 @@ class RabbitMQ:
             force_refresh = msg_data.get("force_refresh", False)
             failed = msg_data.get("failed", False)
             request_type = msg_data.get("request_type", None)
+            is_reminder = msg_data.get("is_reminder", False)
             has_changed = False
             oam_full_string = generate_oam_full_string(msg_data)
 
@@ -122,7 +123,7 @@ class RabbitMQ:
                 if failed and request_type == "refresh":
                     # Drop failed refresh requests with log message
                     # But do not update status in DB to avoid mass status rewrite
-                    # in case of issues at fetcher
+                    # in case of issues on fetchers
                     logger.warning(f"[REFRESH FAILED] Failed to refresh status {oam_full_string}, user {chat_id}")
                     return
 
@@ -142,8 +143,18 @@ class RabbitMQ:
                     await self.db.update_last_checked(chat_id, number, type_, year)
                     return
 
-                if failed and request_type == "fetch":
-                    is_resolved = True
+                if failed:
+                    if request_type == "fetch":
+                        # Tolerate failed fetch requests triggered by reminders, do not notify users / change status in db
+                        if is_reminder:
+                            logger.error(
+                                f"[REMINDER] Failed to to fetch status for {oam_full_string}, "
+                                f"user {chat_id}, status: {received_status}"
+                            )
+                            return
+                        else:
+                            # If we failed during initial application fetch, further processing is frozen
+                            is_resolved = True
                 else:
                     is_resolved = self.is_resolved(received_status)
 
@@ -205,7 +216,7 @@ class RabbitMQ:
     async def on_expiration_message(self, message: aio_pika.IncomingMessage):
         """Async function to handle messages from ExpirationQueue"""
         async with message.process():
-            msg_data = json.loads(message.body.decode('utf-8'))
+            msg_data = json.loads(message.body.decode("utf-8"))
             application_id = msg_data.get("application_id")
             chat_id = msg_data.get("chat_id")
             oam_full_string = generate_oam_full_string(msg_data)
@@ -224,7 +235,6 @@ class RabbitMQ:
                     logger.debug(f"Notifying user {chat_id} about application {oam_full_string} expiration")
                 except Exception as e:
                     logger.error(f"Failed to send expiration notification to {chat_id}: {e}")
-
 
     async def on_service_message(self, message: aio_pika.IncomingMessage):
         """Async function to handle service messages from FetcherMetricsQueue"""
