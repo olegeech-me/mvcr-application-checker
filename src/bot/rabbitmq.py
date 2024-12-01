@@ -7,7 +7,7 @@ import cachetools
 from aiormq.exceptions import AMQPConnectionError
 from bot.texts import message_texts
 from bot.utils import generate_oam_full_string
-from bot.utils import MVCR_STATUSES, categorize_application_status
+from bot.utils import MVCR_STATUSES, categorize_application_status, notify_user
 
 MAX_RETRIES = 5  # maximum number of connection retries
 RETRY_DELAY = 5  # delay (in seconds) between retries
@@ -207,11 +207,7 @@ class RabbitMQ:
                         notification_text = f"{message}\n\n{received_status}"
 
                     # notify the user
-                    try:
-                        await self.bot.updater.bot.send_message(chat_id=chat_id, text=notification_text)
-                        logger.debug(f"Sent status update to chatID {chat_id}")
-                    except Exception as e:
-                        logger.error(f"Failed to send status update to {chat_id}: {e}")
+                    await notify_user(self.bot, chat_id, notification_text)
 
     async def on_expiration_message(self, message: aio_pika.IncomingMessage):
         """Async function to handle messages from ExpirationQueue"""
@@ -230,11 +226,7 @@ class RabbitMQ:
                 notification_text = message_texts[lang]["not_found_expired"].format(app_string=oam_full_string)
 
                 # notify the user
-                try:
-                    await self.bot.updater.bot.send_message(chat_id=chat_id, text=notification_text)
-                    logger.debug(f"Notifying user {chat_id} about application {oam_full_string} expiration")
-                except Exception as e:
-                    logger.error(f"Failed to send expiration notification to {chat_id}: {e}")
+                await notify_user(self.bot, chat_id, notification_text)
 
     async def on_service_message(self, message: aio_pika.IncomingMessage):
         """Async function to handle service messages from FetcherMetricsQueue"""
