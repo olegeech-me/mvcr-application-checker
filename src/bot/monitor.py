@@ -33,10 +33,7 @@ class ApplicationMonitor:
                 pass
 
     async def check_for_updates(self):
-        applications_to_update = await self.db.fetch_applications_needing_update(
-            self.refresh,
-            self.not_found_refresh
-        )
+        applications_to_update = await self.db.fetch_applications_needing_update(self.refresh, self.not_found_refresh)
 
         if not applications_to_update:
             logger.info("No applications need status refresh")
@@ -71,23 +68,18 @@ class ApplicationMonitor:
         for app in applications_to_expire:
 
             message = {
-                "application_id": app['application_id'],
+                "application_id": app["application_id"],
                 "chat_id": app["chat_id"],
-                "number": app['application_number'],
-                "suffix": app['application_suffix'],
-                "type": app['application_type'],
-                "year": app['application_year'],
+                "number": app["application_number"],
+                "suffix": app["application_suffix"],
+                "type": app["application_type"],
+                "year": app["application_year"],
                 "request_type": "expire",
                 "last_updated": app["created_at"].isoformat() if app["created_at"] else "0",
             }
             oam_full_string = generate_oam_full_string(app)
-            logger.info(
-                f"Scheduling expiration for {oam_full_string}, user: {app['chat_id']}, created_at: {app['created_at']}"
-            )
-            await self.rabbit.publish_message(
-                message,
-                routing_key="ExpirationQueue"
-            )
+            logger.info(f"Scheduling expiration for {oam_full_string}, user: {app['chat_id']}, created_at: {app['created_at']}")
+            await self.rabbit.publish_message(message, routing_key="ExpirationQueue")
 
     def stop(self):
         self.shutdown_event.set()
@@ -129,6 +121,7 @@ class ReminderMonitor:
                 "force_refresh": True,
                 "failed": False,
                 "request_type": "fetch",
+                "is_reminder": True,
                 "last_updated": reminder["last_updated"].isoformat() if reminder["last_updated"] else "0",
             }
             oam_full_string = generate_oam_full_string(reminder)
