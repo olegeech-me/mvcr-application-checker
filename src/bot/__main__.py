@@ -33,6 +33,10 @@ from bot.handlers import (
 )
 from bot import monitor
 
+# init opentelementry
+from bot import tracing  # noqa
+
+
 MAX_RETRIES = 15  # maximum number bot of connection retries
 RETRY_DELAY = 5  # delay (in seconds) between retries
 

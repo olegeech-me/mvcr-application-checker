@@ -4,3 +4,9 @@ asyncpg==0.28.0
 uvloop==0.17.0
 pytz
 cachetools
+
+# OpenTelemetry dependencies
+opentelemetry-api
+opentelemetry-sdk
+opentelemetry-exporter-zipkin
+opentelemetry-instrumentation-asyncio

@@ -5,10 +5,12 @@ import pytz
 import asyncio
 from bot.texts import message_texts
 from bot.utils import categorize_application_status
+from opentelemetry import trace
 
 MAX_RETRIES = 5  # maximum number of connection retries
 RETRY_DELAY = 2  # delay (in seconds) between retries
 
+tracer = trace.get_tracer(__name__)
 logger = logging.getLogger(__name__)
 
 
@@ -184,16 +186,22 @@ class Database:
         query = """SELECT *
                    FROM Applications
                    WHERE user_id = (SELECT user_id FROM Users WHERE chat_id = $1)"""
-        async with self.pool.acquire() as conn:
-            try:
-                rows = await conn.fetch(query, chat_id)
-                if not rows:
-                    logger.info(f"No data found for chat_id {chat_id}")
-                    return []
-                return [dict(row) for row in rows]  # Convert the records to dictionaries
-            except Exception as e:
-                logger.error(f"Error while fetching user data for chat ID: {chat_id}. Error: {e}")
-                return None
+
+        with tracer.start_as_current_span("db_fetch_user_subscriptions") as span:
+            span.set_attribute("db.operation", "SELECT")
+            span.set_attribute("db.statement", query)
+            span.set_attribute("chat.id", chat_id)
+            async with self.pool.acquire() as conn:
+                try:
+                    rows = await conn.fetch(query, chat_id)
+                    if not rows:
+                        logger.info(f"No data found for chat_id {chat_id}")
+                        return []
+                    return [dict(row) for row in rows]  # Convert the records to dictionaries
+                except Exception as e:
+                    logger.error(f"Error while fetching user data for chat ID: {chat_id}. Error: {e}")
+                    span.record_exception(e)
+                    return None
 
     async def fetch_application_status(self, chat_id, application_number, application_type, application_year):
         """Fetch the status and timestamp of a specific application for a user"""
@@ -228,28 +236,36 @@ class Database:
                    AND application_year = $4"""
         params = (chat_id, application_number, application_type, application_year)
 
-        async with self.pool.acquire() as conn:
-            try:
-                result = await conn.fetchrow(query, *params)
-                if result is not None and result["last_updated"]:
-                    current_status = result["current_status"]
-                    last_updated_utc = result["last_updated"].replace(tzinfo=pytz.utc)
-                    last_updated_prague = last_updated_utc.astimezone(pytz.timezone("Europe/Prague"))
-                    timestamp = last_updated_prague.strftime("%H:%M:%S %d-%m-%Y")
+        with tracer.start_as_current_span("db_fetch_status_with_timestamp") as span:
+            span.set_attribute("db.operation", "SELECT")
+            span.set_attribute("db.statement", query)
+            span.set_attribute("application.number", application_number)
+            span.set_attribute("application.type", application_type)
+            span.set_attribute("application.year", application_year)
+            async with self.pool.acquire() as conn:
+                try:
+                    result = await conn.fetchrow(query, *params)
+                    if result is not None and result["last_updated"]:
+                        current_status = result["current_status"]
+                        last_updated_utc = result["last_updated"].replace(tzinfo=pytz.utc)
+                        last_updated_prague = last_updated_utc.astimezone(pytz.timezone("Europe/Prague"))
+                        timestamp = last_updated_prague.strftime("%H:%M:%S %d-%m-%Y")
 
-                    status_str = message_texts[lang]["current_status_timestamp"].format(
-                        status_sign=categorize_application_status(current_status)[1],
-                        status=current_status,
-                        timestamp=timestamp,
+                        status_str = message_texts[lang]["current_status_timestamp"].format(
+                            status_sign=categorize_application_status(current_status)[1],
+                            status=current_status,
+                            timestamp=timestamp,
+                        )
+                        return status_str
+                    else:
+                        return message_texts[lang]["current_status_empty"]
+                except Exception as e:
+                    logger.error(
+                        f"Error while fetching status from DB for {chat_id} "
+                        f"and application number: {application_number}. Error: {e}"
                     )
-                    return status_str
-                else:
-                    return message_texts[lang]["current_status_empty"]
-            except Exception as e:
-                logger.error(
-                    f"Error while fetching status from DB for {chat_id} and application number: {application_number}. Error: {e}"
-                )
-                return message_texts[lang]["error_generic"]
+                    span.record_exception(e)
+                    return message_texts[lang]["error_generic"]
 
     async def fetch_applications_needing_update(self, refresh_period, not_found_refresh_period):
         """Fetch applications that need updates based on their refresh periods"""

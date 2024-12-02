@@ -8,6 +8,7 @@ from telegram.ext import ContextTypes, ConversationHandler
 from bot.loader import loader, ADMIN_CHAT_IDS, REFRESH_PERIOD, FULL_VERSION
 from bot.texts import button_texts, message_texts, commands_description
 from bot.utils import generate_oam_full_string
+from opentelemetry import trace
 
 SUBSCRIPTIONS_LIMIT = 5
 BUTTON_WAIT_SECONDS = 1
@@ -25,7 +26,7 @@ START, NUMBER, TYPE, YEAR, VALIDATE = range(5)
 BROADCAST_TEXT, BROADCAST_CONFIRM = range(2)
 REMINDER_ADD, REMINDER_DELETE = range(2)
 
-
+tracer = trace.get_tracer(__name__)
 logger = logging.getLogger(__name__)
 
 # Get instances of database and rabbitmq (lazy init)
@@ -652,23 +653,28 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"💻 Received /status command from {user_info(update)}")
     message = update.message
     chat_id = update.effective_chat.id
-    lang = await _get_user_language(update, context)
 
-    subscriptions = await db.fetch_user_subscriptions(chat_id)
-    if len(subscriptions) > 1:
-        keyboard = _generate_buttons_from_subscriptions("status", subscriptions)
-        await message.reply_text(message_texts[lang]["select_status"], reply_markup=keyboard)
-    elif len(subscriptions) == 1:
-        app_status = await db.fetch_status_with_timestamp(
-            chat_id,
-            subscriptions[0]["application_number"],
-            subscriptions[0]["application_type"],
-            subscriptions[0]["application_year"],
-            lang=lang,
-        )
-        await message.reply_text(app_status)
-    else:
-        await message.reply_text(message_texts[lang]["not_subscribed"])
+    with tracer.start_as_current_span("status_command") as span:
+        span.set_attribute("chat.id", chat_id)
+        span.set_attribute("command", "/status")
+
+        lang = await _get_user_language(update, context)
+
+        subscriptions = await db.fetch_user_subscriptions(chat_id)
+        if len(subscriptions) > 1:
+            keyboard = _generate_buttons_from_subscriptions("status", subscriptions)
+            await message.reply_text(message_texts[lang]["select_status"], reply_markup=keyboard)
+        elif len(subscriptions) == 1:
+            app_status = await db.fetch_status_with_timestamp(
+                chat_id,
+                subscriptions[0]["application_number"],
+                subscriptions[0]["application_type"],
+                subscriptions[0]["application_year"],
+                lang=lang,
+            )
+            await message.reply_text(app_status)
+        else:
+            await message.reply_text(message_texts[lang]["not_subscribed"])
 
 
 async def status_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
