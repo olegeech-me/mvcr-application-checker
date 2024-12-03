@@ -4,9 +4,12 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.exporter.zipkin.json import ZipkinExporter
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from loader import TRACING_DISABLED, ZIPKIN_ENDPOINT, ZIPKIN_TIMEOUT
 
-os.environ.setdefault("OTEL_EXPORTER_ZIPKIN_ENDPOINT", "http://localhost:9411/api/v2/spans")
-os.environ.setdefault("OTEL_EXPORTER_ZIPKIN_TIMEOUT", "5")
+os.environ("OTEL_SDK_DISABLED", TRACING_DISABLED)
+os.environ("OTEL_EXPORTER_ZIPKIN_ENDPOINT", ZIPKIN_ENDPOINT)
+os.environ("OTEL_EXPORTER_ZIPKIN_TIMEOUT", ZIPKIN_TIMEOUT)
+
 
 resource = Resource(attributes={"service.name": "mvcr-telegram-bot"})
 

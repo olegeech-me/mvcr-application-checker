@@ -33,6 +33,10 @@ REFRESH_PERIOD = int(os.getenv("REFRESH_PERIOD", 3600))
 SCHEDULER_PERIOD = int(os.getenv("SCHEDULER_PERIOD", 300))
 NOT_FOUND_MAX_DAYS = int(os.getenv("NOT_FOUND_MAX_DAYS", 30))
 NOT_FOUND_REFRESH_PERIOD = int(os.getenv("NOT_FOUND_REFRESH_PERIOD", 86400))
+# Enable Opentelemetry
+TRACING_DISABLED = os.getenv("TRACING_DISABLED", "True").lower() == "true"
+ZIPKIN_ENDPOINT = os.getenv("ZIPKIN_ENDPOINT", "http://localhost:9411/api/v2/spans")
+ZIPKIN_TIMEOUT = os.getenv("ZIPKIN_TIMEOUT", "5")
 # Run mode for tests
 RUN_MODE = os.getenv("RUN_MODE", "PROD")
 
