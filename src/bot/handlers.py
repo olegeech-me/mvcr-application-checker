@@ -683,7 +683,7 @@ async def status_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     chat_id = update.effective_chat.id
 
-    with tracer.start_as_current_span("button_callback") as span:
+    with tracer.start_as_current_span("status_button") as span:
         span.set_attribute("chat.id", chat_id)
         span.set_attribute("command", "/status")
         lang = await _get_user_language(update, context)
