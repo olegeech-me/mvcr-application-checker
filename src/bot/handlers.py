@@ -682,21 +682,25 @@ async def status_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     query = update.callback_query
     chat_id = update.effective_chat.id
-    lang = await _get_user_language(update, context)
 
-    if await _is_button_click_abused(update, context):
-        return
-    await query.answer()
+    with tracer.start_as_current_span("button_callback") as span:
+        span.set_attribute("chat.id", chat_id)
+        span.set_attribute("command", "/status")
+        lang = await _get_user_language(update, context)
 
-    app_details = _parse_application_buttons_callback_data(query.data)
-    app_status = await db.fetch_status_with_timestamp(
-        chat_id,
-        app_details["number"],
-        app_details["type"],
-        app_details["year"],
-        lang=lang,
-    )
-    await query.edit_message_text(app_status)
+        if await _is_button_click_abused(update, context):
+            return
+        await query.answer()
+
+        app_details = _parse_application_buttons_callback_data(query.data)
+        app_status = await db.fetch_status_with_timestamp(
+            chat_id,
+            app_details["number"],
+            app_details["type"],
+            app_details["year"],
+            lang=lang,
+        )
+        await query.edit_message_text(app_status)
 
 
 # Handler for the /help command

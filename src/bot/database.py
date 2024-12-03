@@ -239,6 +239,7 @@ class Database:
         with tracer.start_as_current_span("db_fetch_status_with_timestamp") as span:
             span.set_attribute("db.operation", "SELECT")
             span.set_attribute("db.statement", query)
+            span.set_attribute("chat.id", chat_id)
             span.set_attribute("application.number", application_number)
             span.set_attribute("application.type", application_type)
             span.set_attribute("application.year", application_year)
@@ -427,14 +428,19 @@ class Database:
         """Fetch the preferred language for a user"""
 
         query = "SELECT language FROM Users WHERE chat_id = $1;"
-        async with self.pool.acquire() as conn:
-            logger.debug(f"Going to DB to fetch language for user: {chat_id}")
-            try:
-                result = await conn.fetchval(query, chat_id)
-                return result
-            except Exception as e:
-                logger.error(f"Error while fetching language for chat ID: {chat_id}. Error: {e}")
-                return None
+        with tracer.start_as_current_span("db_fetch_user_language") as span:
+            span.set_attribute("db.operation", "SELECT")
+            span.set_attribute("db.statement", query)
+            span.set_attribute("chat.id", chat_id)
+            async with self.pool.acquire() as conn:
+                logger.debug(f"Going to DB to fetch language for user: {chat_id}")
+                try:
+                    result = await conn.fetchval(query, chat_id)
+                    return result
+                except Exception as e:
+                    logger.error(f"Error while fetching language for chat ID: {chat_id}. Error: {e}")
+                    span.record_exception(e)
+                    return None
 
     async def update_user_language(self, chat_id, lang):
         """Update the preferred language for a user"""
