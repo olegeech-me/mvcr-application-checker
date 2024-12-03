@@ -17,7 +17,7 @@ data:
   REQUEUE_THRESHOLD_SECONDS: "3600"
   NOT_FOUND_MAX_DAYS: "30"
   NOT_FOUND_REFRESH_PERIOD: "86400"
-  TRACING_DISABLED: "True"
+  TRACING_DISABLED: "true"
   ZIPKIN_ENDPOINT: "http://zipkin.zipkin.svc.cluster.local:9411/api/v2/span"
   ZIPKIN_TIMEOUT: "5"
 ---
