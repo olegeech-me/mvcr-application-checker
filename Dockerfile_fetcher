@@ -5,6 +5,7 @@
 FROM ubuntu:focal
 
 ARG DEBIAN_FRONTEND=noninteractive
+ARG TARGETARCH
 
 RUN echo "===> Installing system dependencies..." && \
     BUILD_DEPS="curl unzip" && \
@@ -20,14 +21,25 @@ RUN echo "===> Installing system dependencies..." && \
     \
     echo "===> Installing geckodriver and firefox..." && \
     GECKODRIVER_VERSION=v0.32.2 && \
-    wget https://github.com/mozilla/geckodriver/releases/download/$GECKODRIVER_VERSION/geckodriver-$GECKODRIVER_VERSION-linux64.tar.gz && \
-    tar -zxf geckodriver-$GECKODRIVER_VERSION-linux64.tar.gz -C /usr/local/bin && \
+    # Determine architecture-specific download names
+    # Note: Firefox stable is only available for amd64; arm64 requires Nightly
+    if [ "$TARGETARCH" = "arm64" ]; then \
+        GECKO_ARCH="linux-aarch64"; \
+        FIREFOX_PRODUCT="firefox-nightly-latest-ssl"; \
+        FIREFOX_OS="linux64-aarch64"; \
+    else \
+        GECKO_ARCH="linux64"; \
+        FIREFOX_PRODUCT="firefox-latest"; \
+        FIREFOX_OS="linux64"; \
+    fi && \
+    wget https://github.com/mozilla/geckodriver/releases/download/$GECKODRIVER_VERSION/geckodriver-$GECKODRIVER_VERSION-$GECKO_ARCH.tar.gz && \
+    tar -zxf geckodriver-$GECKODRIVER_VERSION-$GECKO_ARCH.tar.gz -C /usr/local/bin && \
     chmod +x /usr/local/bin/geckodriver && \
-    rm geckodriver-$GECKODRIVER_VERSION-linux64.tar.gz && \
+    rm geckodriver-$GECKODRIVER_VERSION-$GECKO_ARCH.tar.gz && \
     \
     FIREFOX_SETUP=firefox-setup.tar.bz2 && \
     apt-get purge firefox && \
-    wget -O $FIREFOX_SETUP "https://download.mozilla.org/?product=firefox-latest&os=linux64" && \
+    wget -O $FIREFOX_SETUP "https://download.mozilla.org/?product=$FIREFOX_PRODUCT&os=$FIREFOX_OS" && \
     tar xjf $FIREFOX_SETUP -C /opt/ && \
     ln -s /opt/firefox/firefox /usr/bin/firefox && \
     rm $FIREFOX_SETUP && \
