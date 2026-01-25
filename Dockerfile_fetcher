@@ -15,6 +15,8 @@ RUN echo "===> Installing system dependencies..." && \
     libnspr4 libnss3 lsb-release xdg-utils libxss1 libdbus-glib-1-2 libgbm1 \
     # https://stackoverflow.com/questions/67090130/webdriverexception-process-unexpectedly-closed-with-status-255-selenium-ge
     bzip2 libxtst6 libgtk-3-0 libx11-xcb-dev libxt6 libpci-dev \
+    # xz-utils needed for Firefox Nightly on ARM64 (.tar.xz format)
+    xz-utils \
     $BUILD_DEPS \
     xvfb && \
     \
@@ -22,27 +24,33 @@ RUN echo "===> Installing system dependencies..." && \
     echo "===> Installing geckodriver and firefox..." && \
     GECKODRIVER_VERSION=v0.32.2 && \
     # Determine architecture-specific download names
-    # Note: Firefox stable is only available for amd64; arm64 requires Nightly
+    # Note: Firefox stable is only available for amd64; arm64 requires Nightly (uses .tar.xz)
     if [ "$TARGETARCH" = "arm64" ]; then \
         GECKO_ARCH="linux-aarch64"; \
-        FIREFOX_PRODUCT="firefox-nightly-latest-ssl"; \
-        FIREFOX_OS="linux64-aarch64"; \
     else \
         GECKO_ARCH="linux64"; \
-        FIREFOX_PRODUCT="firefox-latest"; \
-        FIREFOX_OS="linux64"; \
     fi && \
     wget https://github.com/mozilla/geckodriver/releases/download/$GECKODRIVER_VERSION/geckodriver-$GECKODRIVER_VERSION-$GECKO_ARCH.tar.gz && \
     tar -zxf geckodriver-$GECKODRIVER_VERSION-$GECKO_ARCH.tar.gz -C /usr/local/bin && \
     chmod +x /usr/local/bin/geckodriver && \
     rm geckodriver-$GECKODRIVER_VERSION-$GECKO_ARCH.tar.gz && \
     \
-    FIREFOX_SETUP=firefox-setup.tar.bz2 && \
     apt-get purge firefox && \
-    wget -O $FIREFOX_SETUP "https://download.mozilla.org/?product=$FIREFOX_PRODUCT&os=$FIREFOX_OS" && \
-    tar xjf $FIREFOX_SETUP -C /opt/ && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+        # Firefox Nightly for ARM64 - uses .tar.xz format from FTP
+        # Get the latest nightly build filename dynamically
+        FIREFOX_FTP="https://ftp.mozilla.org/pub/firefox/nightly/latest-mozilla-central"; \
+        FIREFOX_FILE=$(wget -q -O - "$FIREFOX_FTP/" | grep -oP 'firefox-[0-9.a-]+\.en-US\.linux-aarch64\.tar\.xz(?=")' | head -1); \
+        wget -O firefox-setup.tar.xz "$FIREFOX_FTP/$FIREFOX_FILE"; \
+        tar xJf firefox-setup.tar.xz -C /opt/; \
+        rm firefox-setup.tar.xz; \
+    else \
+        # Firefox stable for amd64 - uses .tar.bz2 format
+        wget -O firefox-setup.tar.bz2 "https://download.mozilla.org/?product=firefox-latest&os=linux64"; \
+        tar xjf firefox-setup.tar.bz2 -C /opt/; \
+        rm firefox-setup.tar.bz2; \
+    fi && \
     ln -s /opt/firefox/firefox /usr/bin/firefox && \
-    rm $FIREFOX_SETUP && \
     \
     echo "===> Remove what is not needed anymore..." && \
     rm -rf /var/lib/apt/lists/*
