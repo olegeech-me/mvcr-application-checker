@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## [v1.0.7] - 2026-03-20
+
+- Telegram bot: optional outbound proxy via `HTTPS_PROXY` / `HTTP_PROXY` / `ALL_PROXY` (PTB 20.x `proxy_url` / `get_updates_proxy_url`)
+
 ## [v1.0.6] - 2026-03-20
 
 - Telegram bot: optional outbound proxy via `HTTPS_PROXY` / `HTTP_PROXY` / `ALL_PROXY` (PTB 20.x `proxy_url` / `get_updates_proxy_url`)

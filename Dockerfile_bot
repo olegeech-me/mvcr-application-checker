@@ -15,7 +15,7 @@ RUN pip install -r requirements.txt
 
 COPY . $APP_HOME/
 
-ARG BASE_VERSION="v1.0.6"
+ARG BASE_VERSION="v1.0.7"
 ARG GIT_COMMIT="unknown"
 
 ENV BASE_VERSION=$BASE_VERSION
