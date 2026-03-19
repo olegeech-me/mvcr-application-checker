@@ -13,6 +13,7 @@ GIT_COMMIT = os.getenv("GIT_COMMIT", "unknown")
 FULL_VERSION = f"{BASE_VERSION}-{GIT_COMMIT}"
 # Telegram bot config
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+PROXY_URL = os.getenv("HTTPS_PROXY") or os.getenv("HTTP_PROXY")
 ADMIN_CHAT_IDS = os.getenv("ADMIN_CHAT_IDS", "")
 ADMIN_CHAT_IDS = [chat_id.strip() for chat_id in ADMIN_CHAT_IDS.split(",")]
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -50,7 +51,10 @@ class Loader:
     @property
     def bot(self):
         if not self._bot and RUN_MODE != "TEST":
-            self._bot = Application.builder().token(TOKEN).defaults(defaults).build()
+            builder = Application.builder().token(TOKEN).defaults(defaults)
+            if PROXY_URL:
+                builder = builder.proxy(PROXY_URL).get_updates_proxy(PROXY_URL)
+            self._bot = builder.build()
         return self._bot
 
     @property
