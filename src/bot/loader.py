@@ -8,12 +8,18 @@ from bot import rabbitmq
 from bot import metrics
 
 # Version information
-BASE_VERSION = os.getenv("BASE_VERSION", "v1.0.0")
+BASE_VERSION = os.getenv("BASE_VERSION", "v1.0.6")
 GIT_COMMIT = os.getenv("GIT_COMMIT", "unknown")
 FULL_VERSION = f"{BASE_VERSION}-{GIT_COMMIT}"
 # Telegram bot config
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-PROXY_URL = os.getenv("HTTPS_PROXY") or os.getenv("HTTP_PROXY")
+# PTB v20.5: HTTPS_PROXY / ALL_PROXY also work via httpx when proxy_url is unset
+# (see telegram.request.HTTPXRequest). We mirror common env for explicit builder wiring.
+PROXY_URL = (
+    os.getenv("HTTPS_PROXY")
+    or os.getenv("HTTP_PROXY")
+    or os.getenv("ALL_PROXY")
+)
 ADMIN_CHAT_IDS = os.getenv("ADMIN_CHAT_IDS", "")
 ADMIN_CHAT_IDS = [chat_id.strip() for chat_id in ADMIN_CHAT_IDS.split(",")]
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -53,7 +59,9 @@ class Loader:
         if not self._bot and RUN_MODE != "TEST":
             builder = Application.builder().token(TOKEN).defaults(defaults)
             if PROXY_URL:
-                builder = builder.proxy(PROXY_URL).get_updates_proxy(PROXY_URL)
+                # v20.x: ApplicationBuilder.proxy_url / get_updates_proxy_url
+                # (renamed to .proxy / .get_updates_proxy in later PTB releases)
+                builder = builder.proxy_url(PROXY_URL).get_updates_proxy_url(PROXY_URL)
             self._bot = builder.build()
         return self._bot
 
