@@ -319,7 +319,7 @@ User sends ZOV number (e.g., ISTA202504220001)
 
 ### Stage 1.4: Subscribe flow — `handlers.py` + i18n
 
-**Status**: TODO
+**Status**: DONE
 
 **Goal**: Users can subscribe to ZOV applications through the Telegram bot.
 
@@ -340,13 +340,23 @@ User sends ZOV number (e.g., ISTA202504220001)
 
 **Validates**: Full subscribe flow works for ZOV number in Telegram — parse, confirm, insert into DB, publish to queue.
 
-**Results/Notes**: *(to be filled after completion)*
+**Results/Notes**:
+- `handlers.py`: added `_parse_zov_number()` — regex `^[A-Z]{4}\d{9,12}$`, case-normalized, accepts any 4-letter embassy code (ISTA, MOSK, KYJV, etc.)
+- `handlers.py`: `application_dialog_number()` tries ZOV parse after OAM full-match fails; ZOV match sets `application_source="zov"` in context and skips type/year dialogs
+- `handlers.py`: `subscribe_command()` tries ZOV format first in `context.args` path before OAM
+- `handlers.py`: `_show_app_number_final_confirmation()` uses `dialog_confirmation_zov` i18n key for ZOV (no "OAM" in confirmation)
+- `handlers.py`: `create_request()` passes `source` through to RabbitMQ message when present in `app_data`
+- `handlers.py`: `create_subscription()` passes `application_source` kwarg to `db.insert_application()` when source is present
+- `handlers.py`: `_generate_buttons_from_subscriptions()` uses ZOV number directly as button label for ZOV subscriptions instead of `OAM-N/T-Y` format
+- `handlers.py`: `clean_sub_context()` now also removes `application_source` key
+- `handlers.py`: `application_dialog_validate()` passes `source` from context into `app_data` so it flows through to `create_subscription` and `create_request`
+- `messages.json` (all 4 languages): added `pre_approved` status notification, `dialog_confirmation_zov` confirmation message, updated `dialog_app_number` to mention ZOV example number
 
 ---
 
 ### Stage 1.5: Tests
 
-**Status**: TODO
+**Status**: DONE
 
 **Goal**: Verify the integration with automated tests.
 
@@ -357,7 +367,12 @@ User sends ZOV number (e.g., ISTA202504220001)
 
 **Validates**: `tox` passes with both old OAM and new ZOV tests.
 
-**Results/Notes**: *(to be filled after completion)*
+**Results/Notes**:
+- Tests were written TDD-style before implementation (baseline OAM regression tests first, then ZOV-specific tests)
+- **Baseline OAM tests** (14 tests): `clean_sub_context`, `_generate_buttons_from_subscriptions` (3 variants), `_parse_application_buttons_callback_data` (2 variants), `create_request` (no source key), `create_subscription` (happy path + DB failure), `application_dialog_number` (full OAM, partial OAM, invalid input), `subscribe_command` (with OAM args, no args)
+- **ZOV-specific tests** (20 tests): `_parse_zov_number` (10 parametrized: ISTA/MOSK/KYJV valid, case normalization, too short, OAM format, 5-letter prefix, 3-letter prefix, empty), `application_dialog_number` ZOV, `subscribe_command` ZOV args, `create_request` ZOV source, `create_subscription` ZOV source passthrough, `_generate_buttons_from_subscriptions` ZOV + mixed OAM/ZOV, `_show_app_number_final_confirmation` ZOV, `clean_sub_context` ZOV source cleanup, `test_i18n_has_zov_keys` (4 parametrized across languages — checks `pre_approved`, `dialog_confirmation_zov`, `dialog_app_number` keys and content)
+- All existing OAM tests pass unchanged — no regressions
+- 127 tests pass total (90 existing + 14 baseline + 20 ZOV + 3 new parser cases)
 
 ---
 

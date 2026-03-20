@@ -24,9 +24,18 @@ from bot.handlers import (
     subscribe_command,
     enforce_rate_limit,
     set_language_startup,
+    clean_sub_context,
+    _generate_buttons_from_subscriptions,
+    _parse_application_buttons_callback_data,
+    create_subscription,
+    application_dialog_number,
+    VALIDATE,
+    TYPE,
+    NUMBER,
 )
 from bot.utils import generate_oam_full_string, categorize_application_status, MVCR_STATUSES
 from bot.database import Database
+
 
 @patch("bot.handlers.ALLOWED_TYPES", new=["MK", "DO", "TP"])
 @patch("bot.handlers.get_allowed_years", return_value=[2020, 2021, 2022, 2023, 2042])
@@ -233,30 +242,31 @@ async def test__is_button_click_abused():
     "app_details, expected",
     [
         # OAM with short keys (RabbitMQ message format)
-        ({"number": "4242", "suffix": "0", "type": "TP", "year": "2042"},
-         "OAM-4242/TP-2042"),
+        ({"number": "4242", "suffix": "0", "type": "TP", "year": "2042"}, "OAM-4242/TP-2042"),
         # OAM with suffix
-        ({"number": "4242", "suffix": "5", "type": "DO", "year": "2020"},
-         "OAM-4242-5/DO-2020"),
+        ({"number": "4242", "suffix": "5", "type": "DO", "year": "2020"}, "OAM-4242-5/DO-2020"),
         # OAM with DB column keys
-        ({"application_number": "12345", "application_suffix": "0",
-          "application_type": "MK", "application_year": "2023"},
-         "OAM-12345/MK-2023"),
+        (
+            {"application_number": "12345", "application_suffix": "0", "application_type": "MK", "application_year": "2023"},
+            "OAM-12345/MK-2023",
+        ),
         # OAM with explicit source="oam"
-        ({"number": "100", "suffix": "0", "type": "TP", "year": "2024",
-          "source": "oam"},
-         "OAM-100/TP-2024"),
+        ({"number": "100", "suffix": "0", "type": "TP", "year": "2024", "source": "oam"}, "OAM-100/TP-2024"),
         # ZOV with short key
-        ({"number": "ISTA202504220001", "source": "zov"},
-         "ISTA202504220001"),
+        ({"number": "ISTA202504220001", "source": "zov"}, "ISTA202504220001"),
         # ZOV with DB column keys
-        ({"application_number": "ISTA202601150003",
-          "application_source": "zov", "application_type": "ZOV",
-          "application_year": 0, "application_suffix": "0"},
-         "ISTA202601150003"),
+        (
+            {
+                "application_number": "ISTA202601150003",
+                "application_source": "zov",
+                "application_type": "ZOV",
+                "application_year": 0,
+                "application_suffix": "0",
+            },
+            "ISTA202601150003",
+        ),
         # No source key at all defaults to OAM
-        ({"number": "999", "suffix": "0", "type": "TP", "year": "2025"},
-         "OAM-999/TP-2025"),
+        ({"number": "999", "suffix": "0", "type": "TP", "year": "2025"}, "OAM-999/TP-2025"),
     ],
 )
 def test_generate_oam_full_string(app_details, expected):
@@ -312,15 +322,248 @@ def test_enforce_rate_limit():
 
 
 # ---------------------------------------------------------------------------
+# Phase A: Baseline OAM regression tests (Stage 1.4 safety net)
+# These protect existing behavior before ZOV modifications.
+# ---------------------------------------------------------------------------
+
+
+def test_clean_sub_context_removes_oam_keys():
+    """clean_sub_context removes OAM subscription keys, preserves others"""
+    context = Mock()
+    context.user_data = {
+        "application_number": "4242",
+        "application_suffix": "0",
+        "application_type": "TP",
+        "application_year": "2023",
+        "lang": "EN",
+        "last_button_press": 123456,
+    }
+    clean_sub_context(context)
+    assert "application_number" not in context.user_data
+    assert "application_suffix" not in context.user_data
+    assert "application_type" not in context.user_data
+    assert "application_year" not in context.user_data
+    assert context.user_data["lang"] == "EN"
+    assert context.user_data["last_button_press"] == 123456
+
+
+def test_generate_buttons_oam_no_suffix():
+    """OAM subscription without suffix produces correct button label and callback"""
+    subs = [{"application_number": "12345", "application_suffix": "0", "application_type": "TP", "application_year": 2023}]
+    result = _generate_buttons_from_subscriptions("status", subs)
+    buttons = result.inline_keyboard
+    assert len(buttons) == 1
+    assert buttons[0][0].text == "OAM-12345/TP-2023"
+    assert buttons[0][0].callback_data == "status_12345-TP-2023"
+
+
+def test_generate_buttons_oam_with_suffix():
+    """OAM subscription with suffix includes it in the label"""
+    subs = [{"application_number": "4242", "application_suffix": "5", "application_type": "DO", "application_year": 2020}]
+    result = _generate_buttons_from_subscriptions("unsubscribe", subs)
+    buttons = result.inline_keyboard
+    assert buttons[0][0].text == "OAM-4242-5/DO-2020"
+    assert buttons[0][0].callback_data == "unsubscribe_4242-DO-2020"
+
+
+def test_generate_buttons_multiple_subscriptions():
+    """Multiple subscriptions produce one button row each"""
+    subs = [
+        {"application_number": "100", "application_suffix": "0", "application_type": "TP", "application_year": 2023},
+        {"application_number": "200", "application_suffix": "3", "application_type": "MK", "application_year": 2022},
+    ]
+    result = _generate_buttons_from_subscriptions("force_refresh", subs)
+    buttons = result.inline_keyboard
+    assert len(buttons) == 2
+    assert buttons[0][0].text == "OAM-100/TP-2023"
+    assert buttons[1][0].text == "OAM-200-3/MK-2022"
+
+
+def test_parse_buttons_callback_data_oam():
+    """Parses OAM button callback data into correct dict"""
+    result = _parse_application_buttons_callback_data("status_12345-TP-2023")
+    assert result == {"number": "12345", "type": "TP", "year": 2023}
+
+
+def test_parse_buttons_callback_data_force_refresh_prefix():
+    """Parses multi-underscore prefix correctly (takes last segment)"""
+    result = _parse_application_buttons_callback_data("force_refresh_4242-DO-2020")
+    assert result == {"number": "4242", "type": "DO", "year": 2020}
+
+
+def test_create_request_oam_no_source_key():
+    """Current OAM create_request does not include 'source' key"""
+    app_data = {"number": "4242", "suffix": "0", "type": "TP", "year": "2042"}
+    result = create_request(100, app_data)
+    assert "source" not in result
+    assert result["request_type"] == "fetch"
+    assert result["failed"] is False
+    assert result["last_updated"] == "0"
+
+
+@pytest.mark.asyncio
+async def test_create_subscription_oam_happy_path():
+    """OAM subscription: inserts into DB, publishes to queue, sends completion"""
+    mock_db = AsyncMock()
+    mock_db.insert_application = AsyncMock(return_value=True)
+    mock_rabbit = AsyncMock()
+
+    update = Mock()
+    update.effective_chat.id = 100
+    update.callback_query.message.reply_text = AsyncMock()
+
+    app_data = {"number": "4242", "suffix": "0", "type": "TP", "year": "2023"}
+
+    with patch("bot.handlers.db", mock_db), patch("bot.handlers.rabbit", mock_rabbit):
+        await create_subscription(update, app_data, lang="EN")
+        mock_db.insert_application.assert_called_once_with(100, "4242", "0", "TP", 2023)
+        mock_rabbit.publish_message.assert_called_once()
+        update.callback_query.message.reply_text.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_create_subscription_oam_db_failure():
+    """DB insert failure skips queue publish"""
+    mock_db = AsyncMock()
+    mock_db.insert_application = AsyncMock(return_value=False)
+    mock_rabbit = AsyncMock()
+
+    update = Mock()
+    update.effective_chat.id = 100
+    update.callback_query.message.reply_text = AsyncMock()
+
+    app_data = {"number": "4242", "suffix": "0", "type": "TP", "year": "2023"}
+
+    with patch("bot.handlers.db", mock_db), patch("bot.handlers.rabbit", mock_rabbit):
+        await create_subscription(update, app_data, lang="EN")
+        mock_rabbit.publish_message.assert_not_called()
+        update.callback_query.message.reply_text.assert_called_once()
+
+
+@patch("bot.handlers.get_allowed_years", return_value=[2020, 2021, 2022, 2023])
+@pytest.mark.asyncio
+async def test_application_dialog_number_full_oam(mock_years):
+    """Full OAM input sets context and jumps to VALIDATE"""
+    update = Mock()
+    update.edited_message = None
+    update.message.text = "12345/TP-2023"
+    context = Mock()
+    context.user_data = {}
+
+    with patch("bot.handlers._get_user_language", new_callable=AsyncMock, return_value="EN"), patch(
+        "bot.handlers._show_app_number_final_confirmation", new_callable=AsyncMock
+    ):
+        result = await application_dialog_number(update, context)
+        assert result == VALIDATE
+        assert context.user_data["application_number"] == "12345"
+        assert context.user_data["application_suffix"] == "0"
+        assert context.user_data["application_type"] == "TP"
+        assert context.user_data["application_year"] == "2023"
+
+
+@pytest.mark.asyncio
+async def test_application_dialog_number_partial_oam():
+    """Partial OAM input (number only) sets number/suffix and returns TYPE"""
+    update = Mock()
+    update.edited_message = None
+    update.message.text = "12345"
+    update.message.reply_text = AsyncMock()
+    context = Mock()
+    context.user_data = {}
+
+    with patch("bot.handlers._get_user_language", new_callable=AsyncMock, return_value="EN"):
+        result = await application_dialog_number(update, context)
+        assert result == TYPE
+        assert context.user_data["application_number"] == "12345"
+        assert context.user_data["application_suffix"] == "0"
+
+
+@pytest.mark.asyncio
+async def test_application_dialog_number_invalid_input():
+    """Invalid input sends error message and returns None"""
+    update = Mock()
+    update.edited_message = None
+    update.message.text = "BADINPUT!!!"
+    update.message.reply_text = AsyncMock()
+    context = Mock()
+    context.user_data = {}
+
+    with patch("bot.handlers._get_user_language", new_callable=AsyncMock, return_value="EN"):
+        result = await application_dialog_number(update, context)
+        assert result is None
+        update.message.reply_text.assert_called_once()
+
+
+@patch("bot.handlers.get_allowed_years", return_value=[2020, 2021, 2022, 2023])
+@pytest.mark.asyncio
+async def test_subscribe_command_with_oam_args(mock_years):
+    """subscribe with full OAM args sets context and returns VALIDATE"""
+    update = Mock()
+    update.edited_message = None
+    update.message.text = "/subscribe 12345/TP-2023"
+    update.message.chat_id = 100
+    update.effective_chat.id = 100
+    update.effective_chat.first_name = "Test"
+    update.effective_chat.username = "testuser"
+    update.effective_chat.last_name = "User"
+    context = Mock()
+    context.args = ["12345/TP-2023"]
+    context.user_data = {}
+
+    mock_db = AsyncMock()
+    mock_db.count_user_subscriptions = AsyncMock(return_value=0)
+    mock_db.user_exists = AsyncMock(return_value=True)
+
+    with patch("bot.handlers._get_user_language", new_callable=AsyncMock, return_value="EN"), patch(
+        "bot.handlers.db", mock_db
+    ), patch("bot.handlers._show_app_number_final_confirmation", new_callable=AsyncMock):
+        result = await subscribe_command(update, context)
+        assert result == VALIDATE
+        assert context.user_data["application_number"] == "12345"
+        assert context.user_data["application_type"] == "TP"
+        assert context.user_data["application_year"] == "2023"
+
+
+@pytest.mark.asyncio
+async def test_subscribe_command_no_args_returns_number():
+    """subscribe with no args sends dialog prompt and returns NUMBER"""
+    update = Mock()
+    update.edited_message = None
+    update.message = AsyncMock()
+    update.message.chat_id = 100
+    update.message.reply_text = AsyncMock()
+    update.effective_chat.id = 100
+    update.effective_chat.first_name = "Test"
+    update.effective_chat.username = "testuser"
+    update.effective_chat.last_name = "User"
+    context = Mock()
+    context.args = []
+    context.user_data = {}
+
+    mock_db = AsyncMock()
+    mock_db.count_user_subscriptions = AsyncMock(return_value=0)
+    mock_db.user_exists = AsyncMock(return_value=True)
+
+    with patch("bot.handlers._get_user_language", new_callable=AsyncMock, return_value="EN"), patch("bot.handlers.db", mock_db):
+        result = await subscribe_command(update, context)
+        assert result == NUMBER
+        update.message.reply_text.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
 # Database class unit tests (mocked asyncpg pool)
 # ---------------------------------------------------------------------------
 
+
 class _FakeAcquire:
     """Async context manager that yields a mock connection"""
+
     def __init__(self, conn):
         self._conn = conn
+
     async def __aenter__(self):
         return self._conn
+
     async def __aexit__(self, *exc):
         pass
 
@@ -340,8 +583,11 @@ async def test_db_insert_application_oam_default_source():
     """insert_application without explicit source defaults to 'oam'"""
     db, conn = _make_db_with_mock_pool()
     result = await db.insert_application(
-        chat_id=100, application_number="4242",
-        application_suffix="0", application_type="TP", application_year=2042,
+        chat_id=100,
+        application_number="4242",
+        application_suffix="0",
+        application_type="TP",
+        application_year=2042,
     )
     assert result is True
     query_arg = conn.execute.call_args[0][0]
@@ -355,8 +601,11 @@ async def test_db_insert_application_zov_source():
     """insert_application with application_source='zov'"""
     db, conn = _make_db_with_mock_pool()
     result = await db.insert_application(
-        chat_id=100, application_number="ISTA202504220001",
-        application_suffix="0", application_type="ZOV", application_year=0,
+        chat_id=100,
+        application_number="ISTA202504220001",
+        application_suffix="0",
+        application_type="ZOV",
+        application_year=0,
         application_source="zov",
     )
     assert result is True
@@ -368,11 +617,15 @@ async def test_db_insert_application_zov_source():
 async def test_db_insert_application_duplicate():
     """insert_application returns False on UniqueViolationError"""
     import asyncpg
+
     db, conn = _make_db_with_mock_pool()
     conn.execute.side_effect = asyncpg.UniqueViolationError("")
     result = await db.insert_application(
-        chat_id=100, application_number="4242",
-        application_suffix="0", application_type="TP", application_year=2042,
+        chat_id=100,
+        application_number="4242",
+        application_suffix="0",
+        application_type="TP",
+        application_year=2042,
     )
     assert result is False
 
@@ -381,6 +634,7 @@ async def test_db_insert_application_duplicate():
 async def test_db_fetch_applications_needing_update_has_source():
     """fetch_applications_needing_update SELECT includes application_source"""
     from datetime import timedelta
+
     db, conn = _make_db_with_mock_pool()
     conn.fetch.return_value = []
     await db.fetch_applications_needing_update(timedelta(hours=1), timedelta(hours=6))
@@ -392,6 +646,7 @@ async def test_db_fetch_applications_needing_update_has_source():
 async def test_db_fetch_applications_to_expire_has_source():
     """fetch_applications_to_expire SELECT includes application_source"""
     from datetime import timedelta
+
     db, conn = _make_db_with_mock_pool()
     conn.fetch.return_value = []
     await db.fetch_applications_to_expire(timedelta(days=30))
@@ -424,10 +679,16 @@ async def test_db_fetch_user_subscriptions_returns_source():
     """fetch_user_subscriptions (SELECT *) returns dicts that include application_source"""
     db, conn = _make_db_with_mock_pool()
     fake_row = {
-        "application_id": 1, "user_id": 1, "application_number": "4242",
-        "application_suffix": "0", "application_type": "TP", "application_year": 2042,
-        "current_status": "Unknown", "application_state": "UNKNOWN",
-        "is_resolved": False, "application_source": "oam",
+        "application_id": 1,
+        "user_id": 1,
+        "application_number": "4242",
+        "application_suffix": "0",
+        "application_type": "TP",
+        "application_year": 2042,
+        "current_status": "Unknown",
+        "application_state": "UNKNOWN",
+        "is_resolved": False,
+        "application_source": "oam",
     }
     conn.fetch.return_value = [fake_row]
     rows = await db.fetch_user_subscriptions(chat_id=100)
@@ -438,6 +699,7 @@ async def test_db_fetch_user_subscriptions_returns_source():
 # ---------------------------------------------------------------------------
 # RabbitMQ class unit tests (mocked dependencies)
 # ---------------------------------------------------------------------------
+
 
 def _make_rabbit():
     """Create a RabbitMQ instance with mocked bot, db, metrics, and exchange"""
@@ -686,6 +948,7 @@ from bot.monitor import ApplicationMonitor, ReminderMonitor
 def _make_oam_db_row(**overrides):
     """Build a fake DB row dict that looks like what the monitor queries return"""
     from datetime import datetime
+
     row = {
         "chat_id": 100,
         "application_number": "12345",
@@ -726,6 +989,7 @@ async def test_monitor_check_for_updates_message():
 async def test_monitor_expire_stale_message():
     """expire_stale_not_found_applications publishes correct message to ExpirationQueue"""
     from datetime import datetime
+
     db = AsyncMock()
     rabbit = AsyncMock()
     row = _make_oam_db_row(
@@ -749,6 +1013,7 @@ async def test_monitor_expire_stale_message():
 async def test_reminder_trigger_reminders_message():
     """trigger_reminders publishes correct message to ApplicationFetchQueue"""
     from datetime import datetime
+
     db = AsyncMock()
     rabbit = AsyncMock()
     row = _make_oam_db_row(last_updated=datetime(2023, 3, 15))
@@ -835,6 +1100,7 @@ _ZOV_BASE_MSG = {
 def _make_zov_db_row(**overrides):
     """Build a fake DB row for a ZOV application"""
     from datetime import datetime
+
     row = {
         "chat_id": 200,
         "application_number": "ISTA202504220001",
@@ -868,6 +1134,7 @@ async def test_monitor_check_for_updates_zov_source():
 async def test_monitor_expire_stale_zov_source():
     """expire_stale_not_found_applications includes source='zov' for ZOV apps"""
     from datetime import datetime
+
     db = AsyncMock()
     rabbit = AsyncMock()
     row = _make_zov_db_row(
@@ -888,6 +1155,7 @@ async def test_monitor_expire_stale_zov_source():
 async def test_reminder_trigger_reminders_zov_source():
     """trigger_reminders includes source='zov' for ZOV apps"""
     from datetime import datetime
+
     db = AsyncMock()
     rabbit = AsyncMock()
     db.fetch_due_reminders = AsyncMock(return_value=[_make_zov_db_row()])
@@ -916,8 +1184,11 @@ async def test_monitor_check_for_updates_oam_source():
 def test_processor_generate_error_message_zov():
     proc = _make_processor()
     app_details = {
-        "number": "ISTA202504220001", "suffix": "0",
-        "type": "ZOV", "year": 0, "source": "zov",
+        "number": "ISTA202504220001",
+        "suffix": "0",
+        "type": "ZOV",
+        "year": 0,
+        "source": "zov",
     }
     result = proc._generate_error_message(app_details)
     assert result == "ISTA202504220001 ERROR"
@@ -995,3 +1266,207 @@ async def test_rabbit_on_update_pre_approved_notifies_user():
         call_args = rabbit.db.update_application_status.call_args[0]
         assert call_args[5] is False  # pre_approved is NOT resolved
         mock_notify.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# ZOV subscribe flow + handler tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "input_str, expected",
+    [
+        ("ISTA202504220001", "ISTA202504220001"),
+        ("ISTA202504220", "ISTA202504220"),
+        ("ista202504220001", "ISTA202504220001"),
+        ("MOSK202503030001", "MOSK202503030001"),
+        ("KYJV202601150", "KYJV202601150"),
+        ("ISTA2025", None),
+        ("12345/TP-2023", None),
+        ("ISTAX2025042200", None),
+        ("IST2025042200010", None),
+        ("", None),
+    ],
+)
+def test_parse_zov_number(input_str, expected):
+    from bot.handlers import _parse_zov_number
+
+    result = _parse_zov_number(input_str)
+    assert result == expected
+
+
+@pytest.mark.asyncio
+async def test_application_dialog_number_zov():
+    """ZOV input sets source context and jumps to VALIDATE"""
+    update = Mock()
+    update.edited_message = None
+    update.message.text = "ISTA202504220001"
+    update.message.reply_text = AsyncMock()
+    context = Mock()
+    context.user_data = {}
+
+    with patch("bot.handlers._get_user_language", new_callable=AsyncMock, return_value="EN"), patch(
+        "bot.handlers._show_app_number_final_confirmation", new_callable=AsyncMock
+    ):
+        result = await application_dialog_number(update, context)
+        assert result == VALIDATE
+        assert context.user_data["application_number"] == "ISTA202504220001"
+        assert context.user_data["application_suffix"] == "0"
+        assert context.user_data["application_type"] == "ZOV"
+        assert context.user_data["application_year"] == 0
+        assert context.user_data["application_source"] == "zov"
+
+
+@pytest.mark.asyncio
+async def test_subscribe_command_with_zov_args():
+    """subscribe with ZOV args sets ZOV context and returns VALIDATE"""
+    update = Mock()
+    update.edited_message = None
+    update.message.text = "/subscribe ISTA202504220001"
+    update.message.chat_id = 100
+    update.message.reply_text = AsyncMock()
+    update.effective_chat.id = 100
+    update.effective_chat.first_name = "Test"
+    update.effective_chat.username = "testuser"
+    update.effective_chat.last_name = "User"
+    context = Mock()
+    context.args = ["ISTA202504220001"]
+    context.user_data = {}
+
+    mock_db = AsyncMock()
+    mock_db.count_user_subscriptions = AsyncMock(return_value=0)
+    mock_db.user_exists = AsyncMock(return_value=True)
+
+    with patch("bot.handlers._get_user_language", new_callable=AsyncMock, return_value="EN"), patch(
+        "bot.handlers.db", mock_db
+    ), patch("bot.handlers._show_app_number_final_confirmation", new_callable=AsyncMock):
+        result = await subscribe_command(update, context)
+        assert result == VALIDATE
+        assert context.user_data["application_number"] == "ISTA202504220001"
+        assert context.user_data["application_source"] == "zov"
+
+
+def test_create_request_zov_includes_source():
+    """ZOV create_request includes source='zov'"""
+    app_data = {"number": "ISTA202504220001", "suffix": "0", "type": "ZOV", "year": 0, "source": "zov"}
+    result = create_request(100, app_data)
+    assert result["source"] == "zov"
+    assert result["number"] == "ISTA202504220001"
+    assert result["type"] == "ZOV"
+    assert result["year"] == 0
+
+
+@pytest.mark.asyncio
+async def test_create_subscription_zov_passes_source():
+    """ZOV subscription passes application_source='zov' to DB"""
+    mock_db = AsyncMock()
+    mock_db.insert_application = AsyncMock(return_value=True)
+    mock_rabbit = AsyncMock()
+
+    update = Mock()
+    update.effective_chat.id = 200
+    update.callback_query.message.reply_text = AsyncMock()
+
+    app_data = {"number": "ISTA202504220001", "suffix": "0", "type": "ZOV", "year": 0, "source": "zov"}
+
+    with patch("bot.handlers.db", mock_db), patch("bot.handlers.rabbit", mock_rabbit):
+        await create_subscription(update, app_data, lang="EN")
+        _, kwargs = mock_db.insert_application.call_args
+        assert kwargs.get("application_source") == "zov"
+
+
+def test_generate_buttons_zov_subscription():
+    """ZOV subscription uses ZOV number as button label"""
+    subs = [
+        {
+            "application_number": "ISTA202504220001",
+            "application_suffix": "0",
+            "application_type": "ZOV",
+            "application_year": 0,
+            "application_source": "zov",
+        }
+    ]
+    result = _generate_buttons_from_subscriptions("status", subs)
+    buttons = result.inline_keyboard
+    assert buttons[0][0].text == "ISTA202504220001"
+    assert buttons[0][0].callback_data == "status_ISTA202504220001-ZOV-0"
+
+
+def test_generate_buttons_mixed_oam_zov():
+    """Mixed OAM+ZOV subscriptions produce correct labels for both"""
+    subs = [
+        {
+            "application_number": "12345",
+            "application_suffix": "0",
+            "application_type": "TP",
+            "application_year": 2023,
+            "application_source": "oam",
+        },
+        {
+            "application_number": "ISTA202504220001",
+            "application_suffix": "0",
+            "application_type": "ZOV",
+            "application_year": 0,
+            "application_source": "zov",
+        },
+    ]
+    result = _generate_buttons_from_subscriptions("status", subs)
+    buttons = result.inline_keyboard
+    assert len(buttons) == 2
+    assert buttons[0][0].text == "OAM-12345/TP-2023"
+    assert buttons[1][0].text == "ISTA202504220001"
+
+
+@pytest.mark.asyncio
+async def test_show_confirmation_zov():
+    """ZOV confirmation uses ZOV-specific message without OAM prefix"""
+    update = Mock()
+    update.callback_query = AsyncMock()
+    update.callback_query.edit_message_text = AsyncMock()
+    context = Mock()
+    context.user_data = {
+        "application_number": "ISTA202504220001",
+        "application_suffix": "0",
+        "application_type": "ZOV",
+        "application_year": 0,
+        "application_source": "zov",
+    }
+
+    with patch("bot.handlers._get_user_language", new_callable=AsyncMock, return_value="EN"):
+        await _show_app_number_final_confirmation(update, context)
+        call_args = update.callback_query.edit_message_text.call_args
+        msg_text = call_args[0][0]
+        assert "ISTA202504220001" in msg_text
+        assert "OAM" not in msg_text
+
+
+def test_clean_sub_context_removes_zov_source():
+    """clean_sub_context also removes application_source key"""
+    context = Mock()
+    context.user_data = {
+        "application_number": "ISTA202504220001",
+        "application_suffix": "0",
+        "application_type": "ZOV",
+        "application_year": 0,
+        "application_source": "zov",
+        "lang": "EN",
+    }
+    clean_sub_context(context)
+    assert "application_source" not in context.user_data
+    assert context.user_data["lang"] == "EN"
+
+
+@pytest.mark.parametrize("lang", ["EN", "RU", "CZ", "UA"])
+def test_i18n_has_zov_keys(lang):
+    """All languages must have ZOV-related i18n keys with proper content"""
+    from bot.texts import message_texts as mt
+
+    assert "pre_approved" in mt[lang], f"Missing 'pre_approved' in {lang}"
+    assert "{status_sign}" in mt[lang]["pre_approved"], f"'pre_approved' in {lang} missing {{status_sign}} placeholder"
+
+    assert "dialog_confirmation_zov" in mt[lang], f"Missing 'dialog_confirmation_zov' in {lang}"
+    assert "{number}" in mt[lang]["dialog_confirmation_zov"], f"'dialog_confirmation_zov' in {lang} missing {{number}} placeholder"
+    assert "OAM" not in mt[lang]["dialog_confirmation_zov"], f"'dialog_confirmation_zov' in {lang} should not contain 'OAM'"
+
+    assert "dialog_app_number" in mt[lang], f"Missing 'dialog_app_number' in {lang}"
+    assert "ISTA" in mt[lang]["dialog_app_number"], f"'dialog_app_number' in {lang} should mention ZOV example number"

@@ -151,7 +151,7 @@ async def enforce_rate_limit(update: Update, context: ContextTypes.DEFAULT_TYPE,
 
 def create_request(chat_id, app_data, force_refresh=False):
     """Creates a request dictionary for RabbitMQ"""
-    return {
+    request = {
         "chat_id": chat_id,
         "number": app_data["number"],
         "suffix": app_data.get("suffix", "0"),
@@ -162,6 +162,9 @@ def create_request(chat_id, app_data, force_refresh=False):
         "request_type": "fetch",
         "last_updated": "0",
     }
+    if "source" in app_data:
+        request["source"] = app_data["source"]
+    return request
 
 
 async def create_subscription(update, app_data, lang="EN"):
@@ -169,12 +172,16 @@ async def create_subscription(update, app_data, lang="EN"):
     chat = update.effective_chat
     message = update.callback_query.message
     try:
+        insert_kwargs = {}
+        if "source" in app_data:
+            insert_kwargs["application_source"] = app_data["source"]
         if await db.insert_application(
             chat.id,
             app_data["number"],
             app_data.get("suffix", "0"),
             app_data["type"],
             int(app_data["year"]),
+            **insert_kwargs,
         ):
             request = create_request(chat.id, app_data)
             await rabbit.publish_message(request)
@@ -188,7 +195,11 @@ async def create_subscription(update, app_data, lang="EN"):
 
 def clean_sub_context(context):
     """Wipes temporary subscription data from user_data context"""
-    keys_to_delete = ["application_number", "application_suffix", "application_type", "application_year"]
+    keys_to_delete = [
+        "application_number", "application_suffix",
+        "application_type", "application_year",
+        "application_source",
+    ]
 
     for key in keys_to_delete:
         context.user_data.pop(key, None)
@@ -202,12 +213,12 @@ async def _show_app_number_final_confirmation(update: Update, context: ContextTy
         [InlineKeyboardButton(button_texts[lang]["subscribe_incorrect"], callback_data="cancel_subscribe")],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    # Choose the appropriate message based on the suffix value
-    confirmation_msg = (
-        message_texts[lang]["dialog_confirmation_no_suffix"]
-        if context.user_data["application_suffix"] == "0"
-        else message_texts[lang]["dialog_confirmation"]
-    )
+    if context.user_data.get("application_source") == "zov":
+        confirmation_msg = message_texts[lang]["dialog_confirmation_zov"]
+    elif context.user_data["application_suffix"] == "0":
+        confirmation_msg = message_texts[lang]["dialog_confirmation_no_suffix"]
+    else:
+        confirmation_msg = message_texts[lang]["dialog_confirmation"]
     msg = confirmation_msg.format(
         number=context.user_data["application_number"],
         suffix=context.user_data["application_suffix"],
@@ -222,6 +233,18 @@ async def _show_app_number_final_confirmation(update: Update, context: ContextTy
         message = get_effective_message(update)
         await message.reply_text(msg, reply_markup=reply_markup)
     return VALIDATE
+
+
+def _parse_zov_number(num_str: str):
+    """
+    Parses a ZOV (visa) application number like ISTA202504220001.
+    Valid format: 4 uppercase letters (embassy city code) + 9-12 digits (13-16 chars total).
+    Returns the uppercased number on success, None otherwise.
+    """
+    num_str = num_str.strip().upper()
+    if re.match(r"^[A-Z]{4}\d{9,12}$", num_str):
+        return num_str
+    return None
 
 
 def _parse_application_number_full(num_str: str):
@@ -278,6 +301,16 @@ async def application_dialog_number(update: Update, context: ContextTypes.DEFAUL
         context.user_data["application_type"] = number_parsed[2]
         context.user_data["application_year"] = number_parsed[3]
         # go straight to verification step
+        await _show_app_number_final_confirmation(update, context)
+        return VALIDATE
+    # Try ZOV format (e.g. ISTA202504220001)
+    zov_number = _parse_zov_number(number_str)
+    if zov_number:
+        context.user_data["application_number"] = zov_number
+        context.user_data["application_suffix"] = "0"
+        context.user_data["application_type"] = "ZOV"
+        context.user_data["application_year"] = 0
+        context.user_data["application_source"] = "zov"
         await _show_app_number_final_confirmation(update, context)
         return VALIDATE
     # NOTE(fernflower) Okay, full match failed, let's try partial match just for number part (no type and year) and
@@ -377,11 +410,11 @@ async def application_dialog_validate(update: Update, context: ContextTypes.DEFA
             "type": context.user_data["application_type"],
             "year": context.user_data["application_year"],
         }
+        if "application_source" in context.user_data:
+            app_data["source"] = context.user_data["application_source"]
 
-        logger.info(
-            f"[SUBSCRIBE] Adding application OAM-"
-            f"{app_data['number']}-{app_data['suffix']}/{app_data['type']}-{app_data['year']} for {user_info(update)}"
-        )
+        app_label = generate_oam_full_string(app_data)
+        logger.info(f"[SUBSCRIBE] Adding application {app_label} for {user_info(update)}")
         await query.message.edit_reply_markup(reply_markup=None)
         await create_subscription(update, app_data, lang=lang)
         clean_sub_context(context)
@@ -465,6 +498,16 @@ async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # and if the format matches - skip the interactive dialog.
         if context.args:
             number_str = "".join(context.args)
+            # Try ZOV format first
+            zov_number = _parse_zov_number(number_str)
+            if zov_number:
+                context.user_data["application_number"] = zov_number
+                context.user_data["application_suffix"] = "0"
+                context.user_data["application_type"] = "ZOV"
+                context.user_data["application_year"] = 0
+                context.user_data["application_source"] = "zov"
+                await _show_app_number_final_confirmation(update, context)
+                return VALIDATE
             number_parsed = _parse_application_number_full(number_str)
             if number_parsed:
                 context.user_data["application_number"] = number_parsed[0]
@@ -502,14 +545,15 @@ def _generate_buttons_from_subscriptions(prefix, subscriptions):
     keyboard = []
 
     for sub in subscriptions:
-        # Construct button label
-        suffix_part = f"-{sub['application_suffix']}" if sub["application_suffix"] != "0" else ""
-        button_label = f"OAM-{sub['application_number']}{suffix_part}/{sub['application_type']}-{sub['application_year']}"
+        source = sub.get("application_source", "oam")
 
-        # Construct button callback data
+        if source == "zov":
+            button_label = sub["application_number"]
+        else:
+            suffix_part = f"-{sub['application_suffix']}" if sub["application_suffix"] != "0" else ""
+            button_label = f"OAM-{sub['application_number']}{suffix_part}/{sub['application_type']}-{sub['application_year']}"
+
         callback_data = f"{prefix}_{sub['application_number']}-{sub['application_type']}-{sub['application_year']}"
-
-        # Append to the keyboard list
         keyboard.append([InlineKeyboardButton(button_label, callback_data=callback_data)])
 
     return InlineKeyboardMarkup(keyboard)
