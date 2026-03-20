@@ -19,7 +19,7 @@
   "not_found_expired": "⚠️ Tracking of your application <b>{app_string}</b> has been stopped, as it has not become available on the Czech Ministry of Interior's website for an extended period. Please check your application number.",
   "in_progress": "⏳ Your application is still under review.\n\nCurrent status {status_sign}:",
   "approved": "🎉 Congratulations! Your application has been approved!\n\nCurrent status {status_sign}:",
-  "pre_approved": "⭐ Your visa application has been preliminarily assessed positively! This is a good sign, but the final decision has not yet been made. We will continue to monitor your application.\n\nCurrent status {status_sign}:",
+  "pre_approved": "🎉 Your visa application has been preliminarily assessed positively!\n\nCurrent status {status_sign}:",
   "denied": "😔 I regret to inform that your application was declined. \n\nCurrent status: {status_sign}",
   "application_failed": "😥 Unfortunately, we couldn't get the status of <b>{app_string}</b> application. Please ensure your application details are correct and try unsubscribing and then subscribing again. If the issue persists, you can reach out to developers.",
   "current_status": "Current application status is: {status_sign}",

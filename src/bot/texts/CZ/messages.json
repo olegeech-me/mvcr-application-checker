@@ -19,7 +19,7 @@
   "not_found_expired": "⚠️ Sledování vaší žádosti <b>{app_string}</b> bylo ukončeno, protože po dlouhou dobu nebyla dostupná na webu Ministerstva vnitra ČR. Zkontrolujte prosím číslo vaší žádosti.",
   "in_progress": "⏳ Vaše žádost je stále ve zpracování.\n\nAktuální stav {status_sign}:",
   "approved": "🎉 Gratulujeme! Vaše žádost byla schválena!\n\nAktuální stav {status_sign}:",
-  "pre_approved": "⭐ Vaše vízová žádost byla předběžně vyhodnocena kladně! Je to dobrý signál, ale konečné rozhodnutí zatím nepadlo. Budeme nadále sledovat stav vaší žádosti.\n\nAktuální stav {status_sign}:",
+  "pre_approved": "🎉 Vaše vízová žádost byla předběžně vyhodnocena kladně!\n\nAktuální stav {status_sign}:",
   "denied": "😔 Bohužel vaše žádost byla zamítnuta ...\n\nAktuální stav {status_sign}:",
   "application_failed": "😥Bohužel jsme nemohli získat stav žádosti <b>{app_string}</b>. Ujistěte se, že údaje vaší žádosti jsou správné a zkuste se odhlásit a poté znovu přihlásit. Pokud problém přetrvává, můžete se obrátit na vývojáře.",
   "current_status": "Aktuální stav žádosti: {status_sign}",
