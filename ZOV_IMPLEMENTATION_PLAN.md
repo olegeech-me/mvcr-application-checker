@@ -1,6 +1,8 @@
 # ZOV (ŽOV) Tracking — Implementation Plan
 
 > **⚠️ NOTE FOR AI SESSIONS**: This plan is a high-level roadmap, NOT a final implementation spec. Each stage must be discussed and confirmed with the developer before writing any code. Read the relevant source files, think carefully about implementation details, propose your approach, and wait for approval. Do NOT blindly implement what's written here — the plan may need adjustments based on what you find in the code.
+>
+> **After completing a stage**: Update its **Status** to `DONE` and fill in the **Results/Notes** section with a concise summary of all changes made, files touched, and test results. Do this immediately after finishing, without being asked.
 
 ## Context: What This Project Does
 
@@ -241,7 +243,7 @@ User sends ZOV number (e.g., ISTA202504220001)
 
 ### Stage 1.1: Foundation — DB schema + `utils.py`
 
-**Status**: TODO
+**Status**: DONE
 
 **Goal**: Lay the groundwork so that the rest of the codebase can store and identify ZOV applications.
 
@@ -255,7 +257,15 @@ User sends ZOV number (e.g., ISTA202504220001)
 
 **Validates**: Migration runner creates tracking table, applies `001` migration, skips it on re-run. Function returns correct identifiers for both OAM and ZOV dicts. `pre_approved` categorization works.
 
-**Results/Notes**: *(to be filled after completion)*
+**Results/Notes**:
+- `init.sql`: added `application_source VARCHAR(10) NOT NULL DEFAULT 'oam'` to Applications table
+- `db-migrations/001_add_application_source.sql`: `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` for existing deployments
+- `database.py`: added `run_migrations(migrations_dir)` method called from `connect()` — creates `schema_migrations` tracking table, applies pending `.sql` files in sorted order, each in its own transaction
+- `loader.py`: added `DB_MIGRATIONS_DIR` env var (default `"db-migrations"`)
+- `__main__.py`: passes `migrations_dir=DB_MIGRATIONS_DIR` to `db.connect()`
+- `utils.py`: `MVCR_STATUSES` now has `pre_approved` (⭐) separate from `approved` (🟢); `generate_oam_full_string()` dispatches on `source`/`application_source`, returns ZOV number directly for `source="zov"`
+- `test_bot.py`: added 17 new tests — `generate_oam_full_string` (7 parametrized: OAM variants + ZOV variants + default fallback), `categorize_application_status` (9 parametrized: all categories including pre_approved), `pre_approved_not_in_resolved_statuses` (structural check)
+- All 46 tests pass (29 existing + 17 new)
 
 ---
 
