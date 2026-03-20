@@ -4,7 +4,7 @@ kind: ConfigMap
 metadata:
   name: fetcher-cm
 data:
-  URL: "https://frs.gov.cz/informace-o-stavu-rizeni/"
+  URL: "https://ipc.gov.cz/informace-o-stavu-rizeni/"
   RETRY_INTERVAL: "30"
   PAGE_LOAD_LIMIT_SECONDS: "20"
   CAPTCHA_WAIT_SECONDS: "120"

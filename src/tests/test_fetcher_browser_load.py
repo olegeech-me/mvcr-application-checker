@@ -3,7 +3,7 @@ import asyncio
 import logging
 from fetcher.browser import Browser
 
-URL = "https://frs.gov.cz/informace-o-stavu-rizeni/"
+URL = "https://ipc.gov.cz/informace-o-stavu-rizeni/"
 
 # Setting up the logger
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")

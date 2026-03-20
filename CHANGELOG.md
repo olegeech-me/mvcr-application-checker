@@ -5,7 +5,7 @@
 ### ZOV (visa application) tracking
 
 - Added support for tracking ZOV visa applications (e.g. `ISTA202504220001`) submitted at Czech embassies abroad, in addition to existing OAM applications
-- Fetcher: new IPC page (`ipc.gov.cz`) support with ZOV-specific form submission alongside existing OAM flow on `frs.gov.cz`
+- Fetcher: both OAM and ZOV applications are now tracked via `ipc.gov.cz` (replaces `frs.gov.cz`)
 - Bot: ZOV number parser accepts any 4-letter embassy code (ISTA, MOSK, KYJV, etc.) followed by 9-12 digits
 - Bot: ZOV subscribe flow skips type/year dialogs — users enter the full number and confirm
 - Bot: ZOV-specific confirmation messages, button labels, and status notifications (all 4 languages: EN, RU, CZ, UA)
