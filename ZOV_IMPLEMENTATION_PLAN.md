@@ -294,7 +294,7 @@ User sends ZOV number (e.g., ISTA202504220001)
 
 ### Stage 1.3: Pipeline plumbing — `monitor.py`, `rabbitmq.py`, `application_processor.py`
 
-**Status**: TODO
+**Status**: DONE
 
 **Goal**: Make `source` flow through RabbitMQ messages and ensure logging/error messages use the correct identifier format.
 
@@ -306,7 +306,14 @@ User sends ZOV number (e.g., ISTA202504220001)
 
 **Validates**: A ZOV message published by the monitor includes `source: "zov"`, flows through fetcher and back, with correct identifiers in all log lines.
 
-**Results/Notes**: *(to be filled after completion)*
+**Results/Notes**:
+- `monitor.py`: added `"source": app["application_source"]` to all 3 message dicts in `check_for_updates()`, `expire_stale_not_found_applications()`, `trigger_reminders()`
+- `rabbitmq.py`: reviewed, no changes needed — already uses `generate_oam_full_string()` everywhere (source-aware since Stage 1.1)
+- `application_processor.py`: `_generate_error_message()` now dispatches on `source` — ZOV returns `"ISTA... ERROR"` instead of hardcoded OAM format; `_process_request()` log prefix is source-aware (ZOV shows `[ISTA202504220001][FETCH]` instead of `[ISTA.../ZOV-0][FETCH]`)
+- **Baseline tests added first** (all 3 files had zero test coverage): RabbitMQ class (14 tests: `generate_unique_id`, `is_resolved`, `_generate_error_message`, dedup cycle, `on_update_message` 6 scenarios, `on_expiration_message`, `publish_message` dedup), Monitor (3 tests), ApplicationProcessor (3 tests)
+- **ZOV-specific tests**: monitor source propagation (4 tests), processor error message ZOV format (2 tests), RabbitMQ ZOV flow-through (3 tests)
+- **Bug found**: `pre_approved` category (added in Stage 1.1) has no `message_texts` i18n entry — `on_update_message` will KeyError when a ZOV app gets "preliminarily assessed positively". Added `test_rabbit_on_update_pre_approved_notifies_user` which asserts correct behavior and **currently fails** — will pass once `pre_approved` i18n text is added in Stage 1.4.
+- 90 passed, 1 failed (54 existing + 37 new)
 
 ---
 

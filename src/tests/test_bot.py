@@ -435,42 +435,563 @@ async def test_db_fetch_user_subscriptions_returns_source():
     assert rows[0]["application_source"] == "oam"
 
 
-# @pytest.fixture
-# def mock_rabbit(mocker):
-#    bot = AsyncMock()
-#    db = AsyncMock()
-#    loop = asyncio.get_event_loop()
-#    mocker.patch("aiormq.Connection", AsyncMock())
-#    rabbit = RabbitMQ("host", "user", "password", bot, db, loop)
-#
-#    # Mocking RabbitMQ connections and channels
-#    rabbit.connection = AsyncMock()
-#    rabbit.channel = AsyncMock()
-#    rabbit.queue = AsyncMock()
-#    rabbit.default_exchange = AsyncMock()
-#
-#    return rabbit
-#
-#
-# @pytest.mark.asyncio
-# async def test_connect_success(mock_rabbit):
-#    await mock_rabbit.connect()
-#    mock_rabbit.channel.declare_queue.assert_called_once_with("StatusUpdateQueue", durable=True)
-#
-#
-# @pytest.mark.asyncio
-# async def test_on_message_no_change(mock_rabbit):
-#    mock_msg = AsyncMock()
-#    mock_msg.body = json.dumps(
-#        {
-#            "chat_id": "123",
-#            "status": "test_status",
-#            "number": "12345",
-#            "last_updated": "now",
-#            "force_refresh": False,
-#        }
-#    ).encode("utf-8")
-#
-#    mock_rabbit.db.get_application_status = AsyncMock(return_value="test_status")
-#    await mock_rabbit.on_message(mock_msg)
-#    mock_rabbit.bot.updater.bot.send_message.assert_not_called()
+# ---------------------------------------------------------------------------
+# RabbitMQ class unit tests (mocked dependencies)
+# ---------------------------------------------------------------------------
+
+def _make_rabbit():
+    """Create a RabbitMQ instance with mocked bot, db, metrics, and exchange"""
+    bot = Mock()
+    db = AsyncMock()
+    metrics = Mock()
+    rabbit = RabbitMQ("host", "user", "pass", bot, db, 300, metrics, None)
+    rabbit.default_exchange = AsyncMock()
+    return rabbit
+
+
+def _make_incoming_message(msg_dict, headers=None):
+    """Create a mock aio_pika.IncomingMessage with async context manager"""
+    msg = Mock()
+    msg.body = json.dumps(msg_dict).encode("utf-8")
+    msg.headers = headers or {}
+    msg.process = Mock(return_value=AsyncMock())
+    return msg
+
+
+_OAM_BASE_MSG = {
+    "chat_id": 100,
+    "number": "12345",
+    "suffix": "0",
+    "type": "TP",
+    "year": 2023,
+    "force_refresh": False,
+    "failed": False,
+    "request_type": "refresh",
+    "last_updated": "2023-01-01T00:00:00",
+}
+
+
+def test_rabbit_generate_unique_id_deterministic():
+    rabbit = _make_rabbit()
+    msg = {**_OAM_BASE_MSG}
+    assert rabbit.generate_unique_id(msg) == rabbit.generate_unique_id(msg)
+
+
+def test_rabbit_generate_unique_id_different():
+    rabbit = _make_rabbit()
+    msg_a = {**_OAM_BASE_MSG}
+    msg_b = {**_OAM_BASE_MSG, "number": "99999"}
+    assert rabbit.generate_unique_id(msg_a) != rabbit.generate_unique_id(msg_b)
+
+
+@pytest.mark.parametrize(
+    "status_text, expected",
+    [
+        ("Vaše žádost bylo <b>povoleno</b>", True),
+        ("rizeni-povoleno", True),
+        ("bylo <b>nepovoleno</b>", True),
+        ("was <b>rejected</b>", True),
+        ("have been closed", True),
+        ("is still being processed", False),
+        ("reference number not found", False),
+        ("preliminarily assessed positively", False),
+        ("has been suspended", False),
+    ],
+)
+def test_rabbit_is_resolved(status_text, expected):
+    rabbit = _make_rabbit()
+    assert rabbit.is_resolved(status_text) is expected
+
+
+def test_rabbit_generate_error_message():
+    rabbit = _make_rabbit()
+    app_details = {**_OAM_BASE_MSG}
+    result = rabbit._generate_error_message(app_details, "EN")
+    assert "OAM-12345/TP-2023" in result
+
+
+def test_rabbit_dedup_cycle():
+    rabbit = _make_rabbit()
+    uid = "test-uid-123"
+    assert rabbit.is_message_published(uid) is False
+    rabbit.mark_message_as_published(uid)
+    assert rabbit.is_message_published(uid) is True
+    rabbit.discard_message_id(uid)
+    assert rabbit.is_message_published(uid) is False
+
+
+@pytest.mark.asyncio
+async def test_rabbit_on_update_status_unchanged():
+    """Status unchanged, not forced: update_last_checked, no notification"""
+    rabbit = _make_rabbit()
+    status_text = "Application 12345 is still being processed"
+    rabbit.db.fetch_application_status = AsyncMock(return_value=status_text)
+
+    msg_dict = {**_OAM_BASE_MSG, "status": status_text}
+    msg = _make_incoming_message(msg_dict)
+
+    with patch("bot.rabbitmq.notify_user", new_callable=AsyncMock) as mock_notify:
+        await rabbit.on_update_message(msg)
+        rabbit.db.update_last_checked.assert_called_once_with(100, "12345", "TP", 2023)
+        mock_notify.assert_not_called()
+        rabbit.db.update_application_status.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_rabbit_on_update_status_changed_approved():
+    """Status changed to approved: is_resolved=True, user notified"""
+    rabbit = _make_rabbit()
+    old_status = "Application 12345 is still being processed"
+    new_status = "Vaše žádost 12345 bylo <b>povoleno</b>"
+    rabbit.db.fetch_application_status = AsyncMock(return_value=old_status)
+    rabbit.db.update_application_status = AsyncMock(return_value=True)
+    rabbit.db.fetch_user_language = AsyncMock(return_value="EN")
+
+    msg_dict = {**_OAM_BASE_MSG, "status": new_status}
+    msg = _make_incoming_message(msg_dict)
+
+    with patch("bot.rabbitmq.notify_user", new_callable=AsyncMock) as mock_notify:
+        await rabbit.on_update_message(msg)
+        rabbit.db.update_application_status.assert_called_once()
+        call_args = rabbit.db.update_application_status.call_args[0]
+        assert call_args[5] is True  # is_resolved
+        mock_notify.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_rabbit_on_update_failed_refresh():
+    """Failed refresh: returns early, no DB update, no notification"""
+    rabbit = _make_rabbit()
+    rabbit.db.fetch_application_status = AsyncMock(return_value="old status")
+
+    msg_dict = {
+        **_OAM_BASE_MSG,
+        "status": "12345 ERROR",
+        "failed": True,
+        "request_type": "refresh",
+    }
+    msg = _make_incoming_message(msg_dict)
+
+    with patch("bot.rabbitmq.notify_user", new_callable=AsyncMock) as mock_notify:
+        await rabbit.on_update_message(msg)
+        rabbit.db.update_application_status.assert_not_called()
+        mock_notify.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_rabbit_on_update_number_mismatch():
+    """Number not in status text: returns early"""
+    rabbit = _make_rabbit()
+    rabbit.db.fetch_application_status = AsyncMock(return_value="old status")
+
+    msg_dict = {
+        **_OAM_BASE_MSG,
+        "status": "Status for 99999 is being processed",
+    }
+    msg = _make_incoming_message(msg_dict)
+
+    with patch("bot.rabbitmq.notify_user", new_callable=AsyncMock) as mock_notify:
+        await rabbit.on_update_message(msg)
+        rabbit.db.update_application_status.assert_not_called()
+        rabbit.db.update_last_checked.assert_not_called()
+        mock_notify.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_rabbit_on_update_failed_fetch_non_reminder():
+    """Failed fetch (not reminder): is_resolved=True, error notification sent"""
+    rabbit = _make_rabbit()
+    rabbit.db.fetch_application_status = AsyncMock(return_value="old status")
+    rabbit.db.update_application_status = AsyncMock(return_value=True)
+    rabbit.db.fetch_user_language = AsyncMock(return_value="EN")
+
+    msg_dict = {
+        **_OAM_BASE_MSG,
+        "status": "OAM-12345-0/TP-2023 ERROR",
+        "failed": True,
+        "request_type": "fetch",
+        "is_reminder": False,
+    }
+    msg = _make_incoming_message(msg_dict)
+
+    with patch("bot.rabbitmq.notify_user", new_callable=AsyncMock) as mock_notify:
+        await rabbit.on_update_message(msg)
+        rabbit.db.update_application_status.assert_called_once()
+        call_args = rabbit.db.update_application_status.call_args[0]
+        assert call_args[5] is True  # is_resolved
+        mock_notify.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_rabbit_on_update_failed_fetch_reminder():
+    """Failed fetch triggered by reminder: returns early, no update"""
+    rabbit = _make_rabbit()
+    rabbit.db.fetch_application_status = AsyncMock(return_value="old status")
+
+    msg_dict = {
+        **_OAM_BASE_MSG,
+        "status": "12345 ERROR",
+        "failed": True,
+        "request_type": "fetch",
+        "is_reminder": True,
+    }
+    msg = _make_incoming_message(msg_dict)
+
+    with patch("bot.rabbitmq.notify_user", new_callable=AsyncMock) as mock_notify:
+        await rabbit.on_update_message(msg)
+        rabbit.db.update_application_status.assert_not_called()
+        mock_notify.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_rabbit_on_expiration_message():
+    """Expiration message: resolve application, notify user"""
+    rabbit = _make_rabbit()
+    rabbit.db.resolve_application = AsyncMock(return_value=True)
+    rabbit.db.fetch_user_language = AsyncMock(return_value="EN")
+
+    msg_dict = {
+        **_OAM_BASE_MSG,
+        "application_id": 42,
+        "request_type": "expire",
+    }
+    msg = _make_incoming_message(msg_dict)
+
+    with patch("bot.rabbitmq.notify_user", new_callable=AsyncMock) as mock_notify:
+        await rabbit.on_expiration_message(msg)
+        rabbit.db.resolve_application.assert_called_once_with(42)
+        mock_notify.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_rabbit_publish_message_dedup():
+    """First publish goes through, duplicate is skipped"""
+    rabbit = _make_rabbit()
+    msg = {**_OAM_BASE_MSG}
+
+    await rabbit.publish_message(msg, routing_key="TestQueue")
+    assert rabbit.default_exchange.publish.call_count == 1
+
+    await rabbit.publish_message(msg, routing_key="TestQueue")
+    assert rabbit.default_exchange.publish.call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# ApplicationMonitor / ReminderMonitor unit tests
+# ---------------------------------------------------------------------------
+
+from bot.monitor import ApplicationMonitor, ReminderMonitor
+
+
+def _make_oam_db_row(**overrides):
+    """Build a fake DB row dict that looks like what the monitor queries return"""
+    from datetime import datetime
+    row = {
+        "chat_id": 100,
+        "application_number": "12345",
+        "application_suffix": "0",
+        "application_type": "TP",
+        "application_year": 2023,
+        "last_updated": datetime(2023, 1, 1),
+        "application_state": "IN_PROGRESS",
+        "application_source": "oam",
+    }
+    row.update(overrides)
+    return row
+
+
+@pytest.mark.asyncio
+async def test_monitor_check_for_updates_message():
+    """check_for_updates publishes correct message to RefreshStatusQueue"""
+    db = AsyncMock()
+    rabbit = AsyncMock()
+    db.fetch_applications_needing_update = AsyncMock(return_value=[_make_oam_db_row()])
+
+    monitor = ApplicationMonitor(db, rabbit)
+    await monitor.check_for_updates()
+
+    rabbit.publish_message.assert_called_once()
+    published_msg = rabbit.publish_message.call_args[0][0]
+    assert published_msg["chat_id"] == 100
+    assert published_msg["number"] == "12345"
+    assert published_msg["suffix"] == "0"
+    assert published_msg["type"] == "TP"
+    assert published_msg["year"] == 2023
+    assert published_msg["request_type"] == "refresh"
+    assert published_msg["force_refresh"] is False
+    assert rabbit.publish_message.call_args[1]["routing_key"] == "RefreshStatusQueue"
+
+
+@pytest.mark.asyncio
+async def test_monitor_expire_stale_message():
+    """expire_stale_not_found_applications publishes correct message to ExpirationQueue"""
+    from datetime import datetime
+    db = AsyncMock()
+    rabbit = AsyncMock()
+    row = _make_oam_db_row(
+        application_id=42,
+        created_at=datetime(2023, 6, 1),
+        application_state="NOT_FOUND",
+    )
+    db.fetch_applications_to_expire = AsyncMock(return_value=[row])
+
+    monitor = ApplicationMonitor(db, rabbit)
+    await monitor.expire_stale_not_found_applications()
+
+    rabbit.publish_message.assert_called_once()
+    published_msg = rabbit.publish_message.call_args[0][0]
+    assert published_msg["application_id"] == 42
+    assert published_msg["request_type"] == "expire"
+    assert rabbit.publish_message.call_args[1]["routing_key"] == "ExpirationQueue"
+
+
+@pytest.mark.asyncio
+async def test_reminder_trigger_reminders_message():
+    """trigger_reminders publishes correct message to ApplicationFetchQueue"""
+    from datetime import datetime
+    db = AsyncMock()
+    rabbit = AsyncMock()
+    row = _make_oam_db_row(last_updated=datetime(2023, 3, 15))
+    db.fetch_due_reminders = AsyncMock(return_value=[row])
+
+    reminder_mon = ReminderMonitor(db, rabbit)
+    await reminder_mon.trigger_reminders()
+
+    rabbit.publish_message.assert_called_once()
+    published_msg = rabbit.publish_message.call_args[0][0]
+    assert published_msg["force_refresh"] is True
+    assert published_msg["is_reminder"] is True
+    assert published_msg["request_type"] == "fetch"
+    assert rabbit.publish_message.call_args[1]["routing_key"] == "ApplicationFetchQueue"
+
+
+# ---------------------------------------------------------------------------
+# ApplicationProcessor unit tests (fetcher side)
+# ---------------------------------------------------------------------------
+
+from fetcher.application_processor import ApplicationProcessor
+
+
+def _make_processor():
+    """Create an ApplicationProcessor with mocked dependencies"""
+    messaging = AsyncMock()
+    browser = AsyncMock()
+    metrics = Mock()
+    metrics.increment_request_state = Mock()
+    metrics.decrement_request_state = Mock()
+    return ApplicationProcessor(messaging, browser, metrics, "http://test.url")
+
+
+def test_processor_generate_error_message_oam():
+    proc = _make_processor()
+    app_details = {"number": "12345", "suffix": "0", "type": "TP", "year": "2023"}
+    result = proc._generate_error_message(app_details)
+    assert result == "OAM-12345-0/TP-2023 ERROR"
+
+
+@pytest.mark.asyncio
+async def test_processor_lock_lifecycle():
+    """start -> is_processing -> end -> not processing"""
+    proc = _make_processor()
+
+    assert await proc.is_processing("fetch", "12345", "TP", 2023) is False
+    await proc.start_processing("fetch", "12345", "TP", 2023)
+    assert await proc.is_processing("fetch", "12345", "TP", 2023) is True
+    await proc.end_processing("fetch", "12345", "TP", 2023)
+    assert await proc.is_processing("fetch", "12345", "TP", 2023) is False
+
+
+@pytest.mark.asyncio
+async def test_processor_refresh_checks_both_queues():
+    """refresh is_processing returns True if app is in either fetch or refresh queue"""
+    proc = _make_processor()
+
+    await proc.start_processing("fetch", "12345", "TP", 2023)
+    assert await proc.is_processing("refresh", "12345", "TP", 2023) is True
+
+    await proc.end_processing("fetch", "12345", "TP", 2023)
+    await proc.start_processing("refresh", "12345", "TP", 2023)
+    assert await proc.is_processing("refresh", "12345", "TP", 2023) is True
+
+
+# ---------------------------------------------------------------------------
+# ZOV-specific tests (Stage 1.3 changes)
+# ---------------------------------------------------------------------------
+
+_ZOV_BASE_MSG = {
+    "chat_id": 200,
+    "number": "ISTA202504220001",
+    "suffix": "0",
+    "type": "ZOV",
+    "year": 0,
+    "source": "zov",
+    "force_refresh": False,
+    "failed": False,
+    "request_type": "refresh",
+    "last_updated": "2025-04-22T00:00:00",
+}
+
+
+def _make_zov_db_row(**overrides):
+    """Build a fake DB row for a ZOV application"""
+    from datetime import datetime
+    row = {
+        "chat_id": 200,
+        "application_number": "ISTA202504220001",
+        "application_suffix": "0",
+        "application_type": "ZOV",
+        "application_year": 0,
+        "last_updated": datetime(2025, 4, 22),
+        "application_state": "IN_PROGRESS",
+        "application_source": "zov",
+    }
+    row.update(overrides)
+    return row
+
+
+@pytest.mark.asyncio
+async def test_monitor_check_for_updates_zov_source():
+    """check_for_updates includes source='zov' in message for ZOV apps"""
+    db = AsyncMock()
+    rabbit = AsyncMock()
+    db.fetch_applications_needing_update = AsyncMock(return_value=[_make_zov_db_row()])
+
+    monitor = ApplicationMonitor(db, rabbit)
+    await monitor.check_for_updates()
+
+    published_msg = rabbit.publish_message.call_args[0][0]
+    assert published_msg["source"] == "zov"
+    assert published_msg["number"] == "ISTA202504220001"
+
+
+@pytest.mark.asyncio
+async def test_monitor_expire_stale_zov_source():
+    """expire_stale_not_found_applications includes source='zov' for ZOV apps"""
+    from datetime import datetime
+    db = AsyncMock()
+    rabbit = AsyncMock()
+    row = _make_zov_db_row(
+        application_id=99,
+        created_at=datetime(2025, 1, 1),
+        application_state="NOT_FOUND",
+    )
+    db.fetch_applications_to_expire = AsyncMock(return_value=[row])
+
+    monitor = ApplicationMonitor(db, rabbit)
+    await monitor.expire_stale_not_found_applications()
+
+    published_msg = rabbit.publish_message.call_args[0][0]
+    assert published_msg["source"] == "zov"
+
+
+@pytest.mark.asyncio
+async def test_reminder_trigger_reminders_zov_source():
+    """trigger_reminders includes source='zov' for ZOV apps"""
+    from datetime import datetime
+    db = AsyncMock()
+    rabbit = AsyncMock()
+    db.fetch_due_reminders = AsyncMock(return_value=[_make_zov_db_row()])
+
+    reminder_mon = ReminderMonitor(db, rabbit)
+    await reminder_mon.trigger_reminders()
+
+    published_msg = rabbit.publish_message.call_args[0][0]
+    assert published_msg["source"] == "zov"
+
+
+@pytest.mark.asyncio
+async def test_monitor_check_for_updates_oam_source():
+    """check_for_updates includes source='oam' for OAM apps"""
+    db = AsyncMock()
+    rabbit = AsyncMock()
+    db.fetch_applications_needing_update = AsyncMock(return_value=[_make_oam_db_row()])
+
+    monitor = ApplicationMonitor(db, rabbit)
+    await monitor.check_for_updates()
+
+    published_msg = rabbit.publish_message.call_args[0][0]
+    assert published_msg["source"] == "oam"
+
+
+def test_processor_generate_error_message_zov():
+    proc = _make_processor()
+    app_details = {
+        "number": "ISTA202504220001", "suffix": "0",
+        "type": "ZOV", "year": 0, "source": "zov",
+    }
+    result = proc._generate_error_message(app_details)
+    assert result == "ISTA202504220001 ERROR"
+
+
+def test_processor_generate_error_message_oam_no_source():
+    """Without source key, defaults to OAM format"""
+    proc = _make_processor()
+    app_details = {"number": "12345", "suffix": "0", "type": "TP", "year": "2023"}
+    result = proc._generate_error_message(app_details)
+    assert result == "OAM-12345-0/TP-2023 ERROR"
+
+
+@pytest.mark.asyncio
+async def test_rabbit_on_update_zov_status_changed():
+    """ZOV status change flows through on_update_message correctly"""
+    rabbit = _make_rabbit()
+    old_status = "Visa application number ISTA202504220001 not found"
+    new_status = "Visa application number ISTA202504220001 is still being processed"
+    rabbit.db.fetch_application_status = AsyncMock(return_value=old_status)
+    rabbit.db.update_application_status = AsyncMock(return_value=True)
+    rabbit.db.fetch_user_language = AsyncMock(return_value="EN")
+
+    msg_dict = {**_ZOV_BASE_MSG, "status": new_status}
+    msg = _make_incoming_message(msg_dict)
+
+    with patch("bot.rabbitmq.notify_user", new_callable=AsyncMock) as mock_notify:
+        await rabbit.on_update_message(msg)
+        rabbit.db.update_application_status.assert_called_once()
+        call_args = rabbit.db.update_application_status.call_args[0]
+        assert call_args[5] is False  # in_progress is NOT resolved
+        mock_notify.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_rabbit_on_expiration_zov():
+    """ZOV expiration message uses correct identifier in notification"""
+    rabbit = _make_rabbit()
+    rabbit.db.resolve_application = AsyncMock(return_value=True)
+    rabbit.db.fetch_user_language = AsyncMock(return_value="EN")
+
+    msg_dict = {**_ZOV_BASE_MSG, "application_id": 99, "request_type": "expire"}
+    msg = _make_incoming_message(msg_dict)
+
+    with patch("bot.rabbitmq.notify_user", new_callable=AsyncMock) as mock_notify:
+        await rabbit.on_expiration_message(msg)
+        rabbit.db.resolve_application.assert_called_once_with(99)
+        notification_text = mock_notify.call_args[0][2]
+        assert "ISTA202504220001" in notification_text
+
+
+def test_rabbit_generate_unique_id_zov():
+    """ZOV messages produce valid unique IDs"""
+    rabbit = _make_rabbit()
+    uid = rabbit.generate_unique_id(_ZOV_BASE_MSG)
+    assert isinstance(uid, str) and len(uid) == 32
+
+
+@pytest.mark.asyncio
+async def test_rabbit_on_update_pre_approved_notifies_user():
+    """pre_approved status change should update DB and notify the user"""
+    rabbit = _make_rabbit()
+    old_status = "Visa application number ISTA202504220001 not found"
+    new_status = "Visa application number ISTA202504220001 has been preliminarily assessed positively"
+    rabbit.db.fetch_application_status = AsyncMock(return_value=old_status)
+    rabbit.db.update_application_status = AsyncMock(return_value=True)
+    rabbit.db.fetch_user_language = AsyncMock(return_value="EN")
+
+    msg_dict = {**_ZOV_BASE_MSG, "status": new_status}
+    msg = _make_incoming_message(msg_dict)
+
+    with patch("bot.rabbitmq.notify_user", new_callable=AsyncMock) as mock_notify:
+        await rabbit.on_update_message(msg)
+        rabbit.db.update_application_status.assert_called_once()
+        call_args = rabbit.db.update_application_status.call_args[0]
+        assert call_args[5] is False  # pre_approved is NOT resolved
+        mock_notify.assert_called_once()
