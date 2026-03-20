@@ -1,13 +1,15 @@
 import pytest
-import pytest_mock
 import os
 import json
 from unittest.mock import Mock, AsyncMock, patch
 import asyncio
-from bot.rabbitmq import RabbitMQ
 
 os.environ["RUN_MODE"] = "TEST"
 os.environ["ADMIN_CHAT_IDS"] = "1234567, 56745679"
+
+from bot.rabbitmq import RabbitMQ  # noqa: E402
+from bot.monitor import ApplicationMonitor, ReminderMonitor  # noqa: E402
+from fetcher.application_processor import ApplicationProcessor  # noqa: E402
 
 from bot.handlers import (
     _parse_application_number_full,
@@ -20,10 +22,8 @@ from bot.handlers import (
     create_request,
     _is_button_click_abused,
     BUTTON_WAIT_SECONDS,
-    start_command,
     subscribe_command,
     enforce_rate_limit,
-    set_language_startup,
     clean_sub_context,
     _generate_buttons_from_subscriptions,
     _parse_application_buttons_callback_data,
@@ -942,8 +942,6 @@ async def test_rabbit_publish_message_dedup():
 # ApplicationMonitor / ReminderMonitor unit tests
 # ---------------------------------------------------------------------------
 
-from bot.monitor import ApplicationMonitor, ReminderMonitor
-
 
 def _make_oam_db_row(**overrides):
     """Build a fake DB row dict that looks like what the monitor queries return"""
@@ -1033,8 +1031,6 @@ async def test_reminder_trigger_reminders_message():
 # ---------------------------------------------------------------------------
 # ApplicationProcessor unit tests (fetcher side)
 # ---------------------------------------------------------------------------
-
-from fetcher.application_processor import ApplicationProcessor
 
 
 def _make_processor():
@@ -1154,8 +1150,6 @@ async def test_monitor_expire_stale_zov_source():
 @pytest.mark.asyncio
 async def test_reminder_trigger_reminders_zov_source():
     """trigger_reminders includes source='zov' for ZOV apps"""
-    from datetime import datetime
-
     db = AsyncMock()
     rabbit = AsyncMock()
     db.fetch_due_reminders = AsyncMock(return_value=[_make_zov_db_row()])

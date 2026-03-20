@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## [v2.0.0] - 2026-03-20
+
+### ZOV (visa application) tracking
+
+- Added support for tracking ZOV visa applications (e.g. `ISTA202504220001`) submitted at Czech embassies abroad, in addition to existing OAM applications
+- Fetcher: new IPC page (`ipc.gov.cz`) support with ZOV-specific form submission alongside existing OAM flow on `frs.gov.cz`
+- Bot: ZOV number parser accepts any 4-letter embassy code (ISTA, MOSK, KYJV, etc.) followed by 9-12 digits
+- Bot: ZOV subscribe flow skips type/year dialogs — users enter the full number and confirm
+- Bot: ZOV-specific confirmation messages, button labels, and status notifications (all 4 languages: EN, RU, CZ, UA)
+- New `pre_approved` status category for "preliminarily assessed positively" responses (not treated as resolved — bot keeps monitoring)
+- Database: `application_source` column (`oam`/`zov`) with automatic migration on startup
+- RabbitMQ messages carry `source` field for correct routing between OAM and ZOV fetchers
+- Full backward compatibility — existing OAM subscriptions and messages are unaffected
+
+### Developer experience
+
+- Added `Makefile` with targets: `env`, `ssl`, `venv`, `test`, `lint`, `build`, `up`, `down`, `logs`, `clean`
+- Integrated `ruff` linter
+- 127 tests (up from 29), covering handlers, RabbitMQ, monitor, processor, and i18n
+
 ## [v1.0.7] - 2026-03-20
 
 - Telegram bot: optional outbound proxy via `HTTPS_PROXY` / `HTTP_PROXY` / `ALL_PROXY` (PTB 20.x `proxy_url` / `get_updates_proxy_url`)
