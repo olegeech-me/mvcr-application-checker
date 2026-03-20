@@ -177,3 +177,6 @@ k8s/bot.yaml
 chrome-cookies.sql
 all_cookies.json
 mvcr_cookies.json
+
+.debug
+debug

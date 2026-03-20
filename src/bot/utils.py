@@ -8,10 +8,14 @@ from telegram.error import NetworkError, TimedOut, RetryAfter
 logger = logging.getLogger(__name__)
 
 MVCR_STATUSES = {
-    "not_found": (["nebylo nalezeno", "bez úvodních nul"], "⚪️"),
-    "in_progress": (["zpracovává se", "v-prubehu-rizeni"], "🟡"),
-    "approved": (["bylo <b>povoleno</b>", "rizeni-povoleno"], "🟢"),
-    "denied": (["bylo <b>nepovoleno</b>", "zamítlo", "zastavilo"], "🔴"),
+    "not_found": (["nebylo nalezeno", "bez úvodních nul", "not found"], "⚪️"),
+    "in_progress": (["zpracovává se", "v-prubehu-rizeni", "being processed"], "🟡"),
+    "approved": (["bylo <b>povoleno</b>", "rizeni-povoleno",
+                   "preliminarily assessed positively",
+                   "předběžně vyhodnoceno kladně"], "🟢"),
+    "denied": (["bylo <b>nepovoleno</b>", "zamítlo", "zastavilo",
+                "<b>rejected</b>", "have been closed"], "🔴"),
+    "suspended": (["přerušeno", "has been suspended"], "🟠"),
     "error": (["ERROR"], "🔴"),
 }
 
