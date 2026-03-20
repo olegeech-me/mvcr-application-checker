@@ -5,7 +5,7 @@ import os
 import pytz
 import asyncio
 from bot.texts import message_texts
-from bot.utils import categorize_application_status
+from bot.utils import categorize_application_status, generate_oam_full_string
 
 MAX_RETRIES = 5  # maximum number of connection retries
 RETRY_DELAY = 2  # delay (in seconds) between retries
@@ -115,18 +115,23 @@ class Database:
         application_suffix,
         application_type,
         application_year,
+        application_source="oam",
     ):
         """Insert a new application to the Applications table"""
 
-        logger.debug(
-            f"Adding application OAM-{application_number}/{application_type}-{application_year} for chatID {chat_id} to DB"
-        )
+        app_label = generate_oam_full_string({
+            "number": application_number, "suffix": application_suffix,
+            "type": application_type, "year": application_year,
+            "source": application_source,
+        })
+        logger.debug(f"Adding application {app_label} for chatID {chat_id} to DB")
         query = (
             "INSERT INTO Applications "
-            "(user_id, application_number, application_suffix, application_type, application_year, application_state) "
-            "SELECT user_id, $2, $3, $4, $5, 'UNKNOWN' FROM Users WHERE chat_id = $1"
+            "(user_id, application_number, application_suffix, application_type, "
+            "application_year, application_state, application_source) "
+            "SELECT user_id, $2, $3, $4, $5, 'UNKNOWN', $6 FROM Users WHERE chat_id = $1"
         )
-        params = (chat_id, application_number, application_suffix, application_type, application_year)
+        params = (chat_id, application_number, application_suffix, application_type, application_year, application_source)
         async with self.pool.acquire() as conn:
             try:
                 await conn.execute(query, *params)
@@ -304,7 +309,7 @@ class Database:
 
         query = """
             SELECT u.chat_id, a.application_number, a.application_suffix, a.application_type,
-                   a.application_year, a.last_updated, a.application_state
+                   a.application_year, a.last_updated, a.application_state, a.application_source
             FROM Applications a
             JOIN Users u ON a.user_id = u.user_id
             WHERE (
@@ -330,7 +335,7 @@ class Database:
 
         query = """
             SELECT a.application_id, u.chat_id, a.application_number, a.application_suffix,
-                   a.application_type, a.application_year, a.created_at
+                   a.application_type, a.application_year, a.created_at, a.application_source
             FROM Applications a
             JOIN Users u ON a.user_id = u.user_id
             WHERE a.application_state = 'NOT_FOUND'
@@ -499,7 +504,8 @@ class Database:
         query = """
             SELECT
                 r.reminder_id, r.reminder_time,
-                a.application_id, a.application_number, a.application_type, a.application_year
+                a.application_id, a.application_number, a.application_type, a.application_year,
+                a.application_source
             FROM Reminders r
             JOIN Users u ON r.user_id = u.user_id
             JOIN Applications a ON r.application_id = a.application_id
@@ -570,7 +576,8 @@ class Database:
 
         query = """
             SELECT r.reminder_id, u.chat_id, r.reminder_time, a.application_number,
-            a.application_suffix, a.application_type, a.application_year, a.last_updated
+            a.application_suffix, a.application_type, a.application_year, a.last_updated,
+            a.application_source
             FROM Reminders r
             INNER JOIN Users u ON r.user_id = u.user_id
             INNER JOIN Applications a ON r.application_id = a.application_id

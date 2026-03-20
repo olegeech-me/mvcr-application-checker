@@ -2,7 +2,7 @@
 
 > **⚠️ NOTE FOR AI SESSIONS**: This plan is a high-level roadmap, NOT a final implementation spec. Each stage must be discussed and confirmed with the developer before writing any code. Read the relevant source files, think carefully about implementation details, propose your approach, and wait for approval. Do NOT blindly implement what's written here — the plan may need adjustments based on what you find in the code.
 >
-> **After completing a stage**: Update its **Status** to `DONE` and fill in the **Results/Notes** section with a concise summary of all changes made, files touched, and test results. Do this immediately after finishing, without being asked.
+> **IMPORTTAN!!!!! After completing a stage**: Update its **Status** to `DONE` and fill in the **Results/Notes** section with a concise summary of all changes made, files touched, and test results. Do this immediately after finishing, without being asked.
 
 ## Context: What This Project Does
 
@@ -271,7 +271,7 @@ User sends ZOV number (e.g., ISTA202504220001)
 
 ### Stage 1.2: Data layer — `database.py`
 
-**Status**: TODO
+**Status**: DONE
 
 **Goal**: Make the database layer accept and return `application_source`.
 
@@ -284,7 +284,11 @@ User sends ZOV number (e.g., ISTA202504220001)
 
 **Validates**: Can insert a ZOV application with `source="zov"`, query it back, see `application_source` in results.
 
-**Results/Notes**: *(to be filled after completion)*
+**Results/Notes**:
+- `database.py`: imported `generate_oam_full_string` from `bot.utils`; `insert_application()` now accepts `application_source="oam"` kwarg, includes it in the INSERT column list + `$6` param, and uses `generate_oam_full_string()` for the log message instead of hardcoded OAM format
+- `database.py`: added `a.application_source` to SELECT in `fetch_applications_needing_update()`, `fetch_applications_to_expire()`, `fetch_due_reminders()`, `fetch_user_reminders()`
+- `test_bot.py`: added 8 new Database unit tests with mocked asyncpg pool — `insert_application` (OAM default, ZOV explicit, duplicate error), 4 SELECT column checks, `fetch_user_subscriptions` smoke test
+- All 54 tests pass (46 existing + 8 new)
 
 ---
 

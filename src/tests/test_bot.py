@@ -26,6 +26,7 @@ from bot.handlers import (
     set_language_startup,
 )
 from bot.utils import generate_oam_full_string, categorize_application_status, MVCR_STATUSES
+from bot.database import Database
 
 @patch("bot.handlers.ALLOWED_TYPES", new=["MK", "DO", "TP"])
 @patch("bot.handlers.get_allowed_years", return_value=[2020, 2021, 2022, 2023, 2042])
@@ -308,6 +309,130 @@ def test_enforce_rate_limit():
     # Testing rate limit for the 6th time, should return False
     result = asyncio.run(enforce_rate_limit(update, context, "test_command"))
     assert not result
+
+
+# ---------------------------------------------------------------------------
+# Database class unit tests (mocked asyncpg pool)
+# ---------------------------------------------------------------------------
+
+class _FakeAcquire:
+    """Async context manager that yields a mock connection"""
+    def __init__(self, conn):
+        self._conn = conn
+    async def __aenter__(self):
+        return self._conn
+    async def __aexit__(self, *exc):
+        pass
+
+
+def _make_db_with_mock_pool():
+    """Create a Database instance with an injected mock pool + connection"""
+    db = Database("testdb", "user", "pass", "localhost", 5432, None)
+    conn = AsyncMock()
+    pool = Mock()
+    pool.acquire = Mock(return_value=_FakeAcquire(conn))
+    db.pool = pool
+    return db, conn
+
+
+@pytest.mark.asyncio
+async def test_db_insert_application_oam_default_source():
+    """insert_application without explicit source defaults to 'oam'"""
+    db, conn = _make_db_with_mock_pool()
+    result = await db.insert_application(
+        chat_id=100, application_number="4242",
+        application_suffix="0", application_type="TP", application_year=2042,
+    )
+    assert result is True
+    query_arg = conn.execute.call_args[0][0]
+    assert "application_source" in query_arg
+    params = conn.execute.call_args[0][1:]
+    assert params[-1] == "oam"
+
+
+@pytest.mark.asyncio
+async def test_db_insert_application_zov_source():
+    """insert_application with application_source='zov'"""
+    db, conn = _make_db_with_mock_pool()
+    result = await db.insert_application(
+        chat_id=100, application_number="ISTA202504220001",
+        application_suffix="0", application_type="ZOV", application_year=0,
+        application_source="zov",
+    )
+    assert result is True
+    params = conn.execute.call_args[0][1:]
+    assert params[-1] == "zov"
+
+
+@pytest.mark.asyncio
+async def test_db_insert_application_duplicate():
+    """insert_application returns False on UniqueViolationError"""
+    import asyncpg
+    db, conn = _make_db_with_mock_pool()
+    conn.execute.side_effect = asyncpg.UniqueViolationError("")
+    result = await db.insert_application(
+        chat_id=100, application_number="4242",
+        application_suffix="0", application_type="TP", application_year=2042,
+    )
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_db_fetch_applications_needing_update_has_source():
+    """fetch_applications_needing_update SELECT includes application_source"""
+    from datetime import timedelta
+    db, conn = _make_db_with_mock_pool()
+    conn.fetch.return_value = []
+    await db.fetch_applications_needing_update(timedelta(hours=1), timedelta(hours=6))
+    query = conn.fetch.call_args[0][0]
+    assert "application_source" in query
+
+
+@pytest.mark.asyncio
+async def test_db_fetch_applications_to_expire_has_source():
+    """fetch_applications_to_expire SELECT includes application_source"""
+    from datetime import timedelta
+    db, conn = _make_db_with_mock_pool()
+    conn.fetch.return_value = []
+    await db.fetch_applications_to_expire(timedelta(days=30))
+    query = conn.fetch.call_args[0][0]
+    assert "application_source" in query
+
+
+@pytest.mark.asyncio
+async def test_db_fetch_due_reminders_has_source():
+    """fetch_due_reminders SELECT includes application_source"""
+    db, conn = _make_db_with_mock_pool()
+    conn.fetch.return_value = []
+    await db.fetch_due_reminders()
+    query = conn.fetch.call_args[0][0]
+    assert "application_source" in query
+
+
+@pytest.mark.asyncio
+async def test_db_fetch_user_reminders_has_source():
+    """fetch_user_reminders SELECT includes application_source"""
+    db, conn = _make_db_with_mock_pool()
+    conn.fetch.return_value = []
+    await db.fetch_user_reminders(chat_id=100)
+    query = conn.fetch.call_args[0][0]
+    assert "application_source" in query
+
+
+@pytest.mark.asyncio
+async def test_db_fetch_user_subscriptions_returns_source():
+    """fetch_user_subscriptions (SELECT *) returns dicts that include application_source"""
+    db, conn = _make_db_with_mock_pool()
+    fake_row = {
+        "application_id": 1, "user_id": 1, "application_number": "4242",
+        "application_suffix": "0", "application_type": "TP", "application_year": 2042,
+        "current_status": "Unknown", "application_state": "UNKNOWN",
+        "is_resolved": False, "application_source": "oam",
+    }
+    conn.fetch.return_value = [fake_row]
+    rows = await db.fetch_user_subscriptions(chat_id=100)
+    assert len(rows) == 1
+    assert rows[0]["application_source"] == "oam"
 
 
 # @pytest.fixture
