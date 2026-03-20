@@ -296,12 +296,11 @@ def test_categorize_application_status(status_text, expected_category, expected_
     assert emoji == expected_emoji
 
 
-def test_pre_approved_not_in_resolved_statuses():
-    """pre_approved must NOT be treated as a final/resolved status"""
-    final_keywords = MVCR_STATUSES.get("approved")[0] + MVCR_STATUSES.get("denied")[0]
-    pre_approved_keywords = MVCR_STATUSES.get("pre_approved")[0]
-    for kw in pre_approved_keywords:
-        assert kw not in final_keywords, f"'{kw}' should not be in resolved statuses"
+def test_pre_approved_in_resolved_statuses():
+    """pre_approved IS a final/resolved status (ZOV has no separate approved)"""
+    rabbit = _make_rabbit()
+    for kw in MVCR_STATUSES.get("pre_approved")[0]:
+        assert rabbit.is_resolved(f"Application {kw}"), f"'{kw}' must be treated as resolved"
 
 
 def test_enforce_rate_limit():
@@ -759,7 +758,7 @@ def test_rabbit_generate_unique_id_different():
         ("have been closed", True),
         ("is still being processed", False),
         ("reference number not found", False),
-        ("preliminarily assessed positively", False),
+        ("preliminarily assessed positively", True),
         ("has been suspended", False),
     ],
 )
@@ -1244,9 +1243,29 @@ def test_rabbit_generate_unique_id_zov():
     assert isinstance(uid, str) and len(uid) == 32
 
 
+def test_categorize_zov_pre_approved_with_povoleno_link():
+    """Real ZOV pre_approved response contains 'rizeni-povoleno' in a link URL;
+    must still be classified as pre_approved, not approved"""
+    real_status = (
+        'Číslo žádosti o vízum<strong> ISTA202504220001 </strong>bylo '
+        '<b>předběžně vyhodnoceno kladně</b>. \n\nPro objednání a případné další '
+        'informace kontaktujte <a href="https://ipc.gov.cz/kontakty/#3">klientské '
+        'centrum</a> na čísle +420 974 801 801 (Po-Čt 8:00-16:00, Pá 8:00-14:00). '
+        'Informace o tom, jak dále postupovat, naleznete dále na '
+        '<a href="https://ipc.gov.cz/spravni-rizeni/rizeni-povoleno/">této stránce</a>.'
+        '\n\n<b>Stav řízení je pouze orientační.</b>'
+    )
+    category, emoji = categorize_application_status(real_status)
+    assert category == "pre_approved", (
+        f"Expected pre_approved but got {category}; "
+        f"'rizeni-povoleno' in link URL must not trigger approved"
+    )
+    assert emoji == "⭐"
+
+
 @pytest.mark.asyncio
-async def test_rabbit_on_update_pre_approved_notifies_user():
-    """pre_approved status change should update DB and notify the user"""
+async def test_rabbit_on_update_zov_pre_approved_notifies_and_resolves():
+    """ZOV pre_approved status change should resolve and notify the user"""
     rabbit = _make_rabbit()
     old_status = "Visa application number ISTA202504220001 not found"
     new_status = "Visa application number ISTA202504220001 has been preliminarily assessed positively"
@@ -1261,7 +1280,7 @@ async def test_rabbit_on_update_pre_approved_notifies_user():
         await rabbit.on_update_message(msg)
         rabbit.db.update_application_status.assert_called_once()
         call_args = rabbit.db.update_application_status.call_args[0]
-        assert call_args[5] is False  # pre_approved is NOT resolved
+        assert call_args[5] is True  # ZOV pre_approved IS resolved
         mock_notify.assert_called_once()
 
 
@@ -1487,6 +1506,52 @@ def _make_zov_subscription():
         "is_resolved": False,
         "application_source": "zov",
     }
+
+
+@pytest.mark.asyncio
+async def test_rabbit_on_update_zov_pre_approved_is_resolved():
+    """ZOV pre_approved must be treated as resolved (final positive status for ZOV),
+    even without 'rizeni-povoleno' link in the response"""
+    rabbit = _make_rabbit()
+    old_status = "ISTA202504220001 not found"
+    new_status = (
+        'Číslo žádosti o vízum<strong> ISTA202504220001 </strong>bylo '
+        '<b>předběžně vyhodnoceno kladně</b>.'
+    )
+    rabbit.db.fetch_application_status = AsyncMock(return_value=old_status)
+    rabbit.db.update_application_status = AsyncMock(return_value=True)
+    rabbit.db.fetch_user_language = AsyncMock(return_value="EN")
+
+    msg_dict = {**_ZOV_BASE_MSG, "status": new_status}
+    msg = _make_incoming_message(msg_dict)
+
+    with patch("bot.rabbitmq.notify_user", new_callable=AsyncMock) as mock_notify:
+        await rabbit.on_update_message(msg)
+        rabbit.db.update_application_status.assert_called_once()
+        call_args = rabbit.db.update_application_status.call_args[0]
+        assert call_args[5] is True, "ZOV pre_approved must be is_resolved=True"
+        mock_notify.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_rabbit_on_update_pre_approved_is_resolved():
+    """pre_approved is always a final/resolved status"""
+    rabbit = _make_rabbit()
+    old_status = "Application 12345 not found"
+    new_status = "Application 12345 has been preliminarily assessed positively"
+    rabbit.db.fetch_application_status = AsyncMock(return_value=old_status)
+    rabbit.db.update_application_status = AsyncMock(return_value=True)
+    rabbit.db.fetch_user_language = AsyncMock(return_value="EN")
+
+    msg_dict = {**_OAM_BASE_MSG, "status": new_status}
+    msg = _make_incoming_message(msg_dict)
+
+    with patch("bot.rabbitmq.notify_user", new_callable=AsyncMock) as mock_notify:
+        await rabbit.on_update_message(msg)
+        rabbit.db.update_application_status.assert_called_once()
+        call_args = rabbit.db.update_application_status.call_args[0]
+        assert call_args[5] is True, "pre_approved must be is_resolved"
+        mock_notify.assert_called_once()
 
 
 def test_parse_buttons_callback_data_zov_roundtrip():

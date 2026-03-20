@@ -10,9 +10,9 @@ logger = logging.getLogger(__name__)
 MVCR_STATUSES = {
     "not_found": (["nebylo nalezeno", "bez úvodních nul", "not found"], "⚪️"),
     "in_progress": (["zpracovává se", "v-prubehu-rizeni", "being processed"], "🟡"),
-    "approved": (["bylo <b>povoleno</b>", "rizeni-povoleno"], "🟢"),
     "pre_approved": (["preliminarily assessed positively",
                       "předběžně vyhodnoceno kladně"], "⭐"),
+    "approved": (["bylo <b>povoleno</b>", "rizeni-povoleno"], "🟢"),
     "denied": (["bylo <b>nepovoleno</b>", "zamítlo", "zastavilo",
                 "<b>rejected</b>", "have been closed"], "🔴"),
     "suspended": (["přerušeno", "has been suspended"], "🟠"),

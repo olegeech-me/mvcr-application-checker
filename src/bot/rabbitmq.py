@@ -80,7 +80,11 @@ class RabbitMQ:
 
     def is_resolved(self, status):
         """Check if the application was resolved to its final status"""
-        final_statuses = MVCR_STATUSES.get("approved")[0] + MVCR_STATUSES.get("denied")[0]
+        final_statuses = (
+            MVCR_STATUSES.get("approved")[0]
+            + MVCR_STATUSES.get("denied")[0]
+            + MVCR_STATUSES.get("pre_approved")[0]
+        )
         return any(final_status in status for final_status in final_statuses)
 
     def _generate_error_message(self, app_details, lang):

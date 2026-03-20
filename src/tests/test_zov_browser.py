@@ -29,8 +29,8 @@ zov_test_data = [
         "suffix": "0",
         "type": "ZOV",
         "year": "0",
-        "expected_category": "approved",
-        "expected_keyword": "preliminarily assessed positively",
+        "expected_category": "pre_approved",
+        "expected_keyword": "předběžně vyhodnoceno kladně",
     },
     {
         "number": "ISTA202410300005",
@@ -39,7 +39,7 @@ zov_test_data = [
         "type": "ZOV",
         "year": "0",
         "expected_category": "denied",
-        "expected_keyword": "rejected",
+        "expected_keyword": "nepovoleno",
     },
     {
         "number": "ISTA202601150003",
@@ -48,7 +48,7 @@ zov_test_data = [
         "type": "ZOV",
         "year": "0",
         "expected_category": "in_progress",
-        "expected_keyword": "being processed",
+        "expected_keyword": "zpracovává se",
     },
     {
         "number": "ZZZZ000000000000",
@@ -57,7 +57,7 @@ zov_test_data = [
         "type": "ZOV",
         "year": "0",
         "expected_category": "not_found",
-        "expected_keyword": "not found",
+        "expected_keyword": "nebylo nalezeno",
     },
 ]
 
