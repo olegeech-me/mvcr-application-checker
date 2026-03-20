@@ -1,5 +1,7 @@
 # ZOV (ŽOV) Tracking — Implementation Plan
 
+> **⚠️ NOTE FOR AI SESSIONS**: This plan is a high-level roadmap, NOT a final implementation spec. Each stage must be discussed and confirmed with the developer before writing any code. Read the relevant source files, think carefully about implementation details, propose your approach, and wait for approval. Do NOT blindly implement what's written here — the plan may need adjustments based on what you find in the code.
+
 ## Context: What This Project Does
 
 This is a **Telegram bot + Selenium fetcher** system that monitors Czech Ministry of Interior (MVČR) residential application statuses and notifies users via Telegram when their status changes.
