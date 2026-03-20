@@ -70,10 +70,10 @@ venv: .venv/.installed ## Create/update .venv with project + test dependencies
 # ---------------------------------------------------------------------------
 
 test: venv ## Run full test suite (verbose)
-	PYTHONPATH=src $(VENV) -m pytest -vvv src/tests/test_bot.py
+	PYTHONPATH=src $(VENV) -m pytest -vvv src/tests/
 
 test-quick: venv ## Run test suite (summary only)
-	PYTHONPATH=src $(VENV) -m pytest src/tests/test_bot.py
+	PYTHONPATH=src $(VENV) -m pytest src/tests/
 
 # ---------------------------------------------------------------------------
 # Code quality

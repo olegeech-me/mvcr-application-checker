@@ -115,23 +115,21 @@ class Database:
         application_suffix,
         application_type,
         application_year,
-        application_source="oam",
     ):
         """Insert a new application to the Applications table"""
 
         app_label = generate_oam_full_string({
             "number": application_number, "suffix": application_suffix,
             "type": application_type, "year": application_year,
-            "source": application_source,
         })
         logger.debug(f"Adding application {app_label} for chatID {chat_id} to DB")
         query = (
             "INSERT INTO Applications "
             "(user_id, application_number, application_suffix, application_type, "
-            "application_year, application_state, application_source) "
-            "SELECT user_id, $2, $3, $4, $5, 'UNKNOWN', $6 FROM Users WHERE chat_id = $1"
+            "application_year, application_state) "
+            "SELECT user_id, $2, $3, $4, $5, 'UNKNOWN' FROM Users WHERE chat_id = $1"
         )
-        params = (chat_id, application_number, application_suffix, application_type, application_year, application_source)
+        params = (chat_id, application_number, application_suffix, application_type, application_year)
         async with self.pool.acquire() as conn:
             try:
                 await conn.execute(query, *params)
@@ -208,8 +206,9 @@ class Database:
     async def delete_application(self, chat_id, application_number, application_type, application_year):
         """Delete a specific application for a user based on number, type, and year"""
 
+        app_details = {"number": application_number, "type": application_type, "year": application_year}
         logger.info(
-            f"Removing application OAM-{application_number}/{application_type}-{application_year} for chatID {chat_id} from DB"
+            f"Removing application {generate_oam_full_string(app_details)} for chatID {chat_id} from DB"
         )
         query = """DELETE FROM Applications
                 WHERE user_id = (SELECT user_id FROM Users WHERE chat_id = $1)
@@ -309,7 +308,7 @@ class Database:
 
         query = """
             SELECT u.chat_id, a.application_number, a.application_suffix, a.application_type,
-                   a.application_year, a.last_updated, a.application_state, a.application_source
+                   a.application_year, a.last_updated, a.application_state
             FROM Applications a
             JOIN Users u ON a.user_id = u.user_id
             WHERE (
@@ -335,7 +334,7 @@ class Database:
 
         query = """
             SELECT a.application_id, u.chat_id, a.application_number, a.application_suffix,
-                   a.application_type, a.application_year, a.created_at, a.application_source
+                   a.application_type, a.application_year, a.created_at
             FROM Applications a
             JOIN Users u ON a.user_id = u.user_id
             WHERE a.application_state = 'NOT_FOUND'
@@ -504,8 +503,7 @@ class Database:
         query = """
             SELECT
                 r.reminder_id, r.reminder_time,
-                a.application_id, a.application_number, a.application_type, a.application_year,
-                a.application_source
+                a.application_id, a.application_number, a.application_type, a.application_year
             FROM Reminders r
             JOIN Users u ON r.user_id = u.user_id
             JOIN Applications a ON r.application_id = a.application_id
@@ -576,8 +574,7 @@ class Database:
 
         query = """
             SELECT r.reminder_id, u.chat_id, r.reminder_time, a.application_number,
-            a.application_suffix, a.application_type, a.application_year, a.last_updated,
-            a.application_source
+            a.application_suffix, a.application_type, a.application_year, a.last_updated
             FROM Reminders r
             INNER JOIN Users u ON r.user_id = u.user_id
             INNER JOIN Applications a ON r.application_id = a.application_id

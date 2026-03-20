@@ -20,24 +20,24 @@ MVCR_STATUSES = {
 }
 
 
+def _get(d, short_key, default=None):
+    """Look up a key in both short ('number') and DB ('application_number') formats."""
+    return d.get(short_key) or d.get(f"application_{short_key}", default)
+
+
 def generate_oam_full_string(app_details):
     """Generate full application identifier (OAM or ZOV)"""
+    if _get(app_details, "type") == "ZOV":
+        return _get(app_details, "number")
 
-    source = (app_details.get("source")
-              or app_details.get("application_source", "oam"))
-
-    if source == "zov":
-        return app_details.get("number") or app_details.get("application_number")
-
-    # Extract data, checking for both possible key formats
-    number = app_details.get("number") or app_details.get("application_number")
-    suffix = app_details.get("suffix") or app_details.get("application_suffix", "0")
-    type_ = app_details.get("type") or app_details.get("application_type")
-    year = app_details.get("year") or app_details.get("application_year")
+    number = _get(app_details, "number")
+    suffix = _get(app_details, "suffix", "0")
+    type_ = _get(app_details, "type")
+    year = _get(app_details, "year")
 
     if suffix != "0":
-        return "OAM-{}-{}/{}-{}".format(number, suffix, type_, year)
-    return "OAM-{}/{}-{}".format(number, type_, year)
+        return f"OAM-{number}-{suffix}/{type_}-{year}"
+    return f"OAM-{number}/{type_}-{year}"
 
 
 def categorize_application_status(status):

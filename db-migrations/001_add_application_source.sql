@@ -1,2 +1,0 @@
-ALTER TABLE Applications
-ADD COLUMN IF NOT EXISTS application_source VARCHAR(10) NOT NULL DEFAULT 'oam';

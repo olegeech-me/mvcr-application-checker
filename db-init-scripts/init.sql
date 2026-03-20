@@ -19,8 +19,7 @@ CREATE TABLE IF NOT EXISTS Applications (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     changed_at TIMESTAMP,
     last_updated TIMESTAMP,
-    is_resolved BOOLEAN NOT NULL DEFAULT FALSE,
-    application_source VARCHAR(10) NOT NULL DEFAULT 'oam'
+    is_resolved BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 CREATE TABLE IF NOT EXISTS Reminders (
