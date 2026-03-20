@@ -563,11 +563,14 @@ def _parse_application_buttons_callback_data(data):
     """Parses application buttons callback data and returns app_details dict"""
     data_part = data.split("_")[-1]
     application_number, application_type, application_year = data_part.split("-")
-    return {
+    result = {
         "number": application_number,
         "type": application_type,
         "year": int(application_year),
     }
+    if application_type == "ZOV":
+        result["source"] = "zov"
+    return result
 
 
 # Handler for /unsubscribe command
@@ -665,16 +668,15 @@ async def force_refresh_command(update: Update, context: ContextTypes.DEFAULT_TY
         keyboard = _generate_buttons_from_subscriptions("force_refresh", subscriptions)
         await update.message.reply_text(message_texts[lang]["select_refresh"], reply_markup=keyboard)
     else:
-        await _publish_force_request(
-            update,
-            "cli",
-            lang,
-            {
-                "number": subscriptions[0]["application_number"],
-                "type": subscriptions[0]["application_type"],
-                "year": subscriptions[0]["application_year"],
-            },
-        )
+        app_details = {
+            "number": subscriptions[0]["application_number"],
+            "type": subscriptions[0]["application_type"],
+            "year": subscriptions[0]["application_year"],
+        }
+        source = subscriptions[0].get("application_source")
+        if source:
+            app_details["source"] = source
+        await _publish_force_request(update, "cli", lang, app_details)
 
 
 async def force_refresh_button(update: Update, context: ContextTypes.DEFAULT_TYPE):

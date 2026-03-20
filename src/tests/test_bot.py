@@ -29,6 +29,9 @@ from bot.handlers import (
     _parse_application_buttons_callback_data,
     create_subscription,
     application_dialog_number,
+    force_refresh_command,
+    force_refresh_button,
+    unsubscribe_button,
     VALIDATE,
     TYPE,
     NUMBER,
@@ -1464,3 +1467,145 @@ def test_i18n_has_zov_keys(lang):
 
     assert "dialog_app_number" in mt[lang], f"Missing 'dialog_app_number' in {lang}"
     assert "ISTA" in mt[lang]["dialog_app_number"], f"'dialog_app_number' in {lang} should mention ZOV example number"
+
+
+# ---------------------------------------------------------------------------
+# ZOV bug regression tests: force_refresh, unsubscribe, callback roundtrip
+# ---------------------------------------------------------------------------
+
+
+def _make_zov_subscription():
+    """Build a fake DB subscription row for a ZOV application"""
+    return {
+        "application_id": 99,
+        "application_number": "ISTA202504220001",
+        "application_suffix": "0",
+        "application_type": "ZOV",
+        "application_year": 0,
+        "current_status": "Unknown",
+        "application_state": "UNKNOWN",
+        "is_resolved": False,
+        "application_source": "zov",
+    }
+
+
+def test_parse_buttons_callback_data_zov_roundtrip():
+    """Callback data generated for ZOV must parse back with source preserved"""
+    subs = [_make_zov_subscription()]
+    markup = _generate_buttons_from_subscriptions("force_refresh", subs)
+    callback_data = markup.inline_keyboard[0][0].callback_data
+
+    parsed = _parse_application_buttons_callback_data(callback_data)
+    assert parsed["number"] == "ISTA202504220001"
+    assert parsed["type"] == "ZOV"
+    assert parsed["year"] == 0
+    # The critical assertion: source must survive the roundtrip
+    assert "source" in parsed, "ZOV callback data must include 'source' key"
+    assert parsed["source"] == "zov"
+
+
+def test_parse_buttons_callback_data_oam_no_source():
+    """OAM callback data should not gain a spurious source key (backward compat)"""
+    result = _parse_application_buttons_callback_data("status_12345-TP-2023")
+    assert result["number"] == "12345"
+    assert result["type"] == "TP"
+    assert result["year"] == 2023
+    assert result.get("source") != "zov"
+
+
+def test_create_request_from_parsed_zov_callback():
+    """create_request from ZOV parsed callback must include source='zov'"""
+    subs = [_make_zov_subscription()]
+    markup = _generate_buttons_from_subscriptions("force_refresh", subs)
+    callback_data = markup.inline_keyboard[0][0].callback_data
+
+    parsed = _parse_application_buttons_callback_data(callback_data)
+    request = create_request(200, parsed, force_refresh=True)
+    assert request["number"] == "ISTA202504220001"
+    assert request["force_refresh"] is True
+    assert "source" in request, "RabbitMQ request for ZOV must include 'source'"
+    assert request["source"] == "zov"
+
+
+@pytest.mark.asyncio
+async def test_force_refresh_command_single_zov_subscription():
+    """force_refresh with one ZOV subscription must include source='zov' in published message"""
+    zov_sub = _make_zov_subscription()
+
+    mock_db = AsyncMock()
+    mock_db.fetch_user_subscriptions = AsyncMock(return_value=[zov_sub])
+    mock_rabbit = AsyncMock()
+
+    update = Mock()
+    update.edited_message = None
+    update.message = AsyncMock()
+    update.message.text = "/force_refresh"
+    update.message.reply_text = AsyncMock()
+    update.effective_chat.id = 200
+    context = Mock()
+    context.user_data = {}
+
+    with patch("bot.handlers.db", mock_db), \
+         patch("bot.handlers.rabbit", mock_rabbit), \
+         patch("bot.handlers._get_user_language", new_callable=AsyncMock, return_value="EN"), \
+         patch("bot.handlers.enforce_rate_limit", new_callable=AsyncMock, return_value=True):
+        await force_refresh_command(update, context)
+
+    mock_rabbit.publish_message.assert_called_once()
+    published_msg = mock_rabbit.publish_message.call_args[0][0]
+    assert published_msg["number"] == "ISTA202504220001"
+    assert published_msg["force_refresh"] is True
+    assert "source" in published_msg, "Force refresh message for ZOV must include 'source'"
+    assert published_msg["source"] == "zov"
+
+
+@pytest.mark.asyncio
+async def test_force_refresh_button_zov():
+    """force_refresh via button for ZOV must include source='zov' in published message"""
+    mock_rabbit = AsyncMock()
+
+    update = Mock()
+    update.callback_query = AsyncMock()
+    update.callback_query.data = "force_refresh_ISTA202504220001-ZOV-0"
+    update.callback_query.message = AsyncMock()
+    update.callback_query.message.reply_text = AsyncMock()
+    update.callback_query.edit_message_text = AsyncMock()
+    update.effective_chat.id = 200
+    context = Mock()
+    context.user_data = {}
+
+    with patch("bot.handlers.rabbit", mock_rabbit), \
+         patch("bot.handlers._get_user_language", new_callable=AsyncMock, return_value="EN"), \
+         patch("bot.handlers._is_button_click_abused", new_callable=AsyncMock, return_value=False):
+        await force_refresh_button(update, context)
+
+    mock_rabbit.publish_message.assert_called_once()
+    published_msg = mock_rabbit.publish_message.call_args[0][0]
+    assert published_msg["number"] == "ISTA202504220001"
+    assert published_msg["force_refresh"] is True
+    assert "source" in published_msg, "Force refresh button message for ZOV must include 'source'"
+    assert published_msg["source"] == "zov"
+
+
+@pytest.mark.asyncio
+async def test_unsubscribe_button_zov_label():
+    """unsubscribe button for ZOV must show ZOV number, not OAM format"""
+    mock_db = AsyncMock()
+    mock_db.delete_application = AsyncMock(return_value=True)
+
+    update = Mock()
+    update.callback_query = AsyncMock()
+    update.callback_query.data = "unsubscribe_ISTA202504220001-ZOV-0"
+    update.callback_query.edit_message_text = AsyncMock()
+    update.effective_chat.id = 200
+    context = Mock()
+    context.user_data = {}
+
+    with patch("bot.handlers.db", mock_db), \
+         patch("bot.handlers._get_user_language", new_callable=AsyncMock, return_value="EN"), \
+         patch("bot.handlers._is_button_click_abused", new_callable=AsyncMock, return_value=False):
+        await unsubscribe_button(update, context)
+
+    call_args = update.callback_query.edit_message_text.call_args[0][0]
+    assert "ISTA202504220001" in call_args
+    assert "OAM" not in call_args, "ZOV unsubscribe message must not show OAM prefix"
