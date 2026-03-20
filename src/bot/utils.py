@@ -10,9 +10,9 @@ logger = logging.getLogger(__name__)
 MVCR_STATUSES = {
     "not_found": (["nebylo nalezeno", "bez úvodních nul", "not found"], "⚪️"),
     "in_progress": (["zpracovává se", "v-prubehu-rizeni", "being processed"], "🟡"),
-    "approved": (["bylo <b>povoleno</b>", "rizeni-povoleno",
-                   "preliminarily assessed positively",
-                   "předběžně vyhodnoceno kladně"], "🟢"),
+    "approved": (["bylo <b>povoleno</b>", "rizeni-povoleno"], "🟢"),
+    "pre_approved": (["preliminarily assessed positively",
+                      "předběžně vyhodnoceno kladně"], "⭐"),
     "denied": (["bylo <b>nepovoleno</b>", "zamítlo", "zastavilo",
                 "<b>rejected</b>", "have been closed"], "🔴"),
     "suspended": (["přerušeno", "has been suspended"], "🟠"),
@@ -21,7 +21,13 @@ MVCR_STATUSES = {
 
 
 def generate_oam_full_string(app_details):
-    """Generate full OAM application identifier"""
+    """Generate full application identifier (OAM or ZOV)"""
+
+    source = (app_details.get("source")
+              or app_details.get("application_source", "oam"))
+
+    if source == "zov":
+        return app_details.get("number") or app_details.get("application_number")
 
     # Extract data, checking for both possible key formats
     number = app_details.get("number") or app_details.get("application_number")
@@ -30,11 +36,8 @@ def generate_oam_full_string(app_details):
     year = app_details.get("year") or app_details.get("application_year")
 
     if suffix != "0":
-        oam_string = "OAM-{}-{}/{}-{}".format(number, suffix, type_, year)
-    else:
-        oam_string = "OAM-{}/{}-{}".format(number, type_, year)
-
-    return oam_string
+        return "OAM-{}-{}/{}-{}".format(number, suffix, type_, year)
+    return "OAM-{}/{}-{}".format(number, type_, year)
 
 
 def categorize_application_status(status):

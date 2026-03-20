@@ -25,6 +25,7 @@ from bot.handlers import (
     enforce_rate_limit,
     set_language_startup,
 )
+from bot.utils import generate_oam_full_string, categorize_application_status, MVCR_STATUSES
 
 @patch("bot.handlers.ALLOWED_TYPES", new=["MK", "DO", "TP"])
 @patch("bot.handlers.get_allowed_years", return_value=[2020, 2021, 2022, 2023, 2042])
@@ -225,6 +226,68 @@ async def test__is_button_click_abused():
 #    with patch("bot.handlers.db", mock_db), patch("bot.handlers._get_user_language", return_value="EN"):
 #        await subscribe_command(update, context)
 #        update.message.reply_text.assert_called_with("You are already subscribed.")
+
+
+@pytest.mark.parametrize(
+    "app_details, expected",
+    [
+        # OAM with short keys (RabbitMQ message format)
+        ({"number": "4242", "suffix": "0", "type": "TP", "year": "2042"},
+         "OAM-4242/TP-2042"),
+        # OAM with suffix
+        ({"number": "4242", "suffix": "5", "type": "DO", "year": "2020"},
+         "OAM-4242-5/DO-2020"),
+        # OAM with DB column keys
+        ({"application_number": "12345", "application_suffix": "0",
+          "application_type": "MK", "application_year": "2023"},
+         "OAM-12345/MK-2023"),
+        # OAM with explicit source="oam"
+        ({"number": "100", "suffix": "0", "type": "TP", "year": "2024",
+          "source": "oam"},
+         "OAM-100/TP-2024"),
+        # ZOV with short key
+        ({"number": "ISTA202504220001", "source": "zov"},
+         "ISTA202504220001"),
+        # ZOV with DB column keys
+        ({"application_number": "ISTA202601150003",
+          "application_source": "zov", "application_type": "ZOV",
+          "application_year": 0, "application_suffix": "0"},
+         "ISTA202601150003"),
+        # No source key at all defaults to OAM
+        ({"number": "999", "suffix": "0", "type": "TP", "year": "2025"},
+         "OAM-999/TP-2025"),
+    ],
+)
+def test_generate_oam_full_string(app_details, expected):
+    assert generate_oam_full_string(app_details) == expected
+
+
+@pytest.mark.parametrize(
+    "status_text, expected_category, expected_emoji",
+    [
+        ("Your application has been preliminarily assessed positively", "pre_approved", "⭐"),
+        ("Vaše žádost bylo předběžně vyhodnoceno kladně", "pre_approved", "⭐"),
+        ("Your application bylo <b>povoleno</b>", "approved", "🟢"),
+        ("rizeni-povoleno", "approved", "🟢"),
+        ("is still being processed", "in_progress", "🟡"),
+        ("was <b>rejected</b>", "denied", "🔴"),
+        ("reference number not found", "not_found", "⚪️"),
+        ("has been suspended", "suspended", "🟠"),
+        ("totally unknown status xyz", None, None),
+    ],
+)
+def test_categorize_application_status(status_text, expected_category, expected_emoji):
+    category, emoji = categorize_application_status(status_text)
+    assert category == expected_category
+    assert emoji == expected_emoji
+
+
+def test_pre_approved_not_in_resolved_statuses():
+    """pre_approved must NOT be treated as a final/resolved status"""
+    final_keywords = MVCR_STATUSES.get("approved")[0] + MVCR_STATUSES.get("denied")[0]
+    pre_approved_keywords = MVCR_STATUSES.get("pre_approved")[0]
+    for kw in pre_approved_keywords:
+        assert kw not in final_keywords, f"'{kw}' should not be in resolved statuses"
 
 
 def test_enforce_rate_limit():

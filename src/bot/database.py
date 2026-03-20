@@ -1,6 +1,7 @@
 import asyncpg
 import datetime
 import logging
+import os
 import pytz
 import asyncio
 from bot.texts import message_texts
@@ -22,8 +23,8 @@ class Database:
         self.loop = loop
         self.pool = None
 
-    async def connect(self, max_retries=MAX_RETRIES, delay=RETRY_DELAY):
-        """Connect to the database with retries"""
+    async def connect(self, max_retries=MAX_RETRIES, delay=RETRY_DELAY, migrations_dir=None):
+        """Connect to the database with retries, then run pending migrations"""
         for attempt in range(1, max_retries + 1):
             try:
                 self.pool = await asyncpg.create_pool(
@@ -45,6 +46,50 @@ class Database:
                 else:
                     logger.error("Max retries reached. Unable to connect to the database")
                     raise
+
+        if migrations_dir:
+            await self.run_migrations(migrations_dir)
+
+    async def run_migrations(self, migrations_dir):
+        """Apply pending SQL migrations from the given directory"""
+        if not os.path.isdir(migrations_dir):
+            logger.info(f"Migrations directory '{migrations_dir}' not found, skipping")
+            return
+
+        sql_files = sorted(f for f in os.listdir(migrations_dir) if f.endswith(".sql"))
+        if not sql_files:
+            logger.info(f"No migration files in '{migrations_dir}', skipping")
+            return
+
+        async with self.pool.acquire() as conn:
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS schema_migrations (
+                    id SERIAL PRIMARY KEY,
+                    filename VARCHAR(255) UNIQUE NOT NULL,
+                    applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
+            applied = {
+                row["filename"]
+                for row in await conn.fetch("SELECT filename FROM schema_migrations")
+            }
+
+            for filename in sql_files:
+                if filename in applied:
+                    continue
+
+                filepath = os.path.join(migrations_dir, filename)
+                with open(filepath, "r") as f:
+                    sql = f.read()
+
+                async with conn.transaction():
+                    await conn.execute(sql)
+                    await conn.execute(
+                        "INSERT INTO schema_migrations (filename) VALUES ($1)",
+                        filename,
+                    )
+                logger.info(f"Applied migration: {filename}")
 
     async def insert_user(self, chat_id, first_name, username=None, last_name=None, lang="EN"):
         """Insert a new user to the Users table"""

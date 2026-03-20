@@ -340,6 +340,15 @@ User sends ZOV number (e.g., ISTA202504220001)
 
 ---
 
+## Dev Notes
+
+- **Local testing**: No `tox` installed globally on macOS. Use the project `.venv` to run tests:
+  ```
+  PYTHONPATH=src .venv/bin/python -m pytest -vvv src/tests/test_bot.py
+  ```
+
+---
+
 ## Risks & Open Questions
 
 1. **Backward compatibility**: The `source` field defaults to `"oam"` everywhere, so existing messages in RabbitMQ queues (without `source`) will be treated as OAM. Zero downtime migration.

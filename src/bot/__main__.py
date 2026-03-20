@@ -4,7 +4,7 @@ import asyncio
 import logging
 import signal
 
-from bot.loader import loader, loop, FULL_VERSION, LOG_LEVEL, ADMIN_CHAT_IDS
+from bot.loader import loader, loop, FULL_VERSION, LOG_LEVEL, ADMIN_CHAT_IDS, DB_MIGRATIONS_DIR
 from bot.handlers import start_command, help_command, unknown_text, unknown_command, status_command
 from bot.handlers import unsubscribe_command, subscribe_command, admin_stats_command, fetcher_stats_command
 from bot.handlers import force_refresh_command, subscribe_button, lang_command, set_language_startup, set_language_cmd
@@ -74,7 +74,7 @@ async def shutdown():
 
 async def main():
     # Connect to postgres
-    await db.connect()
+    await db.connect(migrations_dir=DB_MIGRATIONS_DIR)
     # Connect to rabbit
     await rabbit.connect()
 
