@@ -99,14 +99,14 @@ build-fetcher: ## Build fetcher image
 # ---------------------------------------------------------------------------
 
 up: env ssl ## Start all services (postgres + rabbitmq + bot + fetcher)
-	$(COMPOSE_BOT) up -d
-	$(COMPOSE_FETCH) up -d
+	$(COMPOSE_BOT) up -d --build
+	$(COMPOSE_FETCH) up -d --build
 
 up-bot: env ssl ## Start bot stack only (postgres + rabbitmq + bot)
-	$(COMPOSE_BOT) up -d
+	$(COMPOSE_BOT) up -d --build
 
 up-fetcher: ## Start fetcher only
-	$(COMPOSE_FETCH) up -d
+	$(COMPOSE_FETCH) up -d --build
 
 down: ## Stop all services
 	$(COMPOSE_BOT) down
