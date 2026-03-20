@@ -218,7 +218,7 @@ The existing uniqueness constraint `(user_id, application_number, application_ty
 
 - **`generate_oam_full_string()`** keeps its name. Its body is updated to check `source`/`application_source` — for ZOV it returns the ZOV number directly, for OAM (or absent source) it returns the existing `OAM-N/T-Y` format. Zero call-site changes needed.
 - **`pre_approved` status category**: ZOV's "preliminarily assessed positively" is distinct from OAM's "granted/povoleno". It gets its own category `pre_approved` (⭐) in `MVCR_STATUSES`. Unlike `approved`, it is **not resolved** — the bot keeps monitoring for a potential final status change. Keywords moved out of `approved` into `pre_approved`.
-- **DB migration** uses an idempotent SQL script (check column existence, ALTER if missing) so it can be re-run safely. `init.sql` also updated for fresh installs.
+- **DB migrations** run automatically on bot startup via a lightweight migration runner in `database.py`. SQL files live in a configurable directory (env var, default `db-migrations/`), tracked by a `schema_migrations` table. `init.sql` stays as-is for fresh Postgres containers via `docker-entrypoint-initdb.d`.
 - **Backward compatibility**: `source` defaults to `"oam"` everywhere. Existing RabbitMQ messages without `source` are treated as OAM. Zero downtime migration.
 
 ### ZOV data flow (end-to-end)
@@ -245,11 +245,13 @@ User sends ZOV number (e.g., ISTA202504220001)
 
 **Scope**:
 
-- `db-init-scripts/init.sql` — add `application_source` column to `CREATE TABLE Applications`, default `'oam'`
-- New migration script `db-init-scripts/002_add_application_source.sql` — idempotent ALTER TABLE for existing databases
+- `db-init-scripts/init.sql` — add `application_source` column to `CREATE TABLE Applications`, default `'oam'` (for fresh installs)
+- Lightweight migration runner in `database.py` — on `connect()`, create `schema_migrations` table if missing, scan a configurable directory (env var, default `db-migrations/`) for `.sql` files, run pending ones in order, record them. Simple, no external dependencies
+- `src/bot/loader.py` — add `DB_MIGRATIONS_DIR` env var config
+- New directory `db-migrations/` with first migration: `001_add_application_source.sql` (adds column if not exists)
 - `src/bot/utils.py` — update `generate_oam_full_string()` body to dispatch on `source`/`application_source`, returning the ZOV number directly for ZOV apps. Add `pre_approved` category to `MVCR_STATUSES` (⭐, not resolved) with keywords "preliminarily assessed positively" / "předběžně vyhodnoceno kladně" moved out of `approved`
 
-**Validates**: Migration runs cleanly, function returns correct identifiers for both OAM and ZOV dicts. `pre_approved` categorization works.
+**Validates**: Migration runner creates tracking table, applies `001` migration, skips it on re-run. Function returns correct identifiers for both OAM and ZOV dicts. `pre_approved` categorization works.
 
 **Results/Notes**: *(to be filled after completion)*
 
