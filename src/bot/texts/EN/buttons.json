@@ -4,5 +4,7 @@
   "subscribe_incorrect": "❌ No, the data is incorrect",
   "add_reminder": "➕ Add",
   "delete_reminder": "➖ Delete",
-  "cancel": "❌ Cancel"
+  "cancel": "❌ Cancel",
+  "source_oam": "🏠 Long-term residence (OAM)",
+  "source_zov": "✈️ Long-term visa (ŽOV)"
 }

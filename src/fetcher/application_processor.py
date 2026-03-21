@@ -69,10 +69,13 @@ class ApplicationProcessor:
 
     def _generate_error_message(self, app_details):
         """Generate an error message for an application number"""
-        app_string = "OAM-{}-{}/{}-{} ERROR".format(
-            app_details["number"], app_details["suffix"], app_details["type"], app_details["year"]
+        source = app_details.get("source", "oam")
+        if source == "zov":
+            return f"{app_details['number']} ERROR"
+        return "OAM-{}-{}/{}-{} ERROR".format(
+            app_details["number"], app_details["suffix"],
+            app_details["type"], app_details["year"]
         )
-        return app_string
 
     async def _process_request(self, message, request_type):
         """Process a fetch or refresh request"""
@@ -84,7 +87,11 @@ class ApplicationProcessor:
         request_type = app_details.get("request_type", "fetch")  # stub for dealing with old format messages in queue
         forced = app_details.get("force_refresh")
 
-        log_prefix_elements = [f"[{number}/{type_}-{year}]", f"[{request_type.upper()}]"]
+        source = app_details.get("source", "oam")
+        if source == "zov":
+            log_prefix_elements = [f"[{number}]", f"[{request_type.upper()}]"]
+        else:
+            log_prefix_elements = [f"[{number}/{type_}-{year}]", f"[{request_type.upper()}]"]
         if retry_count:
             log_prefix_elements.append(f"[X-RETRY {retry_count}]")
         if forced:

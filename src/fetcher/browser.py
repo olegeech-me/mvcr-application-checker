@@ -176,30 +176,53 @@ class Browser:
         self._log(logging.INFO, "Setting resolution to %s", chosen_resolution)
         return chosen_resolution
 
-    def _submit_form(self, app_details):
-        """Submit application details into the form"""
+    def _dismiss_cookies(self):
+        """Try to dismiss the cookie consent dialog if present"""
+        try:
+            cookies_btn = self.browser.find_element_by_xpath(
+                '//button[@class="button button__primary" and text()="Souhlasím se všemi"]'
+            )
+            cookies_btn.click()
+            self._log(logging.INFO, "Cookies button found, clicked.")
+        except (ElementClickInterceptedException, NoSuchElementException):
+            self._log(logging.INFO, "Cookies button not active or not found")
+
+    def _click_submit(self):
+        """Locate and click the form submit button"""
+        submit_button = self.browser.find_element(By.CSS_SELECTOR, 'button[type="submit"]')
+        self.random_sleep()
+        self.browser.execute_script("arguments[0].scrollIntoView();", submit_button)
+        actions = ActionChains(self.browser)
+        actions.move_to_element(submit_button).perform()
+        self.browser.execute_script("arguments[0].click();", submit_button)
+
+    def _fill_zov_form(self, app_details):
+        """Fill the ZOV visa application number field"""
+        self._log(logging.INFO, "Filling ZOV form for %s", app_details["number"])
+
+        WebDriverWait(self.browser, PAGE_LOAD_LIMIT_SECONDS).until(
+            EC.presence_of_element_located((By.NAME, "visaApplicationNumber"))
+        )
+
+        zov_field = self.browser.find_element(By.NAME, "visaApplicationNumber")
+        zov_field.clear()
+        self.random_sleep()
+        self.type_with_delay(zov_field, app_details["number"])
+
+    def _fill_oam_form(self, app_details):
+        """Fill the OAM application form fields (number, suffix, type, year)"""
         logged_details = {key: app_details[key] for key in ["number", "suffix", "type", "year"]}
-        self._log(logging.INFO, "Submitting application data %s", logged_details)
+        self._log(logging.INFO, "Filling OAM form %s", logged_details)
 
         WebDriverWait(self.browser, PAGE_LOAD_LIMIT_SECONDS).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, ".input__control"))
         )
 
-        # Try clicking on cookies button
-        cookies = self.browser.find_element_by_xpath('//button[@class="button button__primary" and text()="Souhlasím se všemi"]')
-        try:
-            cookies.click()
-            self._log(logging.INFO, "Cookies button found, clicked.")
-        except ElementClickInterceptedException:
-            self._log(logging.INFO, "Cookies button is not active")
-
-        # Locate and fill out the application number field by its placeholder
         application_number_field = self.browser.find_element(By.NAME, "proceedings.referenceNumber")
         self.random_sleep()
         application_number_field.clear()
         self.type_with_delay(application_number_field, app_details["number"])
 
-        # Locate and fill out the application type field by its placeholder
         application_suffix_field = self.browser.find_element(By.NAME, "proceedings.additionalSuffix")
         application_suffix_field.clear()
         self.random_sleep()
@@ -207,12 +230,10 @@ class Browser:
 
         # Select the "Type" from the dropdown
         try:
-            # Locate the select wrapper containing 'proceedings.category'
             type_select_wrapper = self.browser.find_element(
                 By.XPATH,
                 "//div[contains(@class, 'select__wrapper') and .//input[@name='proceedings.category']]"
             )
-            # Find the 'react-select__control' inside the wrapper
             type_dropdown = type_select_wrapper.find_element(
                 By.XPATH,
                 ".//div[contains(@class, 'react-select__control')]"
@@ -220,18 +241,15 @@ class Browser:
             self.random_sleep()
             type_dropdown.click()
 
-            # Wait for the options to be present
             WebDriverWait(self.browser, 3).until(
                 EC.presence_of_element_located((By.CLASS_NAME, "react-select__menu"))
             )
 
-            # Adjusted XPath to locate the option correctly
             type_option = self.browser.find_element(
                 By.XPATH,
                 f"//div[contains(@class, 'react-select__option') and .//div[normalize-space(text())='{app_details['type']}']]"
             )
 
-            # Scroll the option into view and click it using JavaScript
             self.browser.execute_script("arguments[0].scrollIntoView(true);", type_option)
             self.random_sleep()
             self.browser.execute_script("arguments[0].click();", type_option)
@@ -246,41 +264,32 @@ class Browser:
 
         # Select the "Year" from the dropdown
         try:
-            # Locate the select wrapper containing 'proceedings.year'
             year_select_wrapper = self.browser.find_element(
                 By.XPATH,
                 "//div[contains(@class, 'select__wrapper') and .//input[@name='proceedings.year']]"
             )
-            # Find the 'react-select__control' inside the wrapper
             year_dropdown = year_select_wrapper.find_element(
                 By.XPATH,
                 ".//div[contains(@class, 'react-select__control')]"
             )
             self.random_sleep()
 
-            # Scroll the year_dropdown into view before clicking it
             self.browser.execute_script("arguments[0].scrollIntoView({block: 'center'});", year_dropdown)
             self.random_sleep()
-            # Click the year_dropdown to open the menu
             year_dropdown.click()
 
-            # Wait for the menu to be present
             WebDriverWait(self.browser, 3).until(
                 EC.presence_of_element_located((By.CLASS_NAME, "react-select__menu"))
             )
 
-            # Locate the desired option
             year_option = self.browser.find_element(
                 By.XPATH,
                 f"//div[contains(@class, 'react-select__option') and .//div[normalize-space(text())='{app_details['year']}']]"
             )
 
-            # Scroll the year_option into view before clicking it
             self.browser.execute_script("arguments[0].scrollIntoView({block: 'center'});", year_option)
             self.random_sleep()
-            # Click the year_option
             self.browser.execute_script("arguments[0].click();", year_option)
-
 
         except (WebDriverException, CustomMaxRetryError, TimeoutException):
             self._log(logging.ERROR, "Error waiting for year list to appear")
@@ -289,14 +298,6 @@ class Browser:
             self._log(logging.ERROR, "Error selecting 'Year': %s", e)
             self.close()
             raise
-
-        # Locate the submit button and click it to submit the form
-        submit_button = self.browser.find_element(By.CSS_SELECTOR, 'button[type="submit"]')
-        self.random_sleep()
-        self.browser.execute_script("arguments[0].scrollIntoView();", submit_button)
-        actions = ActionChains(self.browser)
-        actions.move_to_element(submit_button).perform()
-        self.browser.execute_script("arguments[0].click();", submit_button)
 
     async def _do_fetch_with_browser(self, url, app_details):
         def _has_recaptcha(browser):
@@ -340,9 +341,15 @@ class Browser:
             # BUG: sometimes on some systems after submitting data
             # the page still appears as nothing was done
             # Magically, re-submitting data resolves the issue ...
+            is_zov = app_details.get("source") == "zov"
             retry_count = 0
             for _attempt in range(3):
-                self._submit_form(app_details)
+                self._dismiss_cookies()
+                if is_zov:
+                    self._fill_zov_form(app_details)
+                else:
+                    self._fill_oam_form(app_details)
+                self._click_submit()
                 try:
                     WebDriverWait(browser, 5).until(
                         lambda x: x.find_element(By.CLASS_NAME, "alert__content"),

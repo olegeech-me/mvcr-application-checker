@@ -8,7 +8,7 @@ from bot import rabbitmq
 from bot import metrics
 
 # Version information
-BASE_VERSION = os.getenv("BASE_VERSION", "v1.0.7")
+BASE_VERSION = os.getenv("BASE_VERSION", "v2.0.0")
 GIT_COMMIT = os.getenv("GIT_COMMIT", "unknown")
 FULL_VERSION = f"{BASE_VERSION}-{GIT_COMMIT}"
 # Telegram bot config
@@ -40,6 +40,8 @@ REFRESH_PERIOD = int(os.getenv("REFRESH_PERIOD", 3600))
 SCHEDULER_PERIOD = int(os.getenv("SCHEDULER_PERIOD", 300))
 NOT_FOUND_MAX_DAYS = int(os.getenv("NOT_FOUND_MAX_DAYS", 30))
 NOT_FOUND_REFRESH_PERIOD = int(os.getenv("NOT_FOUND_REFRESH_PERIOD", 86400))
+# DB migrations
+DB_MIGRATIONS_DIR = os.getenv("DB_MIGRATIONS_DIR", "db-migrations")
 # Run mode for tests
 RUN_MODE = os.getenv("RUN_MODE", "PROD")
 

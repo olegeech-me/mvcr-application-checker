@@ -1,10 +1,11 @@
 import asyncpg
 import datetime
 import logging
+import os
 import pytz
 import asyncio
 from bot.texts import message_texts
-from bot.utils import categorize_application_status
+from bot.utils import categorize_application_status, generate_oam_full_string
 
 MAX_RETRIES = 5  # maximum number of connection retries
 RETRY_DELAY = 2  # delay (in seconds) between retries
@@ -22,8 +23,8 @@ class Database:
         self.loop = loop
         self.pool = None
 
-    async def connect(self, max_retries=MAX_RETRIES, delay=RETRY_DELAY):
-        """Connect to the database with retries"""
+    async def connect(self, max_retries=MAX_RETRIES, delay=RETRY_DELAY, migrations_dir=None):
+        """Connect to the database with retries, then run pending migrations"""
         for attempt in range(1, max_retries + 1):
             try:
                 self.pool = await asyncpg.create_pool(
@@ -45,6 +46,50 @@ class Database:
                 else:
                     logger.error("Max retries reached. Unable to connect to the database")
                     raise
+
+        if migrations_dir:
+            await self.run_migrations(migrations_dir)
+
+    async def run_migrations(self, migrations_dir):
+        """Apply pending SQL migrations from the given directory"""
+        if not os.path.isdir(migrations_dir):
+            logger.info(f"Migrations directory '{migrations_dir}' not found, skipping")
+            return
+
+        sql_files = sorted(f for f in os.listdir(migrations_dir) if f.endswith(".sql"))
+        if not sql_files:
+            logger.info(f"No migration files in '{migrations_dir}', skipping")
+            return
+
+        async with self.pool.acquire() as conn:
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS schema_migrations (
+                    id SERIAL PRIMARY KEY,
+                    filename VARCHAR(255) UNIQUE NOT NULL,
+                    applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
+            applied = {
+                row["filename"]
+                for row in await conn.fetch("SELECT filename FROM schema_migrations")
+            }
+
+            for filename in sql_files:
+                if filename in applied:
+                    continue
+
+                filepath = os.path.join(migrations_dir, filename)
+                with open(filepath, "r") as f:
+                    sql = f.read()
+
+                async with conn.transaction():
+                    await conn.execute(sql)
+                    await conn.execute(
+                        "INSERT INTO schema_migrations (filename) VALUES ($1)",
+                        filename,
+                    )
+                logger.info(f"Applied migration: {filename}")
 
     async def insert_user(self, chat_id, first_name, username=None, last_name=None, lang="EN"):
         """Insert a new user to the Users table"""
@@ -73,12 +118,15 @@ class Database:
     ):
         """Insert a new application to the Applications table"""
 
-        logger.debug(
-            f"Adding application OAM-{application_number}/{application_type}-{application_year} for chatID {chat_id} to DB"
-        )
+        app_label = generate_oam_full_string({
+            "number": application_number, "suffix": application_suffix,
+            "type": application_type, "year": application_year,
+        })
+        logger.debug(f"Adding application {app_label} for chatID {chat_id} to DB")
         query = (
             "INSERT INTO Applications "
-            "(user_id, application_number, application_suffix, application_type, application_year, application_state) "
+            "(user_id, application_number, application_suffix, application_type, "
+            "application_year, application_state) "
             "SELECT user_id, $2, $3, $4, $5, 'UNKNOWN' FROM Users WHERE chat_id = $1"
         )
         params = (chat_id, application_number, application_suffix, application_type, application_year)
@@ -158,8 +206,9 @@ class Database:
     async def delete_application(self, chat_id, application_number, application_type, application_year):
         """Delete a specific application for a user based on number, type, and year"""
 
+        app_details = {"number": application_number, "type": application_type, "year": application_year}
         logger.info(
-            f"Removing application OAM-{application_number}/{application_type}-{application_year} for chatID {chat_id} from DB"
+            f"Removing application {generate_oam_full_string(app_details)} for chatID {chat_id} from DB"
         )
         query = """DELETE FROM Applications
                 WHERE user_id = (SELECT user_id FROM Users WHERE chat_id = $1)

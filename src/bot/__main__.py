@@ -4,17 +4,19 @@ import asyncio
 import logging
 import signal
 
-from bot.loader import loader, loop, FULL_VERSION, LOG_LEVEL, ADMIN_CHAT_IDS
+from bot.loader import loader, loop, FULL_VERSION, LOG_LEVEL, ADMIN_CHAT_IDS, DB_MIGRATIONS_DIR
 from bot.handlers import start_command, help_command, unknown_text, unknown_command, status_command
 from bot.handlers import unsubscribe_command, subscribe_command, admin_stats_command, fetcher_stats_command
 from bot.handlers import force_refresh_command, subscribe_button, lang_command, set_language_startup, set_language_cmd
 from bot.handlers import status_button, unsubscribe_button, force_refresh_button
 from bot.handlers import (
     application_dialog_number,
+    application_dialog_source,
     application_dialog_year,
     application_dialog_type,
     application_dialog_validate,
     START,
+    SOURCE,
     NUMBER,
     TYPE,
     YEAR,
@@ -74,7 +76,7 @@ async def shutdown():
 
 async def main():
     # Connect to postgres
-    await db.connect()
+    await db.connect(migrations_dir=DB_MIGRATIONS_DIR)
     # Connect to rabbit
     await rabbit.connect()
 
@@ -106,6 +108,7 @@ async def main():
                 CallbackQueryHandler(subscribe_button, pattern="subscribe"),
                 CallbackQueryHandler(set_language_startup, pattern="set_lang_*"),
             ],
+            SOURCE: [CallbackQueryHandler(application_dialog_source, pattern="application_source_*")],
             NUMBER: [MessageHandler(filters.TEXT, application_dialog_number)],
             TYPE: [CallbackQueryHandler(application_dialog_type, pattern="application_dialog_type_*")],
             YEAR: [CallbackQueryHandler(application_dialog_year, pattern="application_dialog_year_*")],

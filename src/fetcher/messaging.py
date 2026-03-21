@@ -4,7 +4,7 @@ import json
 import logging
 import ssl
 from fetcher.config import MAX_MESSAGES
-from aiormq.exceptions import AMQPConnectionError, ChannelInvalidStateError
+from aiormq.exceptions import AMQPConnectionError
 
 MAX_RETRIES = 25  # maximum number of connection retries
 RETRY_DELAY = 5  # delay (in seconds) between retries

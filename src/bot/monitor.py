@@ -47,6 +47,7 @@ class ApplicationMonitor:
                 "suffix": app["application_suffix"],
                 "type": app["application_type"],
                 "year": app["application_year"],
+                "source": "zov" if app["application_type"] == "ZOV" else "oam",
                 "force_refresh": False,
                 "failed": False,
                 "request_type": "refresh",
@@ -74,6 +75,7 @@ class ApplicationMonitor:
                 "suffix": app["application_suffix"],
                 "type": app["application_type"],
                 "year": app["application_year"],
+                "source": "zov" if app["application_type"] == "ZOV" else "oam",
                 "request_type": "expire",
                 "last_updated": app["created_at"].isoformat() if app["created_at"] else "0",
             }
@@ -118,6 +120,7 @@ class ReminderMonitor:
                 "suffix": reminder["application_suffix"],
                 "type": reminder["application_type"],
                 "year": reminder["application_year"],
+                "source": "zov" if reminder["application_type"] == "ZOV" else "oam",
                 "force_refresh": True,
                 "failed": False,
                 "request_type": "fetch",

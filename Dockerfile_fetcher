@@ -2,7 +2,7 @@
 
 # Taken from https://github.com/fernflower/trvalypobytexamchecker/blob/main/Dockerfile_fetcher
 
-FROM ubuntu:focal
+FROM ubuntu:jammy
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG TARGETARCH
@@ -73,7 +73,7 @@ COPY . $APP_HOME/
 
 COPY tox-docker.ini tox.ini
 
-ARG BASE_VERSION="v1.0.0"
+ARG BASE_VERSION="v2.0.0"
 ARG GIT_COMMIT="unknown"
 ENV BASE_VERSION=$BASE_VERSION
 ENV GIT_COMMIT=$GIT_COMMIT

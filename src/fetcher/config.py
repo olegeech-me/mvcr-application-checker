@@ -1,11 +1,11 @@
 import os
 
 # Version information
-BASE_VERSION = os.getenv("BASE_VERSION", "v1.0.0")
+BASE_VERSION = os.getenv("BASE_VERSION", "v2.0.0")
 GIT_COMMIT = os.getenv("GIT_COMMIT", "unknown")
 FULL_VERSION = f"{BASE_VERSION}-{GIT_COMMIT}"
 # The URL to fetch
-URL = os.getenv("URL", "https://frs.gov.cz/informace-o-stavu-rizeni/")
+URL = os.getenv("URL", "https://ipc.gov.cz/informace-o-stavu-rizeni/")
 # The maximum number of retries to connect to RabbitMQ
 RETRY_INTERVAL = int(os.getenv("RETRY_INTERVAL", 30))
 # Where to save reports for failed fetches
