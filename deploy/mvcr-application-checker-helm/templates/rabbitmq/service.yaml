@@ -18,8 +18,12 @@ spec:
       targetPort: amqps
       protocol: TCP
     {{- end }}
+    - name: amqp
+      port: 5672
+      targetPort: amqp
+      protocol: TCP
     - name: management
-      port: 15672
+      port: {{ .Values.rabbitmq.service.managementPort | default 15672 }}
       targetPort: management
       protocol: TCP
   selector:

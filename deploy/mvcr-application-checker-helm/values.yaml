@@ -111,9 +111,9 @@ rabbitmq:
   ssl:
     enabled: true
   service:
-    type: LoadBalancer
+    type: ClusterIP
+    managementPort: 15672
     annotations: {}
-    # external-dns.alpha.kubernetes.io/hostname: mvcr.example.com
 
 # -- External RabbitMQ (used when rabbitmq.enabled=false)
 externalRabbitmq:

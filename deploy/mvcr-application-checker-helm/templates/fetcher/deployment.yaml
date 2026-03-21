@@ -6,7 +6,7 @@ metadata:
   labels:
     {{- include "mvcr-application-checker.componentLabels" (dict "context" . "component" "fetcher") | nindent 4 }}
 spec:
-  replicas: {{ .Values.fetcher.replicas | default 1 }}
+  replicas: {{ .Values.fetcher.replicas }}
   selector:
     matchLabels:
       {{- include "mvcr-application-checker.selectorLabels" (dict "context" . "component" "fetcher") | nindent 6 }}
