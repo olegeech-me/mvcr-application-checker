@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## [v2.1.0] - 2026-03-21
+## [v2.1.1] - 2026-03-21
 
 ### Documentation & Deployment
 
@@ -8,6 +8,7 @@
 - Updated README with Docker image tags, Helm chart install instructions, and Kubernetes deployment guide
 - Moved Helm chart from `k8s/` to `deploy/mvcr-application-checker-helm/`
 - Removed stale `docs/development.md`
+- Chart minor fixes
 
 ## [v2.0.0] - 2026-03-20
 
