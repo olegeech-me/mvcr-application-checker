@@ -39,7 +39,7 @@
   "error_generic": "😓 Oops! Something didn't go quite right. Please try again later. If the issue keeps popping up, feel free to contact developers.",
   "dialog_completion": "Fantastic! 🌟 You're all set up. I'll keep you posted with updates related to your application!",
   "reminder_decision": "You already have active reminders. Would you like to add another one or delete an existing one?\n\n🔔 Active reminders:\n\n{reminders_str}",
-  "enter_reminder_time": "🕰️ Please enter the time you'd like to forcibly refresh and receive the status of your application.\n\nFor instance, if you want notifications at 16:00, type <code>16:00</code>.\n\n💡 Note, the time should be in 24-hour format and in the Europe/Prague timezone.",
+  "enter_reminder_time": "🕰️ Please enter the time you'd like to forcibly refresh and receive the status of your application.\n\nFor example, if you want a reminder at four o'clock in the afternoon, type <code>16:00</code>.\n\n💡 Note, the time should be in 24-hour format and in the Europe/Prague timezone.",
   "select_reminder_to_delete": "🗑️ Select the reminder you'd like to delete:",
   "reminder_deleted": "Reminder deleted ✅",
   "reminder_delete_failed": "😓 Oops! Failed to delete the reminder. Please try again later.",
