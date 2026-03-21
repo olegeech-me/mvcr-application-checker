@@ -5,13 +5,14 @@
 ### ZOV (visa application) tracking
 
 - Added support for tracking ZOV visa applications (e.g. `ISTA202504220001`) submitted at Czech embassies abroad, in addition to existing OAM applications
-- Fetcher: both OAM and ZOV applications are now tracked via `ipc.gov.cz`
-- Bot: ZOV number parser accepts any 4-letter embassy code (ISTA, MOSK, KYJV, etc.) followed by 9-12 digits
-- Bot: ZOV subscribe flow skips type/year dialogs — users enter the full number and confirm
+- Separate OAM and ZOV subscribe flows in the bot
 - Bot: ZOV-specific confirmation messages, button labels, and status notifications (all 4 languages: EN, RU, CZ, UA)
 - Database: automatic DB schema migration on startup from the `DB_MIGRATIONS_DIR` folder
 - New `pre_approved` status category for "preliminarily assessed positively" responses (treated as resolved/final)
 - RabbitMQ messages carry `source` field for correct routing between OAM and ZOV fetchers
+- Minor text improvements
+- Libs bumps
+- Documentation updates
 
 ### Developer experience
 
