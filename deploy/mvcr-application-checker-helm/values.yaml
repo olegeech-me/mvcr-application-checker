@@ -37,6 +37,9 @@ fetcher:
     pullPolicy: IfNotPresent
   replicas: 1
   privileged: true
+  ssl:
+    enabled: false
+    existingSecret: ""
   config:
     URL: "https://ipc.gov.cz/informace-o-stavu-rizeni/"
     RETRY_INTERVAL: "30"

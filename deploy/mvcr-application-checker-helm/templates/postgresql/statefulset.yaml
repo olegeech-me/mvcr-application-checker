@@ -34,6 +34,8 @@ spec:
                 secretKeyRef:
                   name: {{ include "mvcr-application-checker.secretName" . }}
                   key: DB_PASSWORD
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
           {{- with .Values.postgresql.resources }}
           resources:
             {{- toYaml . | nindent 12 }}

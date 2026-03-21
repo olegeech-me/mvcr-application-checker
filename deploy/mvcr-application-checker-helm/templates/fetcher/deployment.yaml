@@ -35,7 +35,7 @@ spec:
           volumeMounts:
             - name: fetcher-data
               mountPath: /code/output
-            {{- if or (and .Values.rabbitmq.enabled .Values.rabbitmq.ssl.enabled) (and (not .Values.rabbitmq.enabled) .Values.externalRabbitmq.ssl.enabled) }}
+            {{- if .Values.fetcher.ssl.enabled }}
             - name: ssl-certs
               mountPath: /etc/ssl/
               readOnly: true
@@ -47,13 +47,9 @@ spec:
       volumes:
         - name: fetcher-data
           emptyDir: {}
-        {{- if or (and .Values.rabbitmq.enabled .Values.rabbitmq.ssl.enabled) (and (not .Values.rabbitmq.enabled) .Values.externalRabbitmq.ssl.enabled) }}
+        {{- if .Values.fetcher.ssl.enabled }}
         - name: ssl-certs
           secret:
-            {{- if and (not .Values.rabbitmq.enabled) .Values.externalRabbitmq.ssl.existingSecret }}
-            secretName: {{ .Values.externalRabbitmq.ssl.existingSecret }}
-            {{- else }}
-            secretName: {{ include "mvcr-application-checker.rabbit.sslSecretName" . }}
-            {{- end }}
+            secretName: {{ .Values.fetcher.ssl.existingSecret | default (include "mvcr-application-checker.rabbit.sslSecretName" .) }}
         {{- end }}
 {{- end }}
