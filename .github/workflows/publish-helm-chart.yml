@@ -7,10 +7,10 @@ on:
     tags:
       - "*"
     paths:
-      - "deploy/helm/**"
+      - "deploy/mvcr-application-checker-helm/**"
   pull_request:
     paths:
-      - "deploy/helm/**"
+      - "deploy/mvcr-application-checker-helm/**"
 
 jobs:
   helm:
@@ -27,7 +27,7 @@ jobs:
       - name: Determine chart version
         id: version
         run: |
-          CHART_VERSION=$(grep '^version:' deploy/helm/mvcr-application-checker/Chart.yaml | awk '{print $2}')
+          CHART_VERSION=$(grep '^version:' deploy/mvcr-application-checker-helm/Chart.yaml | awk '{print $2}')
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             VERSION="${CHART_VERSION}"
           else
@@ -38,14 +38,14 @@ jobs:
 
       - name: Set chart version
         run: |
-          sed -i "s/^version:.*/version: ${{ env.VERSION }}/" deploy/helm/mvcr-application-checker/Chart.yaml
-          sed -i "s/^appVersion:.*/appVersion: \"${{ env.VERSION }}\"/" deploy/helm/mvcr-application-checker/Chart.yaml
+          sed -i "s/^version:.*/version: ${{ env.VERSION }}/" deploy/mvcr-application-checker-helm/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"${{ env.VERSION }}\"/" deploy/mvcr-application-checker-helm/Chart.yaml
 
       - name: Lint chart
-        run: helm lint deploy/helm/mvcr-application-checker/
+        run: helm lint deploy/mvcr-application-checker-helm/
 
       - name: Package chart
-        run: helm package deploy/helm/mvcr-application-checker/ --destination .
+        run: helm package deploy/mvcr-application-checker-helm/ --destination .
 
       - name: Login to DockerHub OCI
         if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
@@ -53,4 +53,4 @@ jobs:
 
       - name: Push chart to OCI registry
         if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
-        run: helm push mvcr-application-checker-${{ env.VERSION }}.tgz oci://docker.io/olegeech
+        run: helm push mvcr-application-checker-helm-${{ env.VERSION }}.tgz oci://docker.io/olegeech

@@ -30,6 +30,30 @@ make logs         # tail logs
 make help         # list all available targets
 ```
 
+### Docker Images
+
+| Component | Image | Tag |
+|-----------|-------|-----|
+| Bot | [`olegeech/mvcr-application-checker`](https://hub.docker.com/r/olegeech/mvcr-application-checker) | `bot-latest`, `bot-v2.0.1` |
+| Fetcher | [`olegeech/mvcr-application-checker`](https://hub.docker.com/r/olegeech/mvcr-application-checker) | `fetcher-latest`, `fetcher-v2.0.1` |
+
+### Kubernetes
+
+A Helm chart is available for deploying to Kubernetes:
+
+```bash
+helm install mvcr oci://docker.io/olegeech/mvcr-application-checker-helm --version <version>
+```
+
+Check [DockerHub](https://hub.docker.com/r/olegeech/mvcr-application-checker-helm/tags) for available chart versions.
+
+The chart deploys all components (bot, fetcher, PostgreSQL, RabbitMQ) with integrated
+infrastructure by default. To use an external database/message broker instead, set
+`postgresql.enabled=false` and `rabbitmq.enabled=false` with the corresponding
+`externalDatabase.*` / `externalRabbitmq.*` values.
+
+See [`deploy/mvcr-application-checker-helm/values.yaml`](deploy/mvcr-application-checker-helm/values.yaml) for all configuration options.
+
 ### Architecture
 
 For a deep dive into the system design - components, state machines, message flows, database schema, and more - see [ARCHITECTURE.md](ARCHITECTURE.md).
