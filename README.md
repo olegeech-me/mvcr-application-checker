@@ -2,7 +2,7 @@
 
 A Telegram bot that monitors Czech Ministry of Interior (MVČR) immigration application statuses and notifies you of any changes. Supports both **OAM** (residency applications filed in Czech Republic) and **ŽOV** (visa applications submitted at Czech embassies abroad).
 
-**[Open the bot in Telegram](https://t.me/mvcr_status_rizeni_2024_bot)** -- subscribe with your application number and get notified when the status changes.
+**[Open the bot in Telegram](https://t.me/mvcr_status_rizeni_2024_bot)** - subscribe with your application number and get notified when the status changes.
 
 <img src="https://private-user-images.githubusercontent.com/21361354/567182652-0c95255b-d846-43e5-83f6-64d203d88b50.png?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NzQwNTg0NDksIm5iZiI6MTc3NDA1ODE0OSwicGF0aCI6Ii8yMTM2MTM1NC81NjcxODI2NTItMGM5NTI1NWItZDg0Ni00M2U1LTgzZjYtNjRkMjAzZDg4YjUwLnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNjAzMjElMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjYwMzIxVDAxNTU0OVomWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPWNkNmIyMDNjYzAzZGMzMTIxOTIxMDUyM2VmMjMwM2Y1MjIzZGE2MGFjNTBmZWRjYzQyY2RjNzZlY2IxZDg5NWEmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0In0.EDYzjilm908nwP8zeQtcVtQETCr0VP28y0b7RwF1slQ" alt="Bot Screenshot" width="640" />
 
