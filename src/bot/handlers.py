@@ -21,7 +21,7 @@ ALLOWED_TYPES = ["CD", "DO", "DP", "DV", "MK", "PP", "ST", "TP", "VP", "ZK", "ZM
 POPULAR_ALLOWED_TYPES = ["DP", "TP", "ZM", "ST", "MK", "DV"]
 
 
-START, NUMBER, TYPE, YEAR, VALIDATE = range(5)
+START, SOURCE, NUMBER, TYPE, YEAR, VALIDATE = range(6)
 BROADCAST_TEXT, BROADCAST_CONFIRM = range(2)
 REMINDER_ADD, REMINDER_DELETE = range(2)
 
@@ -194,6 +194,7 @@ def clean_sub_context(context):
     keys_to_delete = [
         "application_number", "application_suffix",
         "application_type", "application_year",
+        "application_source",
     ]
 
     for key in keys_to_delete:
@@ -276,43 +277,87 @@ def _parse_application_number(num_str: str):
     return matched[2], (matched[3] or "0").lstrip("-")
 
 
+async def _show_source_selection(update: Update, context: ContextTypes.DEFAULT_TYPE, edit=False):
+    """Show OAM/ZOV source selection buttons."""
+    lang = await _get_user_language(update, context)
+    keyboard = [
+        [InlineKeyboardButton(button_texts[lang]["source_oam"], callback_data="application_source_oam")],
+        [InlineKeyboardButton(button_texts[lang]["source_zov"], callback_data="application_source_zov")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    if edit:
+        await update.callback_query.edit_message_text(
+            message_texts[lang]["dialog_source"], reply_markup=reply_markup
+        )
+    else:
+        await get_effective_message(update).reply_text(
+            message_texts[lang]["dialog_source"], reply_markup=reply_markup
+        )
+    return SOURCE
+
+
+async def application_dialog_source(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handles OAM/ZOV source selection callback."""
+    query = update.callback_query
+    lang = await _get_user_language(update, context)
+
+    if await _is_button_click_abused(update, context):
+        return
+    await query.answer()
+
+    source = query.data.split("application_source_")[-1]  # "oam" or "zov"
+    context.user_data["application_source"] = source
+
+    if source == "oam":
+        msg_key = "dialog_app_number_oam"
+    else:
+        msg_key = "dialog_app_number_zov"
+
+    await query.edit_message_text(message_texts[lang][msg_key])
+    return NUMBER
+
+
 async def application_dialog_number(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Gets full application number to work with.
-    Two ways of operation are supported:
-    * User submits just the number part of the application (useful for mobile device). In this case an interactive
-      dialog is triggered and the ConversationHandler will walk the user through the steps of specifying type and year
-    * User submits full application number in 1111/TP-2022 form (useful for copy-paste from official documents). If
-      it is parsed successfully there is no need for the interactive dialog, so it's skipped.
+    Behavior depends on the selected application source (OAM or ZOV).
+    For OAM: tries full parse first, then partial (triggering type/year dialog).
+    For ZOV: only tries ZOV parser.
     """
     message = get_effective_message(update)
     lang = await _get_user_language(update, context)
     number_str = message.text.strip()
-    # NOTE(fernflower) Attempt to parse full application number as is
+    source = context.user_data.get("application_source", "oam")
+
+    if source == "zov":
+        # --- ZOV path: only try ZOV parser ---
+        zov_number = _parse_zov_number(number_str)
+        if zov_number:
+            context.user_data["application_number"] = zov_number
+            context.user_data["application_suffix"] = "0"
+            context.user_data["application_type"] = "ZOV"
+            context.user_data["application_year"] = 0
+            await _show_app_number_final_confirmation(update, context)
+            return VALIDATE
+        # ZOV-specific error
+        await message.reply_text(message_texts[lang]["error_invalid_number_zov"])
+        return
+
+    # --- OAM path: try full, then partial ---
     number_parsed = _parse_application_number_full(number_str)
     if number_parsed:
         context.user_data["application_number"] = number_parsed[0]
         context.user_data["application_suffix"] = number_parsed[1]
         context.user_data["application_type"] = number_parsed[2]
         context.user_data["application_year"] = number_parsed[3]
-        # go straight to verification step
         await _show_app_number_final_confirmation(update, context)
         return VALIDATE
-    # Try ZOV format (e.g. ISTA202504220001)
-    zov_number = _parse_zov_number(number_str)
-    if zov_number:
-        context.user_data["application_number"] = zov_number
-        context.user_data["application_suffix"] = "0"
-        context.user_data["application_type"] = "ZOV"
-        context.user_data["application_year"] = 0
-        await _show_app_number_final_confirmation(update, context)
-        return VALIDATE
-    # NOTE(fernflower) Okay, full match failed, let's try partial match just for number part (no type and year) and
-    # get the rest via interactive dialog
-    number_parsed = _parse_application_number(message.text.strip())
+
+    number_parsed = _parse_application_number(number_str)
     if not number_parsed:
         await message.reply_text(message_texts[lang]["error_invalid_number"])
         return
+
     context.user_data["application_number"] = number_parsed[0]
     context.user_data["application_suffix"] = number_parsed[1]
     keyboard = [
@@ -508,9 +553,9 @@ async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 # go straight to verification step
                 await _show_app_number_final_confirmation(update, context)
                 return VALIDATE
-        await update.message.reply_text(message_texts[lang]["dialog_app_number"])
+        return await _show_source_selection(update, context, edit=False)
 
-    return NUMBER
+    return SOURCE
 
 
 # Callback function for user-pressed-subscribe-button-event
@@ -526,8 +571,7 @@ async def subscribe_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if await db.count_user_subscriptions(query.message.chat_id) >= SUBSCRIPTIONS_LIMIT:
             await query.edit_message_text(message_texts[lang]["max_subscriptions_reached"])
         else:
-            await query.edit_message_text(message_texts[lang]["dialog_app_number"])
-            return NUMBER
+            return await _show_source_selection(update, context, edit=True)
 
 
 def _generate_buttons_from_subscriptions(prefix, subscriptions):

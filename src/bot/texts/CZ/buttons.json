@@ -4,5 +4,7 @@
   "subscribe_incorrect": "❌ Ne, údaje nejsou správné",
   "add_reminder": "➕ Přidat",
   "delete_reminder": "➖ Odstranit",
-  "cancel": "❌ Zrušit"
+  "cancel": "❌ Zrušit",
+  "source_oam": "🏠 Dlouhodobý pobyt (OAM)",
+  "source_zov": "✈️ Dlouhodobé vízum (ŽOV)"
 }

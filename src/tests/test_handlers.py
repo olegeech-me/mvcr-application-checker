@@ -21,6 +21,7 @@ from bot.handlers import (
     _parse_application_buttons_callback_data,
     create_subscription,
     application_dialog_number,
+    application_dialog_source,
     force_refresh_command,
     force_refresh_button,
     unsubscribe_command,
@@ -28,6 +29,7 @@ from bot.handlers import (
     VALIDATE,
     TYPE,
     NUMBER,
+    SOURCE,
 )
 
 from conftest import make_zov_subscription
@@ -265,6 +267,7 @@ def test_clean_sub_context_removes_oam_keys():
         "application_suffix": "0",
         "application_type": "TP",
         "application_year": "2023",
+        "application_source": "oam",
         "lang": "EN",
         "last_button_press": 123456,
     }
@@ -273,6 +276,7 @@ def test_clean_sub_context_removes_oam_keys():
     assert "application_suffix" not in context.user_data
     assert "application_type" not in context.user_data
     assert "application_year" not in context.user_data
+    assert "application_source" not in context.user_data
     assert context.user_data["lang"] == "EN"
     assert context.user_data["last_button_press"] == 123456
 
@@ -484,7 +488,7 @@ async def test_application_dialog_number_full_oam(mock_years):
     update.edited_message = None
     update.message.text = "12345/TP-2023"
     context = Mock()
-    context.user_data = {}
+    context.user_data = {"application_source": "oam"}
 
     with patch("bot.handlers._get_user_language", new_callable=AsyncMock, return_value="EN"), patch(
         "bot.handlers._show_app_number_final_confirmation", new_callable=AsyncMock
@@ -505,7 +509,7 @@ async def test_application_dialog_number_partial_oam():
     update.message.text = "12345"
     update.message.reply_text = AsyncMock()
     context = Mock()
-    context.user_data = {}
+    context.user_data = {"application_source": "oam"}
 
     with patch("bot.handlers._get_user_language", new_callable=AsyncMock, return_value="EN"):
         result = await application_dialog_number(update, context)
@@ -522,7 +526,7 @@ async def test_application_dialog_number_invalid_input():
     update.message.text = "BADINPUT!!!"
     update.message.reply_text = AsyncMock()
     context = Mock()
-    context.user_data = {}
+    context.user_data = {"application_source": "oam"}
 
     with patch("bot.handlers._get_user_language", new_callable=AsyncMock, return_value="EN"):
         result = await application_dialog_number(update, context)
@@ -538,7 +542,7 @@ async def test_application_dialog_number_zov():
     update.message.text = "ISTA202504220001"
     update.message.reply_text = AsyncMock()
     context = Mock()
-    context.user_data = {}
+    context.user_data = {"application_source": "zov"}
 
     with patch("bot.handlers._get_user_language", new_callable=AsyncMock, return_value="EN"), patch(
         "bot.handlers._show_app_number_final_confirmation", new_callable=AsyncMock
@@ -549,7 +553,82 @@ async def test_application_dialog_number_zov():
         assert context.user_data["application_suffix"] == "0"
         assert context.user_data["application_type"] == "ZOV"
         assert context.user_data["application_year"] == 0
-        assert "application_source" not in context.user_data
+
+
+@pytest.mark.asyncio
+async def test_application_dialog_source_oam():
+    """Selecting OAM source stores it and returns NUMBER"""
+    update = Mock()
+    update.callback_query = AsyncMock()
+    update.callback_query.data = "application_source_oam"
+    update.callback_query.answer = AsyncMock()
+    update.callback_query.edit_message_text = AsyncMock()
+    context = Mock()
+    context.user_data = {}
+
+    with patch("bot.handlers._get_user_language", new_callable=AsyncMock, return_value="EN"), \
+         patch("bot.handlers._is_button_click_abused", new_callable=AsyncMock, return_value=False):
+        result = await application_dialog_source(update, context)
+        assert result == NUMBER
+        assert context.user_data["application_source"] == "oam"
+        update.callback_query.edit_message_text.assert_called_once()
+        call_args = update.callback_query.edit_message_text.call_args
+        assert "OAM-" in call_args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_application_dialog_source_zov():
+    """Selecting ZOV source stores it and returns NUMBER"""
+    update = Mock()
+    update.callback_query = AsyncMock()
+    update.callback_query.data = "application_source_zov"
+    update.callback_query.answer = AsyncMock()
+    update.callback_query.edit_message_text = AsyncMock()
+    context = Mock()
+    context.user_data = {}
+
+    with patch("bot.handlers._get_user_language", new_callable=AsyncMock, return_value="EN"), \
+         patch("bot.handlers._is_button_click_abused", new_callable=AsyncMock, return_value=False):
+        result = await application_dialog_source(update, context)
+        assert result == NUMBER
+        assert context.user_data["application_source"] == "zov"
+        update.callback_query.edit_message_text.assert_called_once()
+        call_args = update.callback_query.edit_message_text.call_args
+        assert "visa" in call_args[0][0].lower()
+
+
+@pytest.mark.asyncio
+async def test_application_dialog_number_zov_rejects_oam_input():
+    """ZOV source rejects OAM-format input with ZOV-specific error"""
+    update = Mock()
+    update.edited_message = None
+    update.message.text = "12345/TP-2023"
+    update.message.reply_text = AsyncMock()
+    context = Mock()
+    context.user_data = {"application_source": "zov"}
+
+    with patch("bot.handlers._get_user_language", new_callable=AsyncMock, return_value="EN"):
+        result = await application_dialog_number(update, context)
+        assert result is None
+        update.message.reply_text.assert_called_once()
+        call_args = update.message.reply_text.call_args
+        assert "visa" in call_args[0][0].lower()
+
+
+@pytest.mark.asyncio
+async def test_application_dialog_number_oam_rejects_zov_input():
+    """OAM source rejects ZOV-format input with OAM error"""
+    update = Mock()
+    update.edited_message = None
+    update.message.text = "ISTA202504220001"
+    update.message.reply_text = AsyncMock()
+    context = Mock()
+    context.user_data = {"application_source": "oam"}
+
+    with patch("bot.handlers._get_user_language", new_callable=AsyncMock, return_value="EN"):
+        result = await application_dialog_number(update, context)
+        assert result is None
+        update.message.reply_text.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -588,8 +667,8 @@ async def test_subscribe_command_with_oam_args(mock_years):
 
 
 @pytest.mark.asyncio
-async def test_subscribe_command_no_args_returns_number():
-    """subscribe with no args sends dialog prompt and returns NUMBER"""
+async def test_subscribe_command_no_args_returns_source():
+    """subscribe with no args shows source selection and returns SOURCE"""
     update = Mock()
     update.edited_message = None
     update.message = AsyncMock()
@@ -609,7 +688,7 @@ async def test_subscribe_command_no_args_returns_number():
 
     with patch("bot.handlers._get_user_language", new_callable=AsyncMock, return_value="EN"), patch("bot.handlers.db", mock_db):
         result = await subscribe_command(update, context)
-        assert result == NUMBER
+        assert result == SOURCE
         update.message.reply_text.assert_called_once()
 
 

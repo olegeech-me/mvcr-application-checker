@@ -4,5 +4,7 @@
   "subscribe_incorrect": "❌ Ні, не сходиться",
   "add_reminder": "➕ Додати",
   "delete_reminder": "➖ Видалити",
-  "cancel": "❌ Скасувати"
+  "cancel": "❌ Скасувати",
+  "source_oam": "🏠 Довготривале перебування (OAM)",
+  "source_zov": "✈️ Довготривала віза (ŽOV)"
 }

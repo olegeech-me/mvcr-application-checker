@@ -116,5 +116,8 @@ def test_i18n_has_zov_keys(lang):
     assert "{number}" in mt[lang]["dialog_confirmation_zov"], f"'dialog_confirmation_zov' in {lang} missing {{number}} placeholder"
     assert "OAM" not in mt[lang]["dialog_confirmation_zov"], f"'dialog_confirmation_zov' in {lang} should not contain 'OAM'"
 
-    assert "dialog_app_number" in mt[lang], f"Missing 'dialog_app_number' in {lang}"
-    assert "ISTA" in mt[lang]["dialog_app_number"], f"'dialog_app_number' in {lang} should mention ZOV example number"
+    assert "dialog_source" in mt[lang], f"Missing 'dialog_source' in {lang}"
+    assert "dialog_app_number_oam" in mt[lang], f"Missing 'dialog_app_number_oam' in {lang}"
+    assert "dialog_app_number_zov" in mt[lang], f"Missing 'dialog_app_number_zov' in {lang}"
+    assert "ISTA" in mt[lang]["dialog_app_number_zov"], f"'dialog_app_number_zov' in {lang} should mention ZOV example number"
+    assert "error_invalid_number_zov" in mt[lang], f"Missing 'error_invalid_number_zov' in {lang}"
