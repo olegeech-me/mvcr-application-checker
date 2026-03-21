@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## [v2.1.0] - 2026-03-21
+
+### Documentation & Deployment
+
+- Added comprehensive [ARCHITECTURE.md](ARCHITECTURE.md) covering system design, state machines, message flows, database schema, and deployment
+- Updated README with Docker image tags, Helm chart install instructions, and Kubernetes deployment guide
+- Moved Helm chart from `k8s/` to `deploy/mvcr-application-checker-helm/`
+- Removed stale `docs/development.md`
+
 ## [v2.0.0] - 2026-03-20
 
 ### ZOV (visa application) tracking
