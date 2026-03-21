@@ -27,12 +27,11 @@ jobs:
       - name: Determine chart version
         id: version
         run: |
+          CHART_VERSION=$(grep '^version:' deploy/helm/mvcr-application-checker/Chart.yaml | awk '{print $2}')
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            VERSION="${{ github.ref_name }}"
-            # Strip leading 'v' if present
-            VERSION="${VERSION#v}"
+            VERSION="${CHART_VERSION}"
           else
-            VERSION="0.0.0-sha.$(git rev-parse --short ${{ github.sha }})"
+            VERSION="${CHART_VERSION}-sha.$(git rev-parse --short ${{ github.sha }})"
           fi
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "Chart version: $VERSION"
