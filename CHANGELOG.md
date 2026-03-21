@@ -1,10 +1,11 @@
 # CHANGELOG
 
-## [v2.1.3] - 2026-03-21
+## [v2.1.4] - 2026-03-21
 
 ### Bot
 
 - Added GitHub repository link to startup/help messages (all 4 languages)
+- Update admin broadcast function
 
 ### Documentation & Deployment
 

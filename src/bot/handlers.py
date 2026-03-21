@@ -1,9 +1,11 @@
+import asyncio
 import datetime
 import logging
 import re
 import time
 
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, BotCommand, BotCommandScopeChat, ForceReply
+from telegram.error import RetryAfter, TimedOut, NetworkError
 from telegram.ext import ContextTypes, ConversationHandler
 from bot.loader import loader, ADMIN_CHAT_IDS, REFRESH_PERIOD, FULL_VERSION
 from bot.texts import button_texts, message_texts, commands_description
@@ -868,6 +870,53 @@ async def admin_broadcast_text(update: Update, context: ContextTypes.DEFAULT_TYP
     return BROADCAST_CONFIRM
 
 
+async def _broadcast_to_users(bot, admin_chat_id, chat_ids, message):
+    """Send broadcast message to all users in the background and report results to admin"""
+    success = 0
+    failed = 0
+    total = len(chat_ids)
+
+    for chat_id in chat_ids:
+        attempt = 0
+        max_retries = 3
+        delay = 1
+        sent = False
+
+        while attempt < max_retries:
+            try:
+                await bot.send_message(chat_id, message)
+                success += 1
+                sent = True
+                break
+            except RetryAfter as e:
+                delay = e.retry_after
+                logger.warning(f"Broadcast RetryAfter for chat_id {chat_id}: waiting {delay}s")
+            except (TimedOut, NetworkError) as e:
+                logger.warning(f"Broadcast {type(e).__name__} for chat_id {chat_id}: retry {attempt + 1}/{max_retries}")
+            except Exception as e:
+                logger.error(f"Broadcast failed for chat_id {chat_id}: {e}")
+                failed += 1
+                sent = True  # permanent failure, don't retry
+                break
+
+            await asyncio.sleep(delay)
+            attempt += 1
+            delay *= 2
+
+        if not sent:
+            failed += 1
+            logger.error(f"Broadcast gave up on chat_id {chat_id} after {max_retries} retries")
+
+        await asyncio.sleep(0.05)  # rate-limit: ~20 msgs/sec
+
+    summary = f"📢 Broadcast complete: {success} delivered, {failed} failed out of {total} total."
+    logger.warning(summary)
+    try:
+        await bot.send_message(admin_chat_id, summary)
+    except Exception as e:
+        logger.error(f"Failed to send broadcast summary to admin: {e}")
+
+
 async def admin_broadcast_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handles the confirmation of the broadcast and sends the message to all users"""
     query = update.callback_query
@@ -876,14 +925,12 @@ async def admin_broadcast_confirm(update: Update, context: ContextTypes.DEFAULT_
     if query.data == "confirm_broadcast":
         chat_ids = await db.fetch_all_chat_ids()
 
-        for chat_id in chat_ids:
-            try:
-                await context.bot.send_message(chat_id, user_message)
-            except Exception as e:
-                logger.error(f"Error broadcasting to chat_id {chat_id}: {e}")
-
         logger.warning(f"📢 Admin broadcast message was issued to all users by {user_info(update)}")
-        await query.edit_message_text("Message broadcasted successfully!")
+        await query.edit_message_text(f"Broadcast started, sending to {len(chat_ids)} users...")
+
+        asyncio.create_task(
+            _broadcast_to_users(context.bot, query.message.chat_id, chat_ids, user_message)
+        )
     elif query.data == "cancel_broadcast":
         await query.edit_message_text("Broadcast canceled.")
 

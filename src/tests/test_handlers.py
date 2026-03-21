@@ -26,10 +26,16 @@ from bot.handlers import (
     force_refresh_button,
     unsubscribe_command,
     unsubscribe_button,
+    admin_broadcast_command,
+    admin_broadcast_text,
+    admin_broadcast_confirm,
+    _broadcast_to_users,
     VALIDATE,
     TYPE,
     NUMBER,
     SOURCE,
+    BROADCAST_TEXT,
+    BROADCAST_CONFIRM,
 )
 
 from conftest import make_zov_subscription
@@ -884,3 +890,183 @@ async def test_unsubscribe_button_zov_label():
     call_args = update.callback_query.edit_message_text.call_args[0][0]
     assert "ISTA202504220001" in call_args
     assert "OAM" not in call_args, "ZOV unsubscribe message must not show OAM prefix"
+
+
+# ---------------------------------------------------------------------------
+# Commands: admin_broadcast
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_admin_broadcast_command_unauthorized():
+    """Non-admin user is rejected"""
+    update = Mock()
+    update.effective_chat.id = 999999
+    update.effective_chat.username = "nobody"
+    update.effective_chat.first_name = "No"
+    update.effective_chat.last_name = "Body"
+    update.message.reply_text = AsyncMock()
+
+    context = Mock()
+    result = await admin_broadcast_command(update, context)
+
+    update.message.reply_text.assert_called_once_with("Unauthorized. This command is only for admins.")
+    from telegram.ext import ConversationHandler
+    assert result == ConversationHandler.END
+
+
+@pytest.mark.asyncio
+async def test_admin_broadcast_command_authorized():
+    """Admin user gets the broadcast prompt"""
+    update = Mock()
+    update.effective_chat.id = 1234567  # matches ADMIN_CHAT_IDS in conftest
+    update.effective_chat.username = "admin"
+    update.effective_chat.first_name = "Admin"
+    update.effective_chat.last_name = "User"
+    update.message.reply_text = AsyncMock()
+
+    context = Mock()
+    result = await admin_broadcast_command(update, context)
+
+    assert result == BROADCAST_TEXT
+    update.message.reply_text.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_admin_broadcast_text_stores_message():
+    """Broadcast text step stores message and shows confirmation with user count"""
+    mock_db = AsyncMock()
+    mock_db.count_users_total = AsyncMock(return_value=42)
+
+    update = Mock()
+    update.message.text = "Hello everyone!"
+    update.message.reply_text = AsyncMock()
+
+    context = Mock()
+    context.user_data = {}
+
+    with patch("bot.handlers.db", mock_db):
+        result = await admin_broadcast_text(update, context)
+
+    assert result == BROADCAST_CONFIRM
+    assert context.user_data["broadcast_message"] == "Hello everyone!"
+    call_text = update.message.reply_text.call_args[0][0]
+    assert "42" in call_text
+    assert "Hello everyone!" in call_text
+
+
+@pytest.mark.asyncio
+async def test_admin_broadcast_confirm_starts_background_task():
+    """Confirm broadcast responds immediately and fires async task"""
+    mock_db = AsyncMock()
+    mock_db.fetch_all_chat_ids = AsyncMock(return_value=[100, 200, 300])
+
+    update = Mock()
+    update.callback_query = AsyncMock()
+    update.callback_query.data = "confirm_broadcast"
+    update.callback_query.message.chat_id = 1234567
+    update.callback_query.edit_message_text = AsyncMock()
+    update.effective_chat.id = 1234567
+    update.effective_chat.username = "admin"
+    update.effective_chat.first_name = "Admin"
+    update.effective_chat.last_name = "User"
+
+    context = Mock()
+    context.user_data = {"broadcast_message": "Test broadcast"}
+    context.bot = AsyncMock()
+
+    with patch("bot.handlers.db", mock_db), \
+         patch("bot.handlers.asyncio.create_task") as mock_create_task:
+        result = await admin_broadcast_confirm(update, context)
+
+    from telegram.ext import ConversationHandler
+    assert result == ConversationHandler.END
+    # Responded immediately with "started" message
+    edit_text = update.callback_query.edit_message_text.call_args[0][0]
+    assert "3 users" in edit_text
+    assert "started" in edit_text.lower()
+    # Background task was fired
+    mock_create_task.assert_called_once()
+    # Context cleaned up
+    assert "broadcast_message" not in context.user_data
+
+
+@pytest.mark.asyncio
+async def test_admin_broadcast_cancel():
+    """Cancel broadcast shows cancel message and cleans up"""
+    update = Mock()
+    update.callback_query = AsyncMock()
+    update.callback_query.data = "cancel_broadcast"
+    update.callback_query.edit_message_text = AsyncMock()
+    update.effective_chat.id = 1234567
+    update.effective_chat.username = "admin"
+    update.effective_chat.first_name = "Admin"
+    update.effective_chat.last_name = "User"
+
+    context = Mock()
+    context.user_data = {"broadcast_message": "Test broadcast"}
+
+    with patch("bot.handlers.db", AsyncMock()):
+        result = await admin_broadcast_confirm(update, context)
+
+    from telegram.ext import ConversationHandler
+    assert result == ConversationHandler.END
+    update.callback_query.edit_message_text.assert_called_once_with("Broadcast canceled.")
+    assert "broadcast_message" not in context.user_data
+
+
+@pytest.mark.asyncio
+async def test_broadcast_to_users_counts_success_and_failure():
+    """Background broadcast counts delivered and failed messages"""
+    bot = AsyncMock()
+    # First two succeed, third raises Forbidden (blocked)
+    bot.send_message = AsyncMock(
+        side_effect=[None, None, Exception("Forbidden: bot was blocked by the user")]
+    )
+
+    await _broadcast_to_users(bot, admin_chat_id=1234567, chat_ids=[100, 200, 300], message="Hi")
+
+    # 3 user sends + 1 summary to admin = 4 calls
+    assert bot.send_message.call_count == 4
+    # Last call is the summary to admin
+    summary_text = bot.send_message.call_args_list[-1].args[1]
+    assert "2 delivered" in summary_text
+    assert "1 failed" in summary_text
+    assert "3 total" in summary_text
+
+
+@pytest.mark.asyncio
+async def test_broadcast_to_users_retries_on_timeout():
+    """Broadcast retries on TimedOut and eventually succeeds"""
+    from telegram.error import TimedOut
+
+    bot = AsyncMock()
+    bot.send_message = AsyncMock(
+        side_effect=[TimedOut(), None, None]  # first call times out, retry succeeds; then summary
+    )
+
+    await _broadcast_to_users(bot, admin_chat_id=999, chat_ids=[100], message="Hi")
+
+    # 2 attempts for user + 1 summary = 3 calls
+    assert bot.send_message.call_count == 3
+    summary_text = bot.send_message.call_args_list[-1].args[1]
+    assert "1 delivered" in summary_text
+    assert "0 failed" in summary_text
+
+
+@pytest.mark.asyncio
+async def test_broadcast_to_users_retries_exhausted():
+    """Broadcast gives up after max retries and counts as failed"""
+    from telegram.error import TimedOut
+
+    bot = AsyncMock()
+    # 3 timeouts for user, then summary send
+    bot.send_message = AsyncMock(
+        side_effect=[TimedOut(), TimedOut(), TimedOut(), None]
+    )
+
+    await _broadcast_to_users(bot, admin_chat_id=999, chat_ids=[100], message="Hi")
+
+    summary_text = bot.send_message.call_args_list[-1].args[1]
+    assert "0 delivered" in summary_text
+    assert "1 failed" in summary_text
