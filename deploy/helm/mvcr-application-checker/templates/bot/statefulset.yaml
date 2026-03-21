@@ -1,0 +1,33 @@
+{{- if .Values.bot.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "mvcr-application-checker.fullname" . }}-bot
+  labels:
+    {{- include "mvcr-application-checker.componentLabels" (dict "context" . "component" "bot") | nindent 4 }}
+spec:
+  serviceName: {{ include "mvcr-application-checker.fullname" . }}-bot
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "mvcr-application-checker.selectorLabels" (dict "context" . "component" "bot") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "mvcr-application-checker.componentLabels" (dict "context" . "component" "bot") | nindent 8 }}
+    spec:
+      containers:
+        - name: bot
+          image: "{{ .Values.bot.image.repository }}:{{ .Values.bot.image.tag }}"
+          imagePullPolicy: {{ .Values.bot.image.pullPolicy | default "IfNotPresent" }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "mvcr-application-checker.fullname" . }}-bot
+            - secretRef:
+                name: {{ include "mvcr-application-checker.secretName" . }}
+          {{- with .Values.bot.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      restartPolicy: Always
+{{- end }}

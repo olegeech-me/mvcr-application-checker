@@ -1,0 +1,27 @@
+MVCR Application Checker has been deployed!
+
+Components:
+{{- if .Values.bot.enabled }}
+  - Bot (StatefulSet): {{ include "mvcr-application-checker.fullname" . }}-bot
+{{- end }}
+{{- if .Values.fetcher.enabled }}
+  - Fetcher (Deployment): {{ include "mvcr-application-checker.fullname" . }}-fetcher ({{ .Values.fetcher.replicas }} replica(s))
+{{- end }}
+{{- if .Values.dbDump.enabled }}
+  - DB Dump (CronJob): {{ include "mvcr-application-checker.fullname" . }}-db-dump ({{ .Values.dbDump.schedule }})
+{{- end }}
+
+Infrastructure:
+{{- if .Values.postgresql.enabled }}
+  - PostgreSQL: {{ include "mvcr-application-checker.db.host" . }}:5432/{{ include "mvcr-application-checker.db.name" . }}
+{{- else }}
+  - PostgreSQL (external): {{ .Values.externalDatabase.host }}:{{ .Values.externalDatabase.port }}/{{ .Values.externalDatabase.database }}
+{{- end }}
+{{- if .Values.rabbitmq.enabled }}
+  - RabbitMQ: {{ include "mvcr-application-checker.rabbit.host" . }}
+    {{- if eq .Values.rabbitmq.service.type "LoadBalancer" }}
+    Service type: LoadBalancer (check `kubectl get svc {{ include "mvcr-application-checker.fullname" . }}-rabbitmq` for external IP)
+    {{- end }}
+{{- else }}
+  - RabbitMQ (external): {{ .Values.externalRabbitmq.host }}:{{ .Values.externalRabbitmq.port }}
+{{- end }}

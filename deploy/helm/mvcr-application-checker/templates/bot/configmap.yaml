@@ -1,0 +1,18 @@
+{{- if .Values.bot.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mvcr-application-checker.fullname" . }}-bot
+  labels:
+    {{- include "mvcr-application-checker.componentLabels" (dict "context" . "component" "bot") | nindent 4 }}
+data:
+  DB_HOST: {{ include "mvcr-application-checker.db.host" . | quote }}
+  DB_PORT: {{ include "mvcr-application-checker.db.port" . | quote }}
+  DB_NAME: {{ include "mvcr-application-checker.db.name" . | quote }}
+  DB_USER: {{ include "mvcr-application-checker.db.user" . | quote }}
+  RABBIT_HOST: {{ include "mvcr-application-checker.rabbit.host" . | quote }}
+  RABBIT_USER: {{ include "mvcr-application-checker.rabbit.user" . | quote }}
+  {{- range $key, $value := .Values.bot.config }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
+{{- end }}

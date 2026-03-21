@@ -1,0 +1,27 @@
+{{- if .Values.rabbitmq.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "mvcr-application-checker.fullname" . }}-rabbitmq
+  labels:
+    {{- include "mvcr-application-checker.componentLabels" (dict "context" . "component" "rabbitmq") | nindent 4 }}
+  {{- with .Values.rabbitmq.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.rabbitmq.service.type | default "ClusterIP" }}
+  ports:
+    {{- if .Values.rabbitmq.ssl.enabled }}
+    - name: amqps
+      port: 5671
+      targetPort: amqps
+      protocol: TCP
+    {{- end }}
+    - name: management
+      port: 15672
+      targetPort: management
+      protocol: TCP
+  selector:
+    {{- include "mvcr-application-checker.selectorLabels" (dict "context" . "component" "rabbitmq") | nindent 4 }}
+{{- end }}

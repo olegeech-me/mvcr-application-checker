@@ -1,0 +1,138 @@
+nameOverride: ""
+fullnameOverride: ""
+
+# -- Telegram Bot (StatefulSet, always 1 replica)
+bot:
+  enabled: true
+  image:
+    repository: olegeech/mvcr-application-checker
+    tag: bot-latest
+    pullPolicy: Always
+  config:
+    ADMIN_CHAT_IDS: "12345, 678910"
+    LOG_LEVEL: "INFO"
+    REFRESH_PERIOD: "3600"
+    SCHEDULER_PERIOD: "300"
+    REQUEUE_THRESHOLD_SECONDS: "3600"
+    NOT_FOUND_MAX_DAYS: "30"
+    NOT_FOUND_REFRESH_PERIOD: "86400"
+    # proxy:
+    #   HTTPS_PROXY: ""
+    #   HTTP_PROXY: ""
+    #   ALL_PROXY: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 250m
+      memory: 512Mi
+
+# -- Web Fetcher (Deployment, scalable)
+fetcher:
+  enabled: true
+  image:
+    repository: olegeech/mvcr-application-checker
+    tag: fetcher-latest
+    pullPolicy: IfNotPresent
+  replicas: 1
+  privileged: true
+  config:
+    URL: "https://ipc.gov.cz/informace-o-stavu-rizeni/"
+    RETRY_INTERVAL: "30"
+    PAGE_LOAD_LIMIT_SECONDS: "20"
+    CAPTCHA_WAIT_SECONDS: "120"
+    JITTER_SECONDS: "600"
+    MAX_MESSAGES: "10"
+    MAX_RETRIES: "5"
+  resources: {}
+
+# -- Database dump CronJob
+dbDump:
+  enabled: true
+  schedule: "15 2 * * *"
+  timeZone: "Europe/Prague"
+  image:
+    repository: postgres
+    tag: "16.13"
+  retainCount: 5
+  persistence:
+    size: 10Gi
+    storageClass: ""
+    existingClaim: ""
+
+# -- Integrated PostgreSQL (set enabled: false to use externalDatabase)
+postgresql:
+  enabled: true
+  image:
+    repository: postgres
+    tag: "16.13"
+  database: "AppTrackerDB"
+  user: "postgres"
+  persistence:
+    size: 10Gi
+    storageClass: ""
+    existingClaim: ""
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+  service:
+    name: ""
+
+# -- External database (used when postgresql.enabled=false)
+externalDatabase:
+  host: ""
+  port: 5432
+  database: "AppTrackerDB"
+  user: "postgres"
+
+# -- Integrated RabbitMQ (set enabled: false to use externalRabbitmq)
+rabbitmq:
+  enabled: true
+  image:
+    repository: rabbitmq
+    tag: "4.2-management"
+  user: "bunny_admin"
+  persistence:
+    size: 10Gi
+    storageClass: ""
+    existingClaim: ""
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+  ssl:
+    enabled: true
+  service:
+    type: LoadBalancer
+    annotations: {}
+    # external-dns.alpha.kubernetes.io/hostname: mvcr.example.com
+
+# -- External RabbitMQ (used when rabbitmq.enabled=false)
+externalRabbitmq:
+  host: ""
+  port: 5671
+  user: "admin"
+  ssl:
+    enabled: true
+    existingSecret: ""
+
+# -- Secrets (credentials and SSL certs)
+secrets:
+  telegramBotToken: ""
+  dbPassword: ""
+  rabbitPassword: ""
+  rabbitSSL:
+    existingSecret: ""
+    caCrt: ""
+    serverCrt: ""
+    serverKey: ""
+    clientCrt: ""
+    clientKey: ""

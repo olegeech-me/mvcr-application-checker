@@ -1,0 +1,17 @@
+{{- if .Values.postgresql.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.postgresql.service.name | default (printf "%s-postgresql" (include "mvcr-application-checker.fullname" .)) }}
+  labels:
+    {{- include "mvcr-application-checker.componentLabels" (dict "context" . "component" "postgresql") | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: postgresql
+      port: 5432
+      targetPort: postgresql
+      protocol: TCP
+  selector:
+    {{- include "mvcr-application-checker.selectorLabels" (dict "context" . "component" "postgresql") | nindent 4 }}
+{{- end }}

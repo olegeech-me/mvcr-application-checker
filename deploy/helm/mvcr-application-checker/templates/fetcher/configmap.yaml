@@ -1,0 +1,20 @@
+{{- if .Values.fetcher.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mvcr-application-checker.fullname" . }}-fetcher
+  labels:
+    {{- include "mvcr-application-checker.componentLabels" (dict "context" . "component" "fetcher") | nindent 4 }}
+data:
+  RABBIT_HOST: {{ include "mvcr-application-checker.rabbit.host" . | quote }}
+  RABBIT_USER: {{ include "mvcr-application-checker.rabbit.user" . | quote }}
+  RABBIT_SSL_PORT: {{ include "mvcr-application-checker.rabbit.port" . | quote }}
+  {{- if or (and .Values.rabbitmq.enabled .Values.rabbitmq.ssl.enabled) (and (not .Values.rabbitmq.enabled) .Values.externalRabbitmq.ssl.enabled) }}
+  RABBIT_SSL_CACERTFILE: "/etc/ssl/ca.crt"
+  RABBIT_SSL_CERTFILE: "/etc/ssl/client.crt"
+  RABBIT_SSL_KEYFILE: "/etc/ssl/client.key"
+  {{- end }}
+  {{- range $key, $value := .Values.fetcher.config }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
+{{- end }}

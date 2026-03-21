@@ -1,0 +1,59 @@
+{{- if .Values.fetcher.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "mvcr-application-checker.fullname" . }}-fetcher
+  labels:
+    {{- include "mvcr-application-checker.componentLabels" (dict "context" . "component" "fetcher") | nindent 4 }}
+spec:
+  replicas: {{ .Values.fetcher.replicas | default 1 }}
+  selector:
+    matchLabels:
+      {{- include "mvcr-application-checker.selectorLabels" (dict "context" . "component" "fetcher") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "mvcr-application-checker.componentLabels" (dict "context" . "component" "fetcher") | nindent 8 }}
+    spec:
+      containers:
+        - name: fetcher
+          image: "{{ .Values.fetcher.image.repository }}:{{ .Values.fetcher.image.tag }}"
+          imagePullPolicy: {{ .Values.fetcher.image.pullPolicy | default "IfNotPresent" }}
+          {{- if .Values.fetcher.privileged }}
+          securityContext:
+            privileged: true
+          {{- end }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "mvcr-application-checker.fullname" . }}-fetcher
+          env:
+            - name: RABBIT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "mvcr-application-checker.secretName" . }}
+                  key: RABBIT_PASSWORD
+          volumeMounts:
+            - name: fetcher-data
+              mountPath: /code/output
+            {{- if or (and .Values.rabbitmq.enabled .Values.rabbitmq.ssl.enabled) (and (not .Values.rabbitmq.enabled) .Values.externalRabbitmq.ssl.enabled) }}
+            - name: ssl-certs
+              mountPath: /etc/ssl/
+              readOnly: true
+            {{- end }}
+          {{- with .Values.fetcher.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: fetcher-data
+          emptyDir: {}
+        {{- if or (and .Values.rabbitmq.enabled .Values.rabbitmq.ssl.enabled) (and (not .Values.rabbitmq.enabled) .Values.externalRabbitmq.ssl.enabled) }}
+        - name: ssl-certs
+          secret:
+            {{- if and (not .Values.rabbitmq.enabled) .Values.externalRabbitmq.ssl.existingSecret }}
+            secretName: {{ .Values.externalRabbitmq.ssl.existingSecret }}
+            {{- else }}
+            secretName: {{ include "mvcr-application-checker.rabbit.sslSecretName" . }}
+            {{- end }}
+        {{- end }}
+{{- end }}

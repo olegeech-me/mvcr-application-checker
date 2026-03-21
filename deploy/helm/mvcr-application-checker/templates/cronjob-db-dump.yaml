@@ -1,0 +1,70 @@
+{{- if .Values.dbDump.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "mvcr-application-checker.fullname" . }}-db-dump
+  labels:
+    {{- include "mvcr-application-checker.componentLabels" (dict "context" . "component" "db-dump") | nindent 4 }}
+spec:
+  schedule: {{ .Values.dbDump.schedule | quote }}
+  {{- if .Values.dbDump.timeZone }}
+  timeZone: {{ .Values.dbDump.timeZone | quote }}
+  {{- end }}
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            {{- include "mvcr-application-checker.selectorLabels" (dict "context" . "component" "db-dump") | nindent 12 }}
+        spec:
+          containers:
+            - name: postgres-dump
+              image: "{{ .Values.dbDump.image.repository }}:{{ .Values.dbDump.image.tag }}"
+              imagePullPolicy: IfNotPresent
+              env:
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "mvcr-application-checker.secretName" . }}
+                      key: DB_PASSWORD
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  DUMP_FILE="/dumps/bot-postgres-dump-$(date +%F-%H%M%S).sql"
+                  pg_dump -h {{ include "mvcr-application-checker.db.host" . }} -U {{ include "mvcr-application-checker.db.user" . }} --clean --if-exists -F c -b -v -f $DUMP_FILE {{ include "mvcr-application-checker.db.name" . }}
+                  # Keep only the last {{ .Values.dbDump.retainCount }} dumps
+                  ls -1t /dumps/*.sql | tail -n +{{ add .Values.dbDump.retainCount 1 }} | xargs rm -f
+              volumeMounts:
+                - name: dump-storage
+                  mountPath: /dumps
+          restartPolicy: OnFailure
+          volumes:
+            - name: dump-storage
+              persistentVolumeClaim:
+                {{- if .Values.dbDump.persistence.existingClaim }}
+                claimName: {{ .Values.dbDump.persistence.existingClaim }}
+                {{- else }}
+                claimName: {{ include "mvcr-application-checker.fullname" . }}-db-dump
+                {{- end }}
+---
+{{- if not .Values.dbDump.persistence.existingClaim }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "mvcr-application-checker.fullname" . }}-db-dump
+  labels:
+    {{- include "mvcr-application-checker.componentLabels" (dict "context" . "component" "db-dump") | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- if .Values.dbDump.persistence.storageClass }}
+  storageClassName: {{ .Values.dbDump.persistence.storageClass | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.dbDump.persistence.size }}
+{{- end }}
+{{- end }}

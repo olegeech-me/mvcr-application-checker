@@ -1,0 +1,17 @@
+{{- if and .Values.rabbitmq.enabled (not .Values.rabbitmq.persistence.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "mvcr-application-checker.fullname" . }}-rabbitmq
+  labels:
+    {{- include "mvcr-application-checker.componentLabels" (dict "context" . "component" "rabbitmq") | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  {{- if .Values.rabbitmq.persistence.storageClass }}
+  storageClassName: {{ .Values.rabbitmq.persistence.storageClass | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.rabbitmq.persistence.size }}
+{{- end }}

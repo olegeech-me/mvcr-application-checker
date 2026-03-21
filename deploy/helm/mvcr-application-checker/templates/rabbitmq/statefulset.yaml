@@ -1,0 +1,75 @@
+{{- if .Values.rabbitmq.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "mvcr-application-checker.fullname" . }}-rabbitmq
+  labels:
+    {{- include "mvcr-application-checker.componentLabels" (dict "context" . "component" "rabbitmq") | nindent 4 }}
+spec:
+  serviceName: {{ include "mvcr-application-checker.fullname" . }}-rabbitmq
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "mvcr-application-checker.selectorLabels" (dict "context" . "component" "rabbitmq") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "mvcr-application-checker.componentLabels" (dict "context" . "component" "rabbitmq") | nindent 8 }}
+    spec:
+      containers:
+        - name: rabbitmq
+          image: "{{ .Values.rabbitmq.image.repository }}:{{ .Values.rabbitmq.image.tag }}"
+          imagePullPolicy: IfNotPresent
+          ports:
+            {{- if .Values.rabbitmq.ssl.enabled }}
+            - name: amqps
+              containerPort: 5671
+              protocol: TCP
+            {{- end }}
+            - name: amqp
+              containerPort: 5672
+              protocol: TCP
+            - name: management
+              containerPort: 15672
+              protocol: TCP
+          env:
+            - name: RABBITMQ_DEFAULT_USER
+              value: {{ .Values.rabbitmq.user | quote }}
+            - name: RABBITMQ_DEFAULT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "mvcr-application-checker.secretName" . }}
+                  key: RABBIT_PASSWORD
+          {{- with .Values.rabbitmq.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/rabbitmq
+            {{- if .Values.rabbitmq.ssl.enabled }}
+            - name: rabbitmq-config
+              mountPath: /etc/rabbitmq/conf.d/ssl.conf
+              subPath: rabbitmq.conf
+            - name: rabbitmq-ssl
+              mountPath: /etc/ssl/
+            {{- end }}
+      volumes:
+        {{- if .Values.rabbitmq.ssl.enabled }}
+        - name: rabbitmq-config
+          configMap:
+            name: {{ include "mvcr-application-checker.fullname" . }}-rabbitmq
+        - name: rabbitmq-ssl
+          secret:
+            secretName: {{ include "mvcr-application-checker.rabbit.sslSecretName" . }}
+        {{- end }}
+        {{- if .Values.rabbitmq.persistence.existingClaim }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ .Values.rabbitmq.persistence.existingClaim }}
+        {{- else }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "mvcr-application-checker.fullname" . }}-rabbitmq
+        {{- end }}
+{{- end }}
