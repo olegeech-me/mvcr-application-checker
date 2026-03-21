@@ -32,6 +32,8 @@ make help         # list all available targets
 
 ### Architecture
 
+For a deep dive into the system design — components, state machines, message flows, database schema, and more — see [ARCHITECTURE.md](ARCHITECTURE.md).
+
 The project consists of two main services communicating via RabbitMQ:
 
 **Telegram Bot** (`src/bot/`) -- handles user interactions, stores subscriptions in PostgreSQL, and periodically queues status check requests.
