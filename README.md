@@ -34,9 +34,9 @@ make help         # list all available targets
 
 | Component | Image | Tag |
 |-----------|-------|-----|
-| Bot | [`olegeech/mvcr-application-checker`](https://hub.docker.com/r/olegeech/mvcr-application-checker) | `bot-latest`, `bot-v2.1.2` |
-| Fetcher | [`olegeech/mvcr-application-checker`](https://hub.docker.com/r/olegeech/mvcr-application-checker) | `fetcher-latest`, `fetcher-v2.1.2` |
-| Helm Chart | [`olegeech/mvcr-application-checker-helm`](https://hub.docker.com/r/olegeech/mvcr-application-checker-helm) | `0.2.0` |
+| Bot | [`olegeech/mvcr-application-checker`](https://hub.docker.com/r/olegeech/mvcr-application-checker) | `bot-latest`, `bot-v2.1.3` |
+| Fetcher | [`olegeech/mvcr-application-checker`](https://hub.docker.com/r/olegeech/mvcr-application-checker) | `fetcher-latest`, `fetcher-v2.1.3` |
+| Helm Chart | [`olegeech/mvcr-application-checker-helm`](https://hub.docker.com/r/olegeech/mvcr-application-checker-helm) | `0.2.1` |
 
 ### Kubernetes
 

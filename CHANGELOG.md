@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## [v2.1.3] - 2026-03-21
+
+### Bot
+
+- Added GitHub repository link to startup/help messages (all 4 languages)
+
+### Documentation & Deployment
+
+- Bumped image tags and Helm chart version
+
 ## [v2.1.2] - 2026-03-21
 
 ### Documentation & Deployment
