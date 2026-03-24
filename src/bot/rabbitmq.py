@@ -43,7 +43,7 @@ class RabbitMQ:
                 self.channel = await self.connection.channel()
                 self.queue = await self.channel.declare_queue("StatusUpdateQueue", durable=True)
                 self.expiration_queue = await self.channel.declare_queue("ExpirationQueue", durable=True)
-                self.service_queue = await self.channel.declare_queue("FetcherMetricsQueue", durable=False)
+                self.service_queue = await self.channel.declare_queue("FetcherMetricsQueue", durable=True)
                 self.default_exchange = self.channel.default_exchange
                 logger.info("Connected to RabbitMQ")
                 break  # Exit the loop if connection is successful

@@ -1,15 +1,11 @@
 # CHANGELOG
 
-## [v2.1.4] - 2026-03-21
-
-### Bot
+## [v2.1.5] - 2026-03-21
 
 - Added GitHub repository link to startup/help messages (all 4 languages)
 - Update admin broadcast function
-
-### Documentation & Deployment
-
-- Bumped image tags and Helm chart version
+- Add rabbit metrics support
+- Update metrics queue config in fetcher
 
 ## [v2.1.2] - 2026-03-21
 

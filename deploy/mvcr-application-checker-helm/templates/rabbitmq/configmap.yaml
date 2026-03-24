@@ -19,6 +19,8 @@ data:
   {{- if .Values.rabbitmq.metrics.enabled }}
   enabled_plugins: |
     [rabbitmq_management,rabbitmq_prometheus].
+  metrics.conf: |
+    management_agent.disable_metrics_collector = true
   {{- end }}
 {{- end }}
 {{- end }}

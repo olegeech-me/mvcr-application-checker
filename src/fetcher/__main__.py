@@ -66,8 +66,7 @@ async def main():
         StatusUpdateQueue=True,
         RefreshStatusQueue=True,
     )
-    # not durable for fetcher metric queue
-    await messaging_instance.setup_queues(FetcherMetricsQueue=False)
+    await messaging_instance.setup_queues(FetcherMetricsQueue=True)
 
     # Start processing requests in the background
     asyncio.gather(

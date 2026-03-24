@@ -63,6 +63,9 @@ spec:
             - name: rabbitmq-config
               mountPath: /etc/rabbitmq/enabled_plugins
               subPath: enabled_plugins
+            - name: rabbitmq-config
+              mountPath: /etc/rabbitmq/conf.d/metrics.conf
+              subPath: metrics.conf
             {{- end }}
       volumes:
         {{- if or .Values.rabbitmq.ssl.enabled .Values.rabbitmq.metrics.enabled }}
