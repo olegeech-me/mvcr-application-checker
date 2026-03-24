@@ -75,6 +75,8 @@ jobs:
           tags: |
             olegeech/mvcr-application-checker:bot-latest
             olegeech/mvcr-application-checker:bot-${{ env.LATEST_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           build-args: |
             BASE_VERSION=${{ env.LATEST_TAG }}
             GIT_COMMIT=${{ env.SHORT_SHA }}
