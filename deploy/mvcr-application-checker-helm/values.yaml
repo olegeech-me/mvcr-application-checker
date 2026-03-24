@@ -120,6 +120,12 @@ rabbitmq:
       interval: 30s
       scrapeTimeout: 10s
       labels: {}
+    prometheusRule:
+      enabled: true
+      labels: {}
+      queuePilingUpThreshold: 50
+      queuePilingUpDuration: 15m
+      noConsumersDuration: 5m
   service:
     type: ClusterIP
     managementPort: 15672

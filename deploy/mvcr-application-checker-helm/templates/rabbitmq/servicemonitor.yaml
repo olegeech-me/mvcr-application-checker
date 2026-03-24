@@ -16,4 +16,12 @@ spec:
     - port: metrics
       interval: {{ .Values.rabbitmq.metrics.serviceMonitor.interval | default "30s" }}
       scrapeTimeout: {{ .Values.rabbitmq.metrics.serviceMonitor.scrapeTimeout | default "10s" }}
+    - port: metrics
+      path: /metrics/detailed
+      params:
+        family:
+          - queue_coarse_metrics
+          - queue_metrics
+      interval: {{ .Values.rabbitmq.metrics.serviceMonitor.interval | default "30s" }}
+      scrapeTimeout: {{ .Values.rabbitmq.metrics.serviceMonitor.scrapeTimeout | default "10s" }}
 {{- end }}

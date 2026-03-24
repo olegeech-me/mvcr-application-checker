@@ -1,0 +1,60 @@
+{{- if and .Values.rabbitmq.enabled .Values.rabbitmq.metrics.enabled .Values.rabbitmq.metrics.prometheusRule.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "mvcr-application-checker.fullname" . }}-rabbitmq
+  labels:
+    {{- include "mvcr-application-checker.componentLabels" (dict "context" . "component" "rabbitmq") | nindent 4 }}
+    {{- with .Values.rabbitmq.metrics.prometheusRule.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  groups:
+    - name: rabbitmq.queues
+      rules:
+        - alert: RabbitMQQueuePilingUp
+          expr: |
+            rabbitmq_detailed_queue_messages_ready{
+              queue=~"ApplicationFetchQueue|RefreshStatusQueue|StatusUpdateQueue",
+              namespace="{{ .Release.Namespace }}"
+            } > {{ .Values.rabbitmq.metrics.prometheusRule.queuePilingUpThreshold }}
+          for: {{ .Values.rabbitmq.metrics.prometheusRule.queuePilingUpDuration }}
+          labels:
+            severity: warning
+          annotations:
+            summary: "RabbitMQ queue {{ "{{ $labels.queue }}" }} is piling up"
+            description: >-
+              Queue {{ "{{ $labels.queue }}" }} has {{ "{{ $value }}" }} ready messages
+              for more than {{ .Values.rabbitmq.metrics.prometheusRule.queuePilingUpDuration }}.
+              Messages are not being consumed fast enough.
+        - alert: RabbitMQNoConsumers
+          expr: |
+            rabbitmq_detailed_queue_consumers{
+              queue=~"ApplicationFetchQueue|RefreshStatusQueue",
+              namespace="{{ .Release.Namespace }}"
+            } == 0
+          for: {{ .Values.rabbitmq.metrics.prometheusRule.noConsumersDuration }}
+          labels:
+            severity: critical
+          annotations:
+            summary: "RabbitMQ queue {{ "{{ $labels.queue }}" }} has no consumers"
+            description: >-
+              Queue {{ "{{ $labels.queue }}" }} has had zero consumers
+              for more than {{ .Values.rabbitmq.metrics.prometheusRule.noConsumersDuration }}.
+              Fetcher pods may be down or disconnected.
+        - alert: RabbitMQStatusUpdateNoConsumers
+          expr: |
+            rabbitmq_detailed_queue_consumers{
+              queue="StatusUpdateQueue",
+              namespace="{{ .Release.Namespace }}"
+            } == 0
+          for: {{ .Values.rabbitmq.metrics.prometheusRule.noConsumersDuration }}
+          labels:
+            severity: critical
+          annotations:
+            summary: "StatusUpdateQueue has no consumers"
+            description: >-
+              StatusUpdateQueue has had zero consumers
+              for more than {{ .Values.rabbitmq.metrics.prometheusRule.noConsumersDuration }}.
+              The bot service may be down or disconnected from RabbitMQ.
+{{- end }}
