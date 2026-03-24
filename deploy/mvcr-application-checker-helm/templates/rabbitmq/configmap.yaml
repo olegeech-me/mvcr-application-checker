@@ -1,4 +1,5 @@
-{{- if and .Values.rabbitmq.enabled .Values.rabbitmq.ssl.enabled }}
+{{- if .Values.rabbitmq.enabled }}
+{{- if or .Values.rabbitmq.ssl.enabled .Values.rabbitmq.metrics.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -6,6 +7,7 @@ metadata:
   labels:
     {{- include "mvcr-application-checker.componentLabels" (dict "context" . "component" "rabbitmq") | nindent 4 }}
 data:
+  {{- if .Values.rabbitmq.ssl.enabled }}
   rabbitmq.conf: |
     listeners.ssl.default = 5671
     ssl_options.verify = verify_peer
@@ -13,4 +15,10 @@ data:
     ssl_options.cacertfile = /etc/ssl/ca.crt
     ssl_options.certfile = /etc/ssl/server.crt
     ssl_options.keyfile = /etc/ssl/server.key
+  {{- end }}
+  {{- if .Values.rabbitmq.metrics.enabled }}
+  enabled_plugins: |
+    [rabbitmq_management,rabbitmq_prometheus].
+  {{- end }}
+{{- end }}
 {{- end }}

@@ -1,0 +1,19 @@
+{{- if and .Values.rabbitmq.enabled .Values.rabbitmq.metrics.enabled .Values.rabbitmq.metrics.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "mvcr-application-checker.fullname" . }}-rabbitmq
+  labels:
+    {{- include "mvcr-application-checker.componentLabels" (dict "context" . "component" "rabbitmq") | nindent 4 }}
+    {{- with .Values.rabbitmq.metrics.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "mvcr-application-checker.selectorLabels" (dict "context" . "component" "rabbitmq") | nindent 6 }}
+  endpoints:
+    - port: metrics
+      interval: {{ .Values.rabbitmq.metrics.serviceMonitor.interval | default "30s" }}
+      scrapeTimeout: {{ .Values.rabbitmq.metrics.serviceMonitor.scrapeTimeout | default "10s" }}
+{{- end }}

@@ -32,6 +32,11 @@ spec:
             - name: management
               containerPort: 15672
               protocol: TCP
+            {{- if .Values.rabbitmq.metrics.enabled }}
+            - name: metrics
+              containerPort: 15692
+              protocol: TCP
+            {{- end }}
           env:
             - name: RABBITMQ_DEFAULT_USER
               value: {{ .Values.rabbitmq.user | quote }}
@@ -54,11 +59,18 @@ spec:
             - name: rabbitmq-ssl
               mountPath: /etc/ssl/
             {{- end }}
+            {{- if .Values.rabbitmq.metrics.enabled }}
+            - name: rabbitmq-config
+              mountPath: /etc/rabbitmq/enabled_plugins
+              subPath: enabled_plugins
+            {{- end }}
       volumes:
-        {{- if .Values.rabbitmq.ssl.enabled }}
+        {{- if or .Values.rabbitmq.ssl.enabled .Values.rabbitmq.metrics.enabled }}
         - name: rabbitmq-config
           configMap:
             name: {{ include "mvcr-application-checker.fullname" . }}-rabbitmq
+        {{- end }}
+        {{- if .Values.rabbitmq.ssl.enabled }}
         - name: rabbitmq-ssl
           secret:
             secretName: {{ include "mvcr-application-checker.rabbit.sslSecretName" . }}

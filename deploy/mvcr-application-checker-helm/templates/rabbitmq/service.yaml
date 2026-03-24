@@ -26,6 +26,12 @@ spec:
       port: {{ .Values.rabbitmq.service.managementPort | default 15672 }}
       targetPort: management
       protocol: TCP
+    {{- if .Values.rabbitmq.metrics.enabled }}
+    - name: metrics
+      port: 15692
+      targetPort: metrics
+      protocol: TCP
+    {{- end }}
   selector:
     {{- include "mvcr-application-checker.selectorLabels" (dict "context" . "component" "rabbitmq") | nindent 4 }}
 {{- end }}

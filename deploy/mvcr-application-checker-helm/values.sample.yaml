@@ -75,6 +75,13 @@ rabbitmq:
     size: 10Gi
   ssl:
     enabled: true
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      interval: 30s
+      scrapeTimeout: 10s
+      labels: {}
   service:
     type: LoadBalancer
     annotations:
