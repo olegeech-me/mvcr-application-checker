@@ -2,7 +2,7 @@ import asyncio
 import logging
 from datetime import timedelta
 from bot.loader import REFRESH_PERIOD, SCHEDULER_PERIOD, NOT_FOUND_REFRESH_PERIOD, NOT_FOUND_MAX_DAYS
-from bot.utils import generate_oam_full_string, user_label
+from bot.utils import generate_oam_full_string, user_label_short
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +57,7 @@ class ApplicationMonitor:
                 "last_updated": app["last_updated"].isoformat() if app["last_updated"] else "0",
             }
             oam_full_string = generate_oam_full_string(app)
-            label = user_label(app["chat_id"], app["username"], app["first_name"], app["last_name"])
+            label = user_label_short(app["chat_id"], app["username"], app["first_name"])
             logger.info(
                 f"Scheduling status refresh for {oam_full_string}, user: {label}, last_updated: {app['last_updated']}"
             )
@@ -86,7 +86,7 @@ class ApplicationMonitor:
                 "last_updated": app["created_at"].isoformat() if app["created_at"] else "0",
             }
             oam_full_string = generate_oam_full_string(app)
-            label = user_label(app["chat_id"], app["username"], app["first_name"], app["last_name"])
+            label = user_label_short(app["chat_id"], app["username"], app["first_name"])
             logger.info(f"Scheduling expiration for {oam_full_string}, user: {label}, created_at: {app['created_at']}")
             await self.rabbit.publish_message(message, routing_key="ExpirationQueue")
 
@@ -138,7 +138,7 @@ class ReminderMonitor:
                 "last_updated": reminder["last_updated"].isoformat() if reminder["last_updated"] else "0",
             }
             oam_full_string = generate_oam_full_string(reminder)
-            label = user_label(reminder["chat_id"], reminder["username"], reminder["first_name"], reminder["last_name"])
+            label = user_label_short(reminder["chat_id"], reminder["username"], reminder["first_name"])
             logger.info(f"[REMINDER] Force refreshing status for {oam_full_string}, user: {label}")
             await self.rabbit.publish_message(message, routing_key="ApplicationFetchQueue")
 

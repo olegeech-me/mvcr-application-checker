@@ -1,6 +1,6 @@
 import pytest
 
-from bot.utils import generate_oam_full_string, categorize_application_status, user_label, MVCR_STATUSES
+from bot.utils import generate_oam_full_string, categorize_application_status, user_label, user_label_short, MVCR_STATUSES
 
 from conftest import make_rabbit
 
@@ -118,6 +118,30 @@ def test_user_label(chat_id, username, first_name, last_name, expected):
 def test_user_label_empty_strings_treated_as_missing():
     """Empty strings should be treated same as None (omitted)"""
     assert user_label(123, "", "", "") == "chat_id: 123"
+
+
+# ---------------------------------------------------------------------------
+# user_label_short
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "chat_id, username, first_name, expected",
+    [
+        (123, "vasya123", "Vasya", "@vasya123"),
+        (123, None, "Vasya", "Vasya"),
+        (123, None, None, "123"),
+        (123, "", "Vasya", "Vasya"),
+        (123, "", "", "123"),
+    ],
+)
+def test_user_label_short(chat_id, username, first_name, expected):
+    assert user_label_short(chat_id, username, first_name) == expected
+
+
+def test_user_label_short_ignores_extra_kwargs():
+    """Extra kwargs (e.g. last_name) are silently ignored"""
+    assert user_label_short(123, username="vasya", first_name="V", last_name="P") == "@vasya"
 
 
 # ---------------------------------------------------------------------------

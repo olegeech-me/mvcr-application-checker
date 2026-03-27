@@ -20,6 +20,15 @@ MVCR_STATUSES = {
 }
 
 
+def user_label_short(chat_id, username=None, first_name=None, **_):
+    """Compact user identifier for routine system log lines."""
+    if username:
+        return f"@{username}"
+    if first_name:
+        return first_name
+    return str(chat_id)
+
+
 def _get(d, short_key, default=None):
     """Look up a key in both short ('number') and DB ('application_number') formats."""
     return d.get(short_key) or d.get(f"application_{short_key}", default)

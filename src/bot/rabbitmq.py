@@ -6,7 +6,7 @@ import hashlib
 import cachetools
 from aiormq.exceptions import AMQPConnectionError
 from bot.texts import message_texts
-from bot.utils import generate_oam_full_string, user_label
+from bot.utils import generate_oam_full_string, user_label, user_label_short
 from bot.utils import MVCR_STATUSES, categorize_application_status, notify_user
 
 MAX_RETRIES = 5  # maximum number of connection retries
@@ -146,8 +146,9 @@ class RabbitMQ:
                     return
 
                 if not has_changed and not force_refresh:
-                    logger.info(f"[REFRESH] Status refreshed for {oam_full_string}, user {label}")
-                    logger.debug(f"Status didn't change for {oam_full_string}, user {label}")
+                    short = user_label_short(chat_id, username, first_name)
+                    logger.info(f"[REFRESH] Status refreshed for {oam_full_string}, user {short}")
+                    logger.debug(f"Status didn't change for {oam_full_string}, user {short}")
                     await self.db.update_last_checked(chat_id, number, type_, year)
                     return
 
