@@ -504,7 +504,7 @@ async def _sync_user_profile(update, lang="EN"):
 # Handler for the /start command
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Shows initial message and asks to subscribe"""
-    lang = await _get_user_language(update, context)
+    await _get_user_language(update, context)
 
     logging.info(f"💻 Received /start command from {user_info(update)}")
     await _show_startup_message(update, context)
