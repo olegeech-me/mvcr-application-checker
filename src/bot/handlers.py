@@ -9,7 +9,7 @@ from telegram.error import RetryAfter, TimedOut, NetworkError
 from telegram.ext import ContextTypes, ConversationHandler
 from bot.loader import loader, ADMIN_CHAT_IDS, REFRESH_PERIOD, FULL_VERSION
 from bot.texts import button_texts, message_texts, commands_description
-from bot.utils import generate_oam_full_string
+from bot.utils import generate_oam_full_string, user_label
 
 SUBSCRIPTIONS_LIMIT = 5
 BUTTON_WAIT_SECONDS = 1
@@ -52,10 +52,11 @@ async def _set_menu_commands(update: Update, context: ContextTypes.DEFAULT_TYPE,
 
 
 async def _get_user_language(update, context):
-    """Fetch user language preference"""
+    """Fetch user language preference and sync profile on first call per session"""
     user_lang = context.user_data.get("lang")
 
     if not user_lang:
+        await _sync_user_profile(update)
         user_lang = await db.fetch_user_language(update.effective_chat.id)
         if not user_lang:
             # Get the language from user locale and try to match
@@ -86,19 +87,8 @@ async def _is_button_click_abused(update: Update, context: ContextTypes.DEFAULT_
 
 def user_info(update: Update):
     """Returns a string with user information"""
-    chatid = update.effective_chat.id
-    username = update.effective_chat.username
-    first_name = update.effective_chat.first_name
-    last_name = update.effective_chat.last_name
-    info_pieces = [f"chat_id: {chatid}"]
-    if username:
-        info_pieces.append(f"username: {username}")
-    if first_name:
-        info_pieces.append(f"first_name: {first_name}")
-    if last_name:
-        info_pieces.append(f"last_name: {last_name}")
-
-    return ", ".join(info_pieces)
+    chat = update.effective_chat
+    return user_label(chat.id, chat.username, chat.first_name, chat.last_name)
 
 
 def get_effective_message(update: Update):
@@ -141,7 +131,7 @@ async def enforce_rate_limit(update: Update, context: ContextTypes.DEFAULT_TYPE,
         if _is_admin(chat_id):
             logger.info(f"Lifting ratelimit for admin, command {command_name}")
             return True
-        logger.info(f"Ratelimiting user {chat_id}, command {command_name}")
+        logger.info(f"Ratelimiting user {user_label(chat_id)}, command {command_name}")
         if command_name == "subscribe":
             await message.edit_reply_markup(reply_markup=None)
 
@@ -151,10 +141,13 @@ async def enforce_rate_limit(update: Update, context: ContextTypes.DEFAULT_TYPE,
     return True
 
 
-def create_request(chat_id, app_data, force_refresh=False):
+def create_request(chat_id, app_data, force_refresh=False, username=None, first_name=None, last_name=None):
     """Creates a request dictionary for RabbitMQ"""
     request = {
         "chat_id": chat_id,
+        "username": username,
+        "first_name": first_name,
+        "last_name": last_name,
         "number": app_data["number"],
         "suffix": app_data.get("suffix", "0"),
         "type": app_data["type"].upper(),
@@ -181,7 +174,10 @@ async def create_subscription(update, app_data, lang="EN"):
             app_data["type"],
             int(app_data["year"]),
         ):
-            request = create_request(chat.id, app_data)
+            request = create_request(
+                chat.id, app_data,
+                username=chat.username, first_name=chat.first_name, last_name=chat.last_name,
+            )
             await rabbit.publish_message(request)
             await message.reply_text(message_texts[lang]["dialog_completion"])
         else:
@@ -487,24 +483,28 @@ async def _show_startup_message(update: Update, context: ContextTypes.DEFAULT_TY
         await update.message.reply_text(msg, reply_markup=reply_markup)
 
 
-async def _create_user_in_db_if_not_exists(update, lang="EN"):
-    """Create user in the database if it does not exist"""
-    chat_id = update.effective_chat.id
-    if not await db.user_exists(chat_id):
-        await db.insert_user(
-            chat_id,
-            update.effective_chat.first_name,
-            update.effective_chat.username,
-            update.effective_chat.last_name,
-            lang=lang,
+async def _sync_user_profile(update, lang="EN"):
+    """Create user if new, or update profile fields if they have changed"""
+    chat = update.effective_chat
+    profile = await db.fetch_user_profile(chat.id)
+
+    if profile is None:
+        await db.insert_user(chat.id, chat.first_name, chat.username, chat.last_name, lang=lang)
+        return
+
+    if (profile["username"] != chat.username
+            or profile["first_name"] != chat.first_name
+            or profile["last_name"] != chat.last_name):
+        logger.info(
+            f"Profile changed for {user_label(chat.id, chat.username, chat.first_name, chat.last_name)}, updating DB"
         )
+        await db.update_user_profile(chat.id, chat.username, chat.first_name, chat.last_name)
 
 
 # Handler for the /start command
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Shows initial message and asks to subscribe"""
     lang = await _get_user_language(update, context)
-    await _create_user_in_db_if_not_exists(update, lang=lang)
 
     logging.info(f"💻 Received /start command from {user_info(update)}")
     await _show_startup_message(update, context)
@@ -525,8 +525,6 @@ async def subscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = await _get_user_language(update, context)
     message = get_effective_message(update)
     chat_id = message.chat_id
-
-    await _create_user_in_db_if_not_exists(update, lang=lang)
 
     # Verify how many subscriptions user has (not more than SUBSCRIPTIONS_LIMIT)
     if await db.count_user_subscriptions(chat_id) >= SUBSCRIPTIONS_LIMIT:
@@ -660,9 +658,13 @@ async def _publish_force_request(update, caller, lang, app_details):
         reply_function = target_message.reply_text
 
     try:
-        request = create_request(update.effective_chat.id, app_details, True)
+        chat = update.effective_chat
+        request = create_request(
+            chat.id, app_details, True,
+            username=chat.username, first_name=chat.first_name, last_name=chat.last_name,
+        )
         oam_full_string = generate_oam_full_string(request)
-        logger.info(f"Publishing force refresh for {oam_full_string}, user: {request['chat_id']}")
+        logger.info(f"Publishing force refresh for {oam_full_string}, user: {user_info(update)}")
         await rabbit.publish_message(request)
 
         if caller == "button":

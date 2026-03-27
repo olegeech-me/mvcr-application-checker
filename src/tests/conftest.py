@@ -57,6 +57,9 @@ def make_incoming_message(msg_dict, headers=None):
 
 OAM_BASE_MSG = {
     "chat_id": 100,
+    "username": "testuser",
+    "first_name": "Test",
+    "last_name": "User",
     "number": "12345",
     "suffix": "0",
     "type": "TP",
@@ -69,6 +72,9 @@ OAM_BASE_MSG = {
 
 ZOV_BASE_MSG = {
     "chat_id": 200,
+    "username": "zovuser",
+    "first_name": "Zov",
+    "last_name": "Test",
     "number": "ISTA202504220001",
     "suffix": "0",
     "type": "ZOV",
@@ -85,6 +91,9 @@ def make_oam_db_row(**overrides):
     """Build a fake DB row dict that looks like what the monitor queries return"""
     row = {
         "chat_id": 100,
+        "username": "testuser",
+        "first_name": "Test",
+        "last_name": "User",
         "application_number": "12345",
         "application_suffix": "0",
         "application_type": "TP",
@@ -100,6 +109,9 @@ def make_zov_db_row(**overrides):
     """Build a fake DB row for a ZOV application"""
     row = {
         "chat_id": 200,
+        "username": "zovuser",
+        "first_name": "Zov",
+        "last_name": "Test",
         "application_number": "ISTA202504220001",
         "application_suffix": "0",
         "application_type": "ZOV",

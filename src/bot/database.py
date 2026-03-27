@@ -108,6 +108,28 @@ class Database:
                 return False
         return True
 
+    async def fetch_user_profile(self, chat_id):
+        """Fetch username, first_name, last_name for a user"""
+        query = "SELECT username, first_name, last_name FROM Users WHERE chat_id = $1"
+        async with self.pool.acquire() as conn:
+            try:
+                return await conn.fetchrow(query, chat_id)
+            except Exception as e:
+                logger.error(f"Error fetching user profile for chat_id {chat_id}: {e}")
+                return None
+
+    async def update_user_profile(self, chat_id, username, first_name, last_name):
+        """Update user profile fields (username, first_name, last_name)"""
+        logger.info(f"Updating profile for chat_id {chat_id} in DB")
+        query = "UPDATE Users SET username = $2, first_name = $3, last_name = $4 WHERE chat_id = $1"
+        async with self.pool.acquire() as conn:
+            try:
+                await conn.execute(query, chat_id, username, first_name, last_name)
+                return True
+            except Exception as e:
+                logger.error(f"Error updating user profile for chat_id {chat_id}: {e}")
+                return False
+
     async def insert_application(
         self,
         chat_id,
@@ -307,7 +329,8 @@ class Database:
         not_found_seconds = not_found_refresh_period.total_seconds()
 
         query = """
-            SELECT u.chat_id, a.application_number, a.application_suffix, a.application_type,
+            SELECT u.chat_id, u.username, u.first_name, u.last_name,
+                   a.application_number, a.application_suffix, a.application_type,
                    a.application_year, a.last_updated, a.application_state
             FROM Applications a
             JOIN Users u ON a.user_id = u.user_id
@@ -333,7 +356,8 @@ class Database:
         not_found_seconds = not_found_max_age.total_seconds()
 
         query = """
-            SELECT a.application_id, u.chat_id, a.application_number, a.application_suffix,
+            SELECT a.application_id, u.chat_id, u.username, u.first_name, u.last_name,
+                   a.application_number, a.application_suffix,
                    a.application_type, a.application_year, a.created_at
             FROM Applications a
             JOIN Users u ON a.user_id = u.user_id
@@ -573,7 +597,8 @@ class Database:
         hour, minute = current_prague_time.hour, current_prague_time.minute
 
         query = """
-            SELECT r.reminder_id, u.chat_id, r.reminder_time, a.application_number,
+            SELECT r.reminder_id, u.chat_id, u.username, u.first_name, u.last_name,
+            r.reminder_time, a.application_number,
             a.application_suffix, a.application_type, a.application_year, a.last_updated
             FROM Reminders r
             INNER JOIN Users u ON r.user_id = u.user_id

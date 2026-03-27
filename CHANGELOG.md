@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## [v2.2.0] - 2026-03-27
+
+### Improved log readability
+
+- Enriched log lines across the async pipeline (RabbitMQ consumers, monitors, notifications) with human-readable user identity (`first_name`, `last_name`, `username`) alongside `chat_id`
+- Added `user_label()` helper for uniform user formatting in all log output
+- Unified log format between handler logs and async pipeline logs
+- User profile fields now flow through RabbitMQ messages and enriched DB queries
+
+### Profile sync-on-touch
+
+- User profile data (username, first_name, last_name) is now synced from Telegram on first interaction per session, keeping DB data fresh for downstream consumers
+- Replaced one-time `_create_user_in_db_if_not_exists` with `_sync_user_profile` that detects and updates changed profile fields
+
+### Tests
+
+- Added tests for `user_label`, `_sync_user_profile`, profile sync integration with `_get_user_language`, and `create_request` user field propagation (155 total tests)
+
 ## [v2.1.5] - 2026-03-21
 
 - Added GitHub repository link to startup/help messages (all 4 languages)

@@ -1,6 +1,6 @@
 import pytest
 
-from bot.utils import generate_oam_full_string, categorize_application_status, MVCR_STATUSES
+from bot.utils import generate_oam_full_string, categorize_application_status, user_label, MVCR_STATUSES
 
 from conftest import make_rabbit
 
@@ -85,6 +85,39 @@ def test_categorize_zov_pre_approved_with_povoleno_link():
         f"'rizeni-povoleno' in link URL must not trigger approved"
     )
     assert emoji == "⭐"
+
+
+# ---------------------------------------------------------------------------
+# user_label
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "chat_id, username, first_name, last_name, expected",
+    [
+        (123, "vasya123", "Vasya", "Pupkin",
+         "first_name: Vasya, last_name: Pupkin, username: vasya123, chat_id: 123"),
+        (123, "vasya123", "Vasya", None,
+         "first_name: Vasya, username: vasya123, chat_id: 123"),
+        (123, None, "Vasya", "Pupkin",
+         "first_name: Vasya, last_name: Pupkin, chat_id: 123"),
+        (123, None, "Vasya", None,
+         "first_name: Vasya, chat_id: 123"),
+        (123, "vasya123", None, None,
+         "username: vasya123, chat_id: 123"),
+        (123, None, None, None,
+         "chat_id: 123"),
+        (123, "vasya123", None, "Pupkin",
+         "last_name: Pupkin, username: vasya123, chat_id: 123"),
+    ],
+)
+def test_user_label(chat_id, username, first_name, last_name, expected):
+    assert user_label(chat_id, username, first_name, last_name) == expected
+
+
+def test_user_label_empty_strings_treated_as_missing():
+    """Empty strings should be treated same as None (omitted)"""
+    assert user_label(123, "", "", "") == "chat_id: 123"
 
 
 # ---------------------------------------------------------------------------

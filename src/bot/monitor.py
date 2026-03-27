@@ -2,7 +2,7 @@ import asyncio
 import logging
 from datetime import timedelta
 from bot.loader import REFRESH_PERIOD, SCHEDULER_PERIOD, NOT_FOUND_REFRESH_PERIOD, NOT_FOUND_MAX_DAYS
-from bot.utils import generate_oam_full_string
+from bot.utils import generate_oam_full_string, user_label
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +43,9 @@ class ApplicationMonitor:
         for app in applications_to_update:
             message = {
                 "chat_id": app["chat_id"],
+                "username": app["username"],
+                "first_name": app["first_name"],
+                "last_name": app["last_name"],
                 "number": app["application_number"],
                 "suffix": app["application_suffix"],
                 "type": app["application_type"],
@@ -54,8 +57,9 @@ class ApplicationMonitor:
                 "last_updated": app["last_updated"].isoformat() if app["last_updated"] else "0",
             }
             oam_full_string = generate_oam_full_string(app)
+            label = user_label(app["chat_id"], app["username"], app["first_name"], app["last_name"])
             logger.info(
-                f"Scheduling status refresh for {oam_full_string}, user: {app['chat_id']}, last_updated: {app['last_updated']}"
+                f"Scheduling status refresh for {oam_full_string}, user: {label}, last_updated: {app['last_updated']}"
             )
             await self.rabbit.publish_message(message, routing_key="RefreshStatusQueue")
 
@@ -67,10 +71,12 @@ class ApplicationMonitor:
 
         logger.info(f"{len(applications_to_expire)} application(s) to expire")
         for app in applications_to_expire:
-
             message = {
                 "application_id": app["application_id"],
                 "chat_id": app["chat_id"],
+                "username": app["username"],
+                "first_name": app["first_name"],
+                "last_name": app["last_name"],
                 "number": app["application_number"],
                 "suffix": app["application_suffix"],
                 "type": app["application_type"],
@@ -80,7 +86,8 @@ class ApplicationMonitor:
                 "last_updated": app["created_at"].isoformat() if app["created_at"] else "0",
             }
             oam_full_string = generate_oam_full_string(app)
-            logger.info(f"Scheduling expiration for {oam_full_string}, user: {app['chat_id']}, created_at: {app['created_at']}")
+            label = user_label(app["chat_id"], app["username"], app["first_name"], app["last_name"])
+            logger.info(f"Scheduling expiration for {oam_full_string}, user: {label}, created_at: {app['created_at']}")
             await self.rabbit.publish_message(message, routing_key="ExpirationQueue")
 
     def stop(self):
@@ -116,6 +123,9 @@ class ReminderMonitor:
         for reminder in reminders_to_trigger:
             message = {
                 "chat_id": reminder["chat_id"],
+                "username": reminder["username"],
+                "first_name": reminder["first_name"],
+                "last_name": reminder["last_name"],
                 "number": reminder["application_number"],
                 "suffix": reminder["application_suffix"],
                 "type": reminder["application_type"],
@@ -128,7 +138,8 @@ class ReminderMonitor:
                 "last_updated": reminder["last_updated"].isoformat() if reminder["last_updated"] else "0",
             }
             oam_full_string = generate_oam_full_string(reminder)
-            logger.info(f"[REMINDER] Force refreshing status for {oam_full_string}, user: {reminder['chat_id']}")
+            label = user_label(reminder["chat_id"], reminder["username"], reminder["first_name"], reminder["last_name"])
+            logger.info(f"[REMINDER] Force refreshing status for {oam_full_string}, user: {label}")
             await self.rabbit.publish_message(message, routing_key="ApplicationFetchQueue")
 
     def stop(self):

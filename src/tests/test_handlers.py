@@ -9,6 +9,7 @@ from bot.handlers import (
     _get_user_language,
     _is_admin,
     user_info,
+    _sync_user_profile,
     _show_app_number_final_confirmation,
     check_and_update_limit,
     create_request,
@@ -132,7 +133,8 @@ def test_get_user_language(user_lang_db, user_lang_context, expected_lang):
     db_mock = Mock()
     db_mock.fetch_user_language = AsyncMock(return_value=user_lang_db)
 
-    with patch("bot.handlers.db", db_mock):
+    with patch("bot.handlers.db", db_mock), \
+         patch("bot.handlers._sync_user_profile", new_callable=AsyncMock):
         update = Mock()
         update.effective_chat.id = 123456789
 
@@ -160,7 +162,163 @@ def test_user_info():
     update.effective_chat.last_name = "Pupkin"
 
     result = user_info(update)
-    assert result == "chat_id: 12345, username: testuser, first_name: Vasya, last_name: Pupkin"
+    assert result == "first_name: Vasya, last_name: Pupkin, username: testuser, chat_id: 12345"
+
+
+def test_user_info_partial():
+    """user_info with missing optional fields omits them"""
+    update = Mock()
+    update.effective_chat.id = 12345
+    update.effective_chat.username = None
+    update.effective_chat.first_name = "Vasya"
+    update.effective_chat.last_name = None
+
+    result = user_info(update)
+    assert result == "first_name: Vasya, chat_id: 12345"
+
+
+# ---------------------------------------------------------------------------
+# Profile sync
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_sync_user_profile_new_user():
+    """New user (not in DB) triggers insert"""
+    mock_db = AsyncMock()
+    mock_db.fetch_user_profile = AsyncMock(return_value=None)
+    mock_db.insert_user = AsyncMock(return_value=True)
+
+    update = Mock()
+    update.effective_chat.id = 100
+    update.effective_chat.username = "newuser"
+    update.effective_chat.first_name = "New"
+    update.effective_chat.last_name = "User"
+
+    with patch("bot.handlers.db", mock_db):
+        await _sync_user_profile(update)
+
+    mock_db.insert_user.assert_called_once_with(100, "New", "newuser", "User", lang="EN")
+    mock_db.update_user_profile = AsyncMock()
+    mock_db.update_user_profile.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_sync_user_profile_no_change():
+    """Existing user with unchanged profile does not trigger update"""
+    mock_db = AsyncMock()
+    mock_db.fetch_user_profile = AsyncMock(return_value={
+        "username": "vasya123", "first_name": "Vasya", "last_name": "Pupkin",
+    })
+    mock_db.update_user_profile = AsyncMock()
+
+    update = Mock()
+    update.effective_chat.id = 100
+    update.effective_chat.username = "vasya123"
+    update.effective_chat.first_name = "Vasya"
+    update.effective_chat.last_name = "Pupkin"
+
+    with patch("bot.handlers.db", mock_db):
+        await _sync_user_profile(update)
+
+    mock_db.insert_user.assert_not_called()
+    mock_db.update_user_profile.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_sync_user_profile_username_changed():
+    """Username change triggers profile update"""
+    mock_db = AsyncMock()
+    mock_db.fetch_user_profile = AsyncMock(return_value={
+        "username": "old_name", "first_name": "Vasya", "last_name": "Pupkin",
+    })
+    mock_db.update_user_profile = AsyncMock()
+
+    update = Mock()
+    update.effective_chat.id = 100
+    update.effective_chat.username = "new_name"
+    update.effective_chat.first_name = "Vasya"
+    update.effective_chat.last_name = "Pupkin"
+
+    with patch("bot.handlers.db", mock_db):
+        await _sync_user_profile(update)
+
+    mock_db.update_user_profile.assert_called_once_with(100, "new_name", "Vasya", "Pupkin")
+
+
+@pytest.mark.asyncio
+async def test_sync_user_profile_first_name_changed():
+    """First name change triggers profile update"""
+    mock_db = AsyncMock()
+    mock_db.fetch_user_profile = AsyncMock(return_value={
+        "username": "vasya123", "first_name": "Vasya", "last_name": "Pupkin",
+    })
+    mock_db.update_user_profile = AsyncMock()
+
+    update = Mock()
+    update.effective_chat.id = 100
+    update.effective_chat.username = "vasya123"
+    update.effective_chat.first_name = "Vasiliy"
+    update.effective_chat.last_name = "Pupkin"
+
+    with patch("bot.handlers.db", mock_db):
+        await _sync_user_profile(update)
+
+    mock_db.update_user_profile.assert_called_once_with(100, "vasya123", "Vasiliy", "Pupkin")
+
+
+@pytest.mark.asyncio
+async def test_sync_user_profile_field_removed():
+    """Field going from a value to None triggers update"""
+    mock_db = AsyncMock()
+    mock_db.fetch_user_profile = AsyncMock(return_value={
+        "username": "vasya123", "first_name": "Vasya", "last_name": "Pupkin",
+    })
+    mock_db.update_user_profile = AsyncMock()
+
+    update = Mock()
+    update.effective_chat.id = 100
+    update.effective_chat.username = None
+    update.effective_chat.first_name = "Vasya"
+    update.effective_chat.last_name = "Pupkin"
+
+    with patch("bot.handlers.db", mock_db):
+        await _sync_user_profile(update)
+
+    mock_db.update_user_profile.assert_called_once_with(100, None, "Vasya", "Pupkin")
+
+
+# ---------------------------------------------------------------------------
+# _get_user_language triggers profile sync
+# ---------------------------------------------------------------------------
+
+
+def test_get_user_language_triggers_sync_on_first_call():
+    """First call (no cached lang) triggers _sync_user_profile"""
+    mock_db = Mock()
+    mock_db.fetch_user_language = AsyncMock(return_value="RU")
+
+    with patch("bot.handlers.db", mock_db), \
+         patch("bot.handlers._sync_user_profile", new_callable=AsyncMock) as mock_sync:
+        update = Mock()
+        update.effective_chat.id = 100
+        context = Mock()
+        context.user_data = {}
+
+        asyncio.run(_get_user_language(update, context))
+        mock_sync.assert_called_once_with(update)
+
+
+def test_get_user_language_skips_sync_on_cached():
+    """Second call (cached lang) does NOT trigger _sync_user_profile"""
+    with patch("bot.handlers._sync_user_profile", new_callable=AsyncMock) as mock_sync:
+        update = Mock()
+        update.effective_chat.id = 100
+        context = Mock()
+        context.user_data = {"lang": "EN"}
+
+        asyncio.run(_get_user_language(update, context))
+        mock_sync.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -389,6 +547,24 @@ def test_create_request():
     assert result["type"] == "TP"
     assert result["year"] == "2042"
     assert result["force_refresh"] is True
+
+
+def test_create_request_includes_user_fields():
+    """create_request includes username/first_name/last_name when provided"""
+    app_data = {"number": "4242", "suffix": "0", "type": "TP", "year": "2042"}
+    result = create_request(100, app_data, username="vasya", first_name="Vasya", last_name="Pupkin")
+    assert result["username"] == "vasya"
+    assert result["first_name"] == "Vasya"
+    assert result["last_name"] == "Pupkin"
+
+
+def test_create_request_user_fields_default_none():
+    """create_request without user fields defaults them to None"""
+    app_data = {"number": "4242", "suffix": "0", "type": "TP", "year": "2042"}
+    result = create_request(100, app_data)
+    assert result["username"] is None
+    assert result["first_name"] is None
+    assert result["last_name"] is None
 
 
 def test_create_request_zov_derives_source():

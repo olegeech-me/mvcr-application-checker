@@ -40,6 +40,24 @@ def generate_oam_full_string(app_details):
     return f"OAM-{number}/{type_}-{year}"
 
 
+def user_label(chat_id, username=None, first_name=None, last_name=None):
+    """Format user identity for log messages.
+
+    Produces a uniform key-value string with human-readable fields first
+    and chat_id always at the end, e.g.:
+      first_name: Vasya, last_name: Pupkin, username: vasya123, chat_id: 123
+    """
+    pieces = []
+    if first_name:
+        pieces.append(f"first_name: {first_name}")
+    if last_name:
+        pieces.append(f"last_name: {last_name}")
+    if username:
+        pieces.append(f"username: {username}")
+    pieces.append(f"chat_id: {chat_id}")
+    return ", ".join(pieces)
+
+
 def categorize_application_status(status):
     """Return category and emoji based on status string"""
     for category, (keywords, emoji_sign) in MVCR_STATUSES.items():
@@ -50,28 +68,29 @@ def categorize_application_status(status):
     return None, None
 
 
-async def notify_user(bot, chat_id, text, max_retries=5):
+async def notify_user(bot, chat_id, text, max_retries=5, username=None, first_name=None, last_name=None):
     """Notify user with retries on intermittent issues"""
+    label = user_label(chat_id, username, first_name, last_name)
     attempt = 0
     delay = 1
     while attempt < max_retries:
         try:
             await bot.updater.bot.send_message(chat_id=chat_id, text=text)
-            logger.debug(f"Sent status update to chatID {chat_id}")
+            logger.debug(f"Sent status update to {label}")
             return
         except RetryAfter as e:
             delay = e.retry_after
-            logger.warning(f"RetryAfter: failed to notify chat_id {chat_id}: retrying after {delay} seconds")
+            logger.warning(f"RetryAfter: failed to notify {label}: retrying after {delay} seconds")
         except TimedOut:
-            logger.warning(f"TimedOut: failed to notify chat_id {chat_id}: retrying after {delay} seconds")
+            logger.warning(f"TimedOut: failed to notify {label}: retrying after {delay} seconds")
         except NetworkError:
-            logger.warning(f"NetworkError: failed to notify chat_id {chat_id}: retrying after {delay} seconds")
+            logger.warning(f"NetworkError: failed to notify {label}: retrying after {delay} seconds")
         except Exception as e:
-            logger.error(f"Failed to send status update to {chat_id}: {e}")
+            logger.error(f"Failed to send status update to {label}: {e}")
             return
 
         await asyncio.sleep(delay)
         attempt += 1
         delay *= 2  # exponential retry increase
 
-    logger.error(f"Failed to send message to {chat_id} after {max_retries} attempts")
+    logger.error(f"Failed to send message to {label} after {max_retries} attempts")

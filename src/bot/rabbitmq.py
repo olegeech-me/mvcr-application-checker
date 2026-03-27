@@ -6,7 +6,7 @@ import hashlib
 import cachetools
 from aiormq.exceptions import AMQPConnectionError
 from bot.texts import message_texts
-from bot.utils import generate_oam_full_string
+from bot.utils import generate_oam_full_string, user_label
 from bot.utils import MVCR_STATUSES, categorize_application_status, notify_user
 
 MAX_RETRIES = 5  # maximum number of connection retries
@@ -99,6 +99,9 @@ class RabbitMQ:
             msg_data = json.loads(message.body.decode("utf-8"))
             logger.debug(f"Received status update message: {msg_data}")
             chat_id = msg_data.get("chat_id", None)
+            username = msg_data.get("username")
+            first_name = msg_data.get("first_name")
+            last_name = msg_data.get("last_name")
             number = msg_data.get("number", None)
             type_ = msg_data.get("type", None)
             year = int(msg_data.get("year"))
@@ -109,6 +112,7 @@ class RabbitMQ:
             is_reminder = msg_data.get("is_reminder", False)
             has_changed = False
             oam_full_string = generate_oam_full_string(msg_data)
+            label = user_label(chat_id, username, first_name, last_name)
 
             # Generate unique ID for the consumed message and remove it from published_messages
             unique_id = self.generate_unique_id(msg_data)
@@ -119,7 +123,7 @@ class RabbitMQ:
                 current_status = await self.db.fetch_application_status(chat_id, number, type_, year)
 
                 if current_status is None:
-                    logger.error(f"Failed to get current status from db for {oam_full_string}, user {chat_id}")
+                    logger.error(f"Failed to get current status from db for {oam_full_string}, user {label}")
                     return
 
                 has_changed = current_status != received_status
@@ -128,7 +132,7 @@ class RabbitMQ:
                     # Drop failed refresh requests with log message
                     # But do not update status in DB to avoid mass status rewrite
                     # in case of issues on fetchers
-                    logger.warning(f"[REFRESH FAILED] Failed to refresh status {oam_full_string}, user {chat_id}")
+                    logger.warning(f"[REFRESH FAILED] Failed to refresh status {oam_full_string}, user {label}")
                     return
 
                 # FIXME olegeech: should be fixed on the fetcher side
@@ -142,8 +146,8 @@ class RabbitMQ:
                     return
 
                 if not has_changed and not force_refresh:
-                    logger.info(f"[REFRESH] Status refreshed for {oam_full_string}, user {chat_id}")
-                    logger.debug(f"Status didn't change for {oam_full_string}, user {chat_id}")
+                    logger.info(f"[REFRESH] Status refreshed for {oam_full_string}, user {label}")
+                    logger.debug(f"Status didn't change for {oam_full_string}, user {label}")
                     await self.db.update_last_checked(chat_id, number, type_, year)
                     return
 
@@ -153,7 +157,7 @@ class RabbitMQ:
                         if is_reminder:
                             logger.error(
                                 f"[REMINDER] Failed to to fetch status for {oam_full_string}, "
-                                f"user {chat_id}, status: {received_status}"
+                                f"user {label}, status: {received_status}"
                             )
                             return
                         else:
@@ -165,7 +169,7 @@ class RabbitMQ:
                 if force_refresh:
                     logger.info(
                         f"[FORCED] Received force refresh response for {oam_full_string}, "
-                        f"user {chat_id}, status: {received_status}"
+                        f"user {label}, status: {received_status}"
                     )
 
                 # Get category and status sign
@@ -180,7 +184,7 @@ class RabbitMQ:
 
                     # if a fetch request failed miserably
                     if failed and request_type == "fetch":
-                        logger.warning(f"[FETCH FAILED] Fetch request failed for {oam_full_string}, user {chat_id}")
+                        logger.warning(f"[FETCH FAILED] Fetch request failed for {oam_full_string}, user {label}")
                         notification_text = self._generate_error_message(msg_data, lang)
                     else:
                         # Log changes only if status has changed
@@ -188,12 +192,12 @@ class RabbitMQ:
                             if is_resolved:
                                 logger.info(
                                     f"[RESOLVED][{application_state}] Application {oam_full_string}, "
-                                    f"user {chat_id} has been resolved to {received_status}"
+                                    f"user {label} has been resolved to {received_status}"
                                 )
                             elif not force_refresh:
                                 logger.info(
-                                    f"[CHANGED][{application_state}] Application status for {oam_full_string},"
-                                    f"user {chat_id} has changed to {received_status}"
+                                    f"[CHANGED][{application_state}] Application status for {oam_full_string}, "
+                                    f"user {label} has changed to {received_status}"
                                 )
                         # Log an error if the status couldn't be categorized on a non-failed update message
                         # Here an Admin should probably take a closer look to wtf is happening, might be
@@ -201,7 +205,7 @@ class RabbitMQ:
                         if not category:
                             logger.error(
                                 f"[UNRECOGNIZED STATUS] Could not categorize status: {received_status} "
-                                f"for application {oam_full_string}, user {chat_id}"
+                                f"for application {oam_full_string}, user {label}"
                             )
                             message = message_texts[lang]["application_updated"]
                         else:
@@ -211,7 +215,10 @@ class RabbitMQ:
                         notification_text = f"{message}\n\n{received_status}"
 
                     # notify the user
-                    await notify_user(self.bot, chat_id, notification_text)
+                    await notify_user(
+                        self.bot, chat_id, notification_text,
+                        username=username, first_name=first_name, last_name=last_name,
+                    )
 
     async def on_expiration_message(self, message: aio_pika.IncomingMessage):
         """Async function to handle messages from ExpirationQueue"""
@@ -219,9 +226,13 @@ class RabbitMQ:
             msg_data = json.loads(message.body.decode("utf-8"))
             application_id = msg_data.get("application_id")
             chat_id = msg_data.get("chat_id")
+            username = msg_data.get("username")
+            first_name = msg_data.get("first_name")
+            last_name = msg_data.get("last_name")
             oam_full_string = generate_oam_full_string(msg_data)
+            label = user_label(chat_id, username, first_name, last_name)
             logger.info(
-                f"[EXPIRE] Application {oam_full_string}, user {chat_id}, created at {msg_data['last_updated']} "
+                f"[EXPIRE] Application {oam_full_string}, user {label}, created at {msg_data['last_updated']} "
                 "has been too long in the state NOT_FOUND, expiring"
             )
 
@@ -230,7 +241,10 @@ class RabbitMQ:
                 notification_text = message_texts[lang]["not_found_expired"].format(app_string=oam_full_string)
 
                 # notify the user
-                await notify_user(self.bot, chat_id, notification_text)
+                await notify_user(
+                    self.bot, chat_id, notification_text,
+                    username=username, first_name=first_name, last_name=last_name,
+                )
 
     async def on_service_message(self, message: aio_pika.IncomingMessage):
         """Async function to handle service messages from FetcherMetricsQueue"""
@@ -262,9 +276,13 @@ class RabbitMQ:
         """Publishes a message to fetchers queue, ensuring not to publish duplicates"""
         unique_id = self.generate_unique_id(message)
         oam_full_string = generate_oam_full_string(message)
+        label = user_label(
+            message["chat_id"], message.get("username"),
+            message.get("first_name"), message.get("last_name"),
+        )
         message_tag = (
             f"request_type: {message['request_type']}, {oam_full_string}, "
-            f"user: {message['chat_id']}, last_updated: {message['last_updated']}"
+            f"user: {label}, last_updated: {message['last_updated']}"
         )
         if self.is_message_published(unique_id):
             logger.warning(f"Message {unique_id} {message_tag} has already been published. Skipping.")
