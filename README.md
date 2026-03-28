@@ -4,7 +4,7 @@ A Telegram bot that monitors Czech Ministry of Interior (MVČR) immigration appl
 
 **[Open the bot in Telegram](https://t.me/mvcr_status_rizeni_2024_bot)** - subscribe with your application number and get notified when the status changes.
 
-![Bot Telegram Screenshot](img/bot-tg.png)
+![Bot Telegram Screenshot](img/screenshot.png)
 
 ## Bot Features
 
