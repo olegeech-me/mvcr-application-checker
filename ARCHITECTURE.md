@@ -6,12 +6,13 @@ MVCR Application Status Notifier is a distributed system that monitors Czech Min
 (MVČR) immigration application statuses and notifies users via Telegram.
 
 It supports two application types:
+
 - **OAM** — residency applications filed in the Czech Republic (format: `OAM-12345/TP-2023`)
 - **ZOV** — visa applications submitted at Czech embassies abroad (format: `ISTA202504220001`)
 
 The system consists of two independently deployable services communicating asynchronously through RabbitMQ:
 
-```
+```text
                                     +----------------+
                                     |   PostgreSQL   |
                                     |  (persistent   |
@@ -39,7 +40,6 @@ The system consists of two independently deployable services communicating async
 **Fetcher** scrapes the MVCR website using Selenium and publishes results back via RabbitMQ.
 Multiple fetcher instances can run in parallel, consuming from shared queues.
 
-
 ## 2. Bot Service (`src/bot/`)
 
 Entry point: `src/bot/__main__.py`
@@ -51,7 +51,7 @@ It uses `uvloop` as the event loop policy.
 
 User subscription is a multi-step dialog implemented via `ConversationHandler`:
 
-```
+```text
   /start or /subscribe
          |
          v
@@ -100,32 +100,34 @@ User subscription is a multi-step dialog implemented via `ConversationHandler`:
 ```
 
 There are two additional conversation handlers:
+
 - **Broadcast** (`/admin_broadcast`): `BROADCAST_TEXT → BROADCAST_CONFIRM` — admin sends a message to all users
 - **Reminder** (`/reminder`): `REMINDER_ADD / REMINDER_DELETE` — schedule daily status checks at a specific time
 
 ### 2.2 Command Handlers
 
-| Command            | Description                                                       |
-|--------------------|-------------------------------------------------------------------|
-| `/start`           | Welcome message, language auto-detection, subscribe button        |
-| `/help`            | Usage instructions                                                |
-| `/subscribe`       | Start the subscription dialog (limit: 5 apps per user)            |
-| `/status`          | Show current status of all subscribed applications                |
-| `/unsubscribe`     | Remove a tracked application (inline buttons to pick which one)   |
+| Command            | Description                                                                   |
+|--------------------|-------------------------------------------------------------------------------|
+| `/start`           | Welcome message, language auto-detection, subscribe button                    |
+| `/help`            | Usage instructions                                                            |
+| `/subscribe`       | Start the subscription dialog (limit: 5 apps per user)                        |
+| `/status`          | Show current status of all subscribed applications                            |
+| `/unsubscribe`     | Remove a tracked application (inline buttons to pick which one)               |
 | `/force_refresh`   | Trigger an immediate status check (rate-limited: 5/day, unlimited for admins) |
-| `/lang`            | Switch language (EN, RU, CZ, UA)                                  |
-| `/reminder`        | Add or remove scheduled daily reminders (hour:minute, Prague TZ)  |
-| `/admin_stats`     | Admin only — user/subscription counts                             |
-| `/fetcher_stats`   | Admin only — live fetcher metrics                                 |
-| `/admin_broadcast` | Admin only — send a message to all users                          |
+| `/lang`            | Switch language (EN, RU, CZ, UA)                                              |
+| `/reminder`        | Add or remove scheduled daily reminders (hour:minute, Prague TZ)              |
+| `/admin_stats`     | Admin only — user/subscription counts                                         |
+| `/fetcher_stats`   | Admin only — live fetcher metrics                                             |
+| `/admin_broadcast` | Admin only — send a message to all users                                      |
 
 Rate limiting uses a sliding window of timestamps per user per command (stored in `context.user_data`).
 
 ### 2.3 Application Monitor (Scheduler)
 
-Two background loops run after a 15-second startup delay:
+Three background loops run after a 15-second startup delay:
 
 **ApplicationMonitor** (interval: `SCHEDULER_PERIOD`, default 300s):
+
 1. Queries DB for applications needing a status refresh:
    - Normal applications: not refreshed in `REFRESH_PERIOD` (default 3600s)
    - NOT_FOUND applications: not refreshed in `NOT_FOUND_REFRESH_PERIOD` (default 86400s)
@@ -135,8 +137,22 @@ Two background loops run after a 15-second startup delay:
    expiration messages to `ExpirationQueue`
 
 **ReminderMonitor** (interval: 60s):
+
 1. Queries DB for reminders matching the current hour:minute in Prague timezone
 2. Publishes force-refresh requests to `ApplicationFetchQueue`
+
+**NotificationDispatcher** (interval: `NOTIFY_MONITOR_TICK`, default 60s + on-enqueue wake-up):
+
+1. Atomically claims due rows from the `Notifications` outbox via `FOR UPDATE SKIP LOCKED`,
+   joining `Users` and filtering `is_active = TRUE` so blocked users don't generate retries
+2. Sends each via Telegram, classifies the outcome, finalizes the row
+   (mark delivered / bump attempt with capped exponential backoff / mark user inactive)
+3. Purges delivered rows older than `NOTIFY_DELIVERED_RETENTION_DAYS` (default 1) and any
+   row older than `NOTIFY_PENDING_MAX_AGE_DAYS` (default 30)
+
+The tick is a backstop. The rabbit consumer calls `dispatcher.wake()` immediately after enqueueing
+a notification, so happy-path delivery latency is sub-second instead of bounded by the tick.
+Missed wakes (e.g. dispatcher restart with rows already in the table) recover on the next tick.
 
 ### 2.4 Database Layer
 
@@ -146,21 +162,44 @@ Auto-runs migrations from `db-migrations/` on startup.
 See [Section 7: Database Schema](#7-database-schema) for table definitions.
 
 Key behaviors:
-- `update_application_status()` updates `last_updated` on every check, but only updates
-  `changed_at` when the status text actually changes
+
+- `update_application_status()` is called only when the polled status genuinely changed;
+  it stamps `changed_at` and refreshes the derived (`is_resolved`, `application_state`) fields.
+  The "no change" case takes the cheaper `update_last_checked()` path (refreshes `last_updated` only)
 - `fetch_applications_needing_update()` uses `last_updated` timestamps to determine refresh eligibility
 - `fetch_due_reminders()` matches against current Prague time with minute precision
+
+**Notifications outbox API:**
+
+- `enqueue_notification(chat_id, kind, text, origin_ref)` — single insert, returns row id
+- `claim_due_notifications(limit, lock_window_seconds)` — atomic `UPDATE … RETURNING` with
+  `FOR UPDATE SKIP LOCKED`, joins `Users` filtered by `is_active = TRUE`, forward-shifts
+  `next_attempt_at` by `lock_window_seconds` so a row can't be claimed twice in flight
+- `mark_delivered(notification_id, last_error=None)` — sets `delivered_at = NOW()`
+- `bump_attempt(notification_id, next_attempt_at, last_error)` — increments attempts,
+  reschedules to caller-supplied timestamp (backoff lives in `compute_next_retry_at()`)
+- `purge_old_notifications(delivered_retention_days, pending_max_age_days)` — single `DELETE`
+  covering both retention classes
+
+**User deactivation:**
+
+- `mark_user_inactive(chat_id, reason)` — flipped when Telegram permanently rejects a send
+  (`Forbidden: bot was blocked`, `user is deactivated`, `chat not found`); idempotent
+- `reactivate_user_if_needed(chat_id)` — flipped back on the user's next interaction
+  (called from `_get_user_language()`, which runs on every handler entry); idempotent
 
 ### 2.5 RabbitMQ Integration (Bot Side)
 
 The bot both **publishes** and **consumes** messages.
 
 **Consumes from:**
+
 - `StatusUpdateQueue` (durable) — status results from fetchers
 - `ExpirationQueue` (durable) — expiration requests from its own monitor
 - `FetcherMetricsQueue` (non-durable) — fetcher health/performance metrics
 
 **Publishes to:**
+
 - `ApplicationFetchQueue` — new subscriptions, force refreshes, reminders
 - `RefreshStatusQueue` — periodic refresh requests from ApplicationMonitor
 
@@ -169,13 +208,23 @@ TTL = `REQUEUE_THRESHOLD_SECONDS`, default 3600s) prevents publishing duplicate 
 When a response arrives, its ID is removed from the cache, allowing re-requests.
 
 **Status update processing (`on_update_message`):**
+
 1. Discard if application number is not found in the status text (misroute guard)
 2. If failed refresh → log and drop (prevents mass status overwrites during fetcher issues)
-3. If failed initial fetch from a reminder → tolerate silently
-4. If status unchanged and not a force refresh → update `last_updated` only, no notification
-5. If status changed or force refresh → update DB, categorize status, notify user
-6. If application reached a final state → mark `is_resolved = TRUE` to stop monitoring
+3. If failed initial fetch from a reminder → tolerate silently (user didn't initiate the lookup)
+4. If status unchanged and not a force refresh → `update_last_checked` only, no notification
+5. If failed initial fetch (non-reminder) → freeze the row (`is_resolved = TRUE`) and
+   enqueue a `failed_fetch` notification
+6. If status changed → `update_application_status`, enqueue a `status_change` notification
+7. If unchanged but force-refreshed → enqueue a `force_refresh_unchanged` notification
 
+In all enqueue cases, the consumer calls `dispatcher.wake()` immediately after the insert so
+delivery happens within milliseconds. The dispatcher (§2.3) owns the actual Telegram send,
+retries, and dead-user handling. This is the transactional outbox pattern: the consumer's job
+ends at "row is durably in the DB" — delivery is asynchronous and survives bot restarts.
+
+**Expiration processing (`on_expiration_message`):** marks the row resolved and enqueues
+an `expiration` notification on the same outbox.
 
 ## 3. Fetcher Service (`src/fetcher/`)
 
@@ -199,12 +248,14 @@ Firefox WebDriver running in a virtual display (Xvfb, 1420x1080):
 ### 3.2 Form Filling
 
 **OAM applications** — fill 4 fields on the form:
+
 1. `proceedings.referenceNumber` — application number
 2. `proceedings.additionalSuffix` — suffix (usually "0")
 3. `proceedings.category` — React-Select dropdown for type (TP, DP, etc.)
 4. Year — React-Select dropdown, scrolling to find the right option
 
 **ZOV applications** — fill 1 field:
+
 1. `visaApplicationNumber` — the full visa number
 
 After filling, the form is submitted via JavaScript click on the submit button.
@@ -216,6 +267,7 @@ Each fetch attempt retries up to 3 times with random backoff (1-20s) at the brow
 ### 3.3 Application Processor
 
 Consumes from two queues:
+
 - `ApplicationFetchQueue` → `fetch_callback()` — new subscriptions, force refreshes
 - `RefreshStatusQueue` → `refresh_callback()` — periodic refreshes
 
@@ -227,7 +279,8 @@ applications by `(number, type, year)` key. Duplicate requests for the same app 
 before processing. This spreads load across time and avoids hammering the MVCR website.
 
 **Request flow:**
-```
+
+```text
   Message arrives from queue
            |
            v
@@ -264,12 +317,11 @@ Runs a background loop (interval: `METRICS_SEND_INTERVAL`, default 30s):
 
 Bot displays these via `/fetcher_stats` command from an in-memory TTL cache (300s).
 
-
 ## 4. Message Flow & Queue Architecture
 
 ### 4.1 Queues
 
-```
+```text
   Bot                            RabbitMQ                         Fetcher(s)
   ===                            ========                         ==========
 
@@ -292,7 +344,7 @@ Bot displays these via `/fetcher_stats` command from an in-memory TTL cache (300
 
 ### 4.2 Message Lifecycle: Subscription to Notification
 
-```
+```text
   1. User sends /subscribe, completes dialog
   2. Bot inserts user + application into PostgreSQL
   3. Bot publishes fetch request to ApplicationFetchQueue
@@ -306,13 +358,15 @@ Bot displays these via `/fetcher_stats` command from an in-memory TTL cache (300
                          v
   8. Bot consumes status update
   9. Bot compares with current_status in DB
- 10. If changed (or force_refresh): update DB, notify user via Telegram
- 11. If resolved: mark is_resolved=TRUE, stop future monitoring
+ 10. If changed (or force_refresh): update DB, enqueue row in Notifications outbox,
+     wake the dispatcher
+ 11. NotificationDispatcher claims the row, sends via Telegram, marks delivered
+ 12. If resolved: mark is_resolved=TRUE, stop future monitoring
 ```
 
 ### 4.3 Message Lifecycle: Periodic Refresh
 
-```
+```text
   1. ApplicationMonitor wakes up every 300s
   2. Queries DB for applications past their refresh interval
   3. Publishes refresh requests to RefreshStatusQueue (with dedup check)
@@ -324,9 +378,8 @@ Bot displays these via `/fetcher_stats` command from an in-memory TTL cache (300
                          |
                          v
   7. Bot processes: if status unchanged, just update last_updated timestamp
-  8. If status changed: update DB + application_state, notify user
+  8. If status changed: update DB + application_state, enqueue notification, wake dispatcher
 ```
-
 
 ## 5. Application Lifecycle & States
 
@@ -334,20 +387,20 @@ Bot displays these via `/fetcher_stats` command from an in-memory TTL cache (300
 
 Status text from the MVCR website is categorized by keyword matching:
 
-| State          | Keywords (Czech/English)                                     | Emoji | Final? |
-|----------------|--------------------------------------------------------------|-------|--------|
-| `NOT_FOUND`    | "nebylo nalezeno", "not found"                               | ⚪️    | No*    |
-| `IN_PROGRESS`  | "zpracovává se", "being processed"                           | 🟡    | No     |
-| `PRE_APPROVED` | "předběžně vyhodnoceno kladně", "preliminarily assessed..."  | ⭐     | Yes    |
-| `APPROVED`     | "bylo povoleno", "rizeni-povoleno"                           | 🟢    | Yes    |
-| `DENIED`       | "bylo nepovoleno", "zamítlo", "zastavilo", "rejected"        | 🔴    | Yes    |
-| `SUSPENDED`    | "přerušeno", "has been suspended"                            | 🟠    | No     |
+| State          | Keywords (Czech/English)                                      | Emoji | Final? |
+|----------------|---------------------------------------------------------------|-------|--------|
+| `NOT_FOUND`    | "nebylo nalezeno", "not found"                                | ⚪️    | No*    |
+| `IN_PROGRESS`  | "zpracovává se", "being processed"                            | 🟡    | No     |
+| `PRE_APPROVED` | "předběžně vyhodnoceno kladně", "preliminarily assessed..."   | ⭐️    | Yes    |
+| `APPROVED`     | "bylo povoleno", "rizeni-povoleno"                            | 🟢    | Yes    |
+| `DENIED`       | "bylo nepovoleno", "zamítlo", "zastavilo", "rejected"         | 🔴    | Yes    |
+| `SUSPENDED`    | "přerušeno", "has been suspended"                             | 🟠    | No     |
 
 *NOT_FOUND expires after `NOT_FOUND_MAX_DAYS` (default 30 days).
 
 ### 5.2 State Transitions & Refresh Intervals
 
-```
+```text
   New subscription
          |
          v
@@ -368,16 +421,28 @@ Status text from the MVCR website is categorized by keyword matching:
 
 When `is_resolved = TRUE`, the application is excluded from all future refresh cycles.
 
-
 ## 6. Error Handling & Retries
 
 ### Bot Layer
-- **Telegram API:** Exponential backoff on `NetworkError`, `TimedOut`, `RetryAfter` (up to 5 attempts)
+
+- **Telegram send (per attempt):** Exponential backoff on `NetworkError`, `TimedOut`,
+  `RetryAfter` (up to 5 attempts inside a single send). The send returns a verdict —
+  `ok`, `dead_user`, `permanent_other`, or `retryable_gave_up` — which the dispatcher
+  uses to decide what to do next (see below)
+- **Telegram send (across attempts via outbox):** The dispatcher persists state and retries
+  a row using capped exponential backoff (`NOTIFY_RETRY_BASE_INTERVAL` × 2^attempts,
+  capped at `NOTIFY_RETRY_MAX_INTERVAL`). There is no per-row attempt cap — the absolute
+  age cap (`NOTIFY_PENDING_MAX_AGE_DAYS`, default 30d) bounds retry duration instead
+- **Permanent Telegram errors** (`Forbidden: bot was blocked`, `Forbidden: user is deactivated`,
+  `Bad Request: chat not found`) flip `Users.is_active = FALSE`. The row stays pending.
+  The dispatcher's claim query joins on `is_active = TRUE`, so these rows become invisible
+  until the user reactivates by interacting with the bot
 - **PostgreSQL:** Connection retries with exponential backoff (up to 5 attempts, starting at 2s)
 - **RabbitMQ:** Connection retries (up to 5 attempts, 5s delay)
 - **Bot startup:** Polling start retried up to 15 times on `NetworkError`
 
 ### Fetcher Layer
+
 - **Browser-level:** 3 retries per fetch with random backoff (1-20s between attempts)
 - **Queue-level:** Failed messages requeued with `x-retry-count` header, up to `MAX_RETRIES` (default 10).
   After exceeding max retries, an error status is published to `StatusUpdateQueue`
@@ -386,53 +451,74 @@ When `is_resolved = TRUE`, the application is excluded from all future refresh c
   the result is treated as a failure and requeued
 
 ### Deduplication
+
 - **Bot publish side:** TTL cache prevents publishing the same request within `REQUEUE_THRESHOLD_SECONDS`
 - **Bot consume side:** Mismatched application numbers in status responses are silently dropped
 - **Fetcher side:** Processing locks prevent concurrent processing of the same application
 
-
 ## 7. Database Schema
 
-```
-  +-------------------+       +------------------------+       +-------------------+
-  |      Users        |       |     Applications       |       |     Reminders     |
-  +-------------------+       +------------------------+       +-------------------+
-  | user_id      (PK) |<--+   | application_id    (PK) |<--+   | reminder_id  (PK) |
-  | chat_id  (UNIQUE) |   +-->| user_id           (FK) |   +-->| application_id(FK)|
-  | username           |       | application_number     |       |   ON DELETE CASCADE|
-  | first_name         |       | application_suffix     |       | user_id       (FK)|
-  | last_name          |       | application_type       |       | reminder_time     |
-  | language (def EN)  |       | application_year       |       | created_at        |
-  +-------------------+       | current_status (1000)  |       +-------------------+
-                              | application_state (50) |
-                              | created_at             |       +-------------------+
-                              | changed_at             |       | schema_migrations |
-                              | last_updated           |       +-------------------+
-                              | is_resolved (bool)     |       | id           (PK) |
-                              +------------------------+       | filename (UNIQUE) |
-                                                               | applied_at        |
-                                                               +-------------------+
+```text
+  +----------------------+       +------------------------+       +-------------------+
+  |        Users         |       |     Applications       |       |     Reminders     |
+  +----------------------+       +------------------------+       +-------------------+
+  | user_id         (PK) |<--+   | application_id    (PK) |<--+   | reminder_id  (PK) |
+  | chat_id     (UNIQUE) |<-+|   | user_id           (FK) |   +-->| application_id(FK)|
+  | username             |  ||   | application_number     |   |   |   ON DELETE CASCADE|
+  | first_name           |  |+-->| application_suffix     |   |   | user_id       (FK)|
+  | last_name            |  |    | application_type       |   |   | reminder_time     |
+  | language (def EN)    |  |    | application_year       |   |   | created_at        |
+  | is_active (def TRUE) |  |    | current_status (1000)  |   |   +-------------------+
+  | deactivated_at       |  |    | application_state (50) |   |
+  | deactivation_reason  |  |    | created_at             |   |   +-------------------+
+  +----------------------+  |    | changed_at             |   |   |   Notifications   |
+                            |    | last_updated           |   |   +-------------------+
+                            |    | is_resolved (bool)     |   |   | id           (PK) |
+                            |    +------------------------+   |   | chat_id (FK)------+
+                            |                                 |   | kind              |
+                            +---------------------------------+   | text              |
+                                                                  | origin_ref        |
+                            +-------------------+                 | created_at        |
+                            | schema_migrations |                 | delivered_at      |
+                            +-------------------+                 | attempts          |
+                            | id           (PK) |                 | next_attempt_at   |
+                            | filename (UNIQUE) |                 | last_error        |
+                            | applied_at        |                 +-------------------+
+                            +-------------------+
 ```
 
 Key fields:
+
 - `current_status` — raw HTML from the MVCR website (up to 1000 chars)
 - `application_state` — categorized state: NOT_FOUND, IN_PROGRESS, PRE_APPROVED, APPROVED, DENIED, SUSPENDED, UNKNOWN
 - `changed_at` — updated only when status text changes
 - `last_updated` — updated on every successful check (even if status unchanged)
 - `is_resolved` — when TRUE, application is excluded from all refresh cycles
 - `reminder_time` — TIME type, matched against current Prague time each minute
-
+- `Users.is_active` — flipped to FALSE when Telegram permanently rejects sends to this chat;
+  flipped back to TRUE on next interaction. The dispatcher's claim query filters on this so
+  blocked users don't accumulate retries
+- `Notifications.kind` — `status_change`, `force_refresh_unchanged`, `failed_fetch`,
+  `expiration` (free-form string; the dispatcher is kind-agnostic)
+- `Notifications.text` — pre-rendered, ready for Telegram. Rendering happens at enqueue time
+  using the user's language, so language switches don't retroactively change pending messages
+- `Notifications.origin_ref` — optional caller-provided reference (e.g. `application_id`)
+  for forensic correlation
+- `Notifications.next_attempt_at` — when the row becomes eligible for delivery; the claim
+  query forward-shifts this on claim to act as an in-flight lock
 
 ## 8. Internationalization (i18n)
 
 Four languages: English (EN), Russian (RU), Czech (CZ), Ukrainian (UA).
 
 Text files live in `src/bot/texts/{EN,RU,CZ,UA}/`:
+
 - `messages.json` — all bot message templates
 - `buttons.json` — inline button labels
 - `commands.json` — command descriptions for Telegram menu
 
 Language resolution:
+
 1. Cached in `context.user_data["lang"]` for the session
 2. Fetched from `Users.language` column in DB
 3. Auto-detected from Telegram user locale via IETF mapping (`en→EN`, `ru→RU`, `cs→CZ`, `uk→UA`)
@@ -440,12 +526,12 @@ Language resolution:
 
 Users can switch language at any time via `/lang`.
 
-
 ## 9. Deployment
 
 ### 9.1 Docker Compose
 
 Two separate compose files for independent scaling:
+
 - `docker-compose-bot.yaml` — PostgreSQL + RabbitMQ + Bot service
 - `docker-compose-fetcher.yaml` — Fetcher service (can be scaled with multiple replicas)
 
@@ -473,23 +559,30 @@ increases throughput. Each fetcher reports metrics independently via `fetcher_id
 ### 9.6 Key Environment Variables
 
 **Bot:**
-| Variable                    | Default         | Description                                    |
-|-----------------------------|-----------------|------------------------------------------------|
-| `TELEGRAM_BOT_TOKEN`        | —               | Telegram bot API token                         |
-| `ADMIN_CHAT_IDS`            | —               | Comma-separated admin chat IDs                 |
-| `REFRESH_PERIOD`            | 3600            | Seconds between status refreshes               |
-| `SCHEDULER_PERIOD`          | 300             | Seconds between monitor wake-ups               |
-| `NOT_FOUND_REFRESH_PERIOD`  | 86400           | Seconds between NOT_FOUND refreshes            |
-| `NOT_FOUND_MAX_DAYS`        | 30              | Days before NOT_FOUND apps expire              |
-| `REQUEUE_THRESHOLD_SECONDS` | 3600            | TTL for deduplication cache                    |
+
+| Variable                          | Default | Description                                                                                  |
+|-----------------------------------|---------|----------------------------------------------------------------------------------------------|
+| `TELEGRAM_BOT_TOKEN`              | —       | Telegram bot API token                                                                       |
+| `ADMIN_CHAT_IDS`                  | —       | Comma-separated admin chat IDs                                                               |
+| `REFRESH_PERIOD`                  | 3600    | Seconds between status refreshes                                                             |
+| `SCHEDULER_PERIOD`                | 300     | Seconds between monitor wake-ups                                                             |
+| `NOT_FOUND_REFRESH_PERIOD`        | 86400   | Seconds between NOT_FOUND refreshes                                                          |
+| `NOT_FOUND_MAX_DAYS`              | 30      | Days before NOT_FOUND apps expire                                                            |
+| `REQUEUE_THRESHOLD_SECONDS`       | 3600    | TTL for deduplication cache                                                                  |
+| `NOTIFY_RETRY_BASE_INTERVAL`      | 300     | Base backoff (s) between outbox retries; also acts as the in-flight lock window              |
+| `NOTIFY_RETRY_MAX_INTERVAL`       | 3600    | Backoff cap (s)                                                                              |
+| `NOTIFY_MONITOR_TICK`             | 60      | Dispatcher poll interval (s); the wake-up signal short-circuits this for happy-path delivery |
+| `NOTIFY_DELIVERED_RETENTION_DAYS` | 1       | Days delivered rows survive before purge                                                     |
+| `NOTIFY_PENDING_MAX_AGE_DAYS`     | 30      | Hard upper bound on pending row age; absolute retry budget                                   |
 
 **Fetcher:**
-| Variable                | Default   | Description                                       |
-|-------------------------|-----------|---------------------------------------------------|
-| `URL`                   | ipc.gov.cz| MVCR website URL                                  |
-| `JITTER_SECONDS`        | 900       | Max random delay before refresh requests           |
-| `MAX_RETRIES`           | 10        | Max requeue attempts per failed message            |
-| `MAX_MESSAGES`           | 10        | RabbitMQ prefetch count per fetcher                |
-| `PAGE_LOAD_LIMIT_SECONDS`| 20       | Selenium page load timeout                         |
-| `CAPTCHA_WAIT_SECONDS`  | 120       | Max wait for manual captcha solving                |
-| `METRICS_SEND_INTERVAL` | 30        | Seconds between metrics publications               |
+
+| Variable                  | Default    | Description                                |
+|---------------------------|------------|--------------------------------------------|
+| `URL`                     | ipc.gov.cz | MVCR website URL                           |
+| `JITTER_SECONDS`          | 900        | Max random delay before refresh requests   |
+| `MAX_RETRIES`             | 10         | Max requeue attempts per failed message    |
+| `MAX_MESSAGES`            | 10         | RabbitMQ prefetch count per fetcher        |
+| `PAGE_LOAD_LIMIT_SECONDS` | 20         | Selenium page load timeout                 |
+| `CAPTCHA_WAIT_SECONDS`    | 120        | Max wait for manual captcha solving        |
+| `METRICS_SEND_INTERVAL`   | 30         | Seconds between metrics publications       |
