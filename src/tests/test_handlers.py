@@ -132,6 +132,7 @@ def test_parse_zov_number(input_str, expected):
 def test_get_user_language(user_lang_db, user_lang_context, expected_lang):
     db_mock = Mock()
     db_mock.fetch_user_language = AsyncMock(return_value=user_lang_db)
+    db_mock.reactivate_user_if_needed = AsyncMock(return_value=False)
 
     with patch("bot.handlers.db", db_mock), \
          patch("bot.handlers._sync_user_profile", new_callable=AsyncMock):
@@ -297,6 +298,7 @@ def test_get_user_language_triggers_sync_on_first_call():
     """First call (no cached lang) triggers _sync_user_profile"""
     mock_db = Mock()
     mock_db.fetch_user_language = AsyncMock(return_value="RU")
+    mock_db.reactivate_user_if_needed = AsyncMock(return_value=False)
 
     with patch("bot.handlers.db", mock_db), \
          patch("bot.handlers._sync_user_profile", new_callable=AsyncMock) as mock_sync:
@@ -311,7 +313,11 @@ def test_get_user_language_triggers_sync_on_first_call():
 
 def test_get_user_language_skips_sync_on_cached():
     """Second call (cached lang) does NOT trigger _sync_user_profile"""
-    with patch("bot.handlers._sync_user_profile", new_callable=AsyncMock) as mock_sync:
+    mock_db = Mock()
+    mock_db.reactivate_user_if_needed = AsyncMock(return_value=False)
+
+    with patch("bot.handlers.db", mock_db), \
+         patch("bot.handlers._sync_user_profile", new_callable=AsyncMock) as mock_sync:
         update = Mock()
         update.effective_chat.id = 100
         context = Mock()
@@ -319,6 +325,25 @@ def test_get_user_language_skips_sync_on_cached():
 
         asyncio.run(_get_user_language(update, context))
         mock_sync.assert_not_called()
+
+
+def test_get_user_language_reactivates_on_every_call():
+    """reactivate_user_if_needed must run on every call, including the cached path,
+    so a user who blocked then unblocked the bot starts receiving notifications again
+    """
+    mock_db = Mock()
+    mock_db.reactivate_user_if_needed = AsyncMock(return_value=False)
+
+    with patch("bot.handlers.db", mock_db), \
+         patch("bot.handlers._sync_user_profile", new_callable=AsyncMock):
+        update = Mock()
+        update.effective_chat.id = 42
+        context = Mock()
+        context.user_data = {"lang": "EN"}
+
+        asyncio.run(_get_user_language(update, context))
+
+    mock_db.reactivate_user_if_needed.assert_awaited_once_with(42)
 
 
 # ---------------------------------------------------------------------------
@@ -1246,3 +1271,48 @@ async def test_broadcast_to_users_retries_exhausted():
     summary_text = bot.send_message.call_args_list[-1].args[1]
     assert "0 delivered" in summary_text
     assert "1 failed" in summary_text
+
+
+@pytest.mark.asyncio
+async def test_broadcast_marks_dead_user_inactive():
+    """A real Forbidden('bot was blocked by the user') flips the user inactive
+    and stops retrying — single attempt only
+    """
+    from telegram.error import Forbidden
+
+    bot = AsyncMock()
+    bot.send_message = AsyncMock(
+        side_effect=[Forbidden("Forbidden: bot was blocked by the user"), None]
+    )
+    db_mock = AsyncMock()
+    db_mock.mark_user_inactive = AsyncMock(return_value=True)
+
+    with patch("bot.handlers.db", db_mock):
+        await _broadcast_to_users(bot, admin_chat_id=999, chat_ids=[100], message="Hi")
+
+    db_mock.mark_user_inactive.assert_awaited_once()
+    assert db_mock.mark_user_inactive.call_args[0][0] == 100
+    # exactly 1 user attempt + 1 admin summary = 2 sends (no retries on terminal)
+    assert bot.send_message.call_count == 2
+    summary_text = bot.send_message.call_args_list[-1].args[1]
+    assert "1 failed" in summary_text
+
+
+@pytest.mark.asyncio
+async def test_broadcast_does_not_mark_inactive_on_non_dead_badrequest():
+    """A BadRequest that is NOT in the dead-user hint list (e.g. message too long)
+    must not flip the user inactive — it's a permanent_other error, not a dead chat
+    """
+    from telegram.error import BadRequest
+
+    bot = AsyncMock()
+    bot.send_message = AsyncMock(
+        side_effect=[BadRequest("Bad Request: message is too long"), None]
+    )
+    db_mock = AsyncMock()
+    db_mock.mark_user_inactive = AsyncMock()
+
+    with patch("bot.handlers.db", db_mock):
+        await _broadcast_to_users(bot, admin_chat_id=999, chat_ids=[100], message="Hi")
+
+    db_mock.mark_user_inactive.assert_not_called()

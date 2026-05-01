@@ -5,11 +5,19 @@ import re
 import time
 
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, BotCommand, BotCommandScopeChat, ForceReply
-from telegram.error import RetryAfter, TimedOut, NetworkError
+from telegram.error import (
+    RetryAfter,
+    TimedOut,
+    NetworkError,
+    Forbidden,
+    BadRequest,
+    ChatMigrated,
+)
 from telegram.ext import ContextTypes, ConversationHandler
-from bot.loader import loader, ADMIN_CHAT_IDS, REFRESH_PERIOD, FULL_VERSION
+from bot.loader import loader
+from bot.config import ADMIN_CHAT_IDS, REFRESH_PERIOD, FULL_VERSION
 from bot.texts import button_texts, message_texts, commands_description
-from bot.utils import generate_oam_full_string, user_label
+from bot.utils import generate_oam_full_string, user_label, classify_send_error
 
 SUBSCRIPTIONS_LIMIT = 5
 BUTTON_WAIT_SECONDS = 1
@@ -52,12 +60,19 @@ async def _set_menu_commands(update: Update, context: ContextTypes.DEFAULT_TYPE,
 
 
 async def _get_user_language(update, context):
-    """Fetch user language preference and sync profile on first call per session"""
+    """Fetch user language preference and sync profile on first call per session
+
+    Also reactivates the user on every interaction so that someone who blocked the
+    bot and unblocked it gets background notifications again automatically
+    """
+    chat_id = update.effective_chat.id
+    await db.reactivate_user_if_needed(chat_id)
+
     user_lang = context.user_data.get("lang")
 
     if not user_lang:
         await _sync_user_profile(update)
-        user_lang = await db.fetch_user_language(update.effective_chat.id)
+        user_lang = await db.fetch_user_language(chat_id)
         if not user_lang:
             # Get the language from user locale and try to match
             # it against supported languages
@@ -175,8 +190,11 @@ async def create_subscription(update, app_data, lang="EN"):
             int(app_data["year"]),
         ):
             request = create_request(
-                chat.id, app_data,
-                username=chat.username, first_name=chat.first_name, last_name=chat.last_name,
+                chat.id,
+                app_data,
+                username=chat.username,
+                first_name=chat.first_name,
+                last_name=chat.last_name,
             )
             await rabbit.publish_message(request)
             await message.reply_text(message_texts[lang]["dialog_completion"])
@@ -190,8 +208,10 @@ async def create_subscription(update, app_data, lang="EN"):
 def clean_sub_context(context):
     """Wipes temporary subscription data from user_data context"""
     keys_to_delete = [
-        "application_number", "application_suffix",
-        "application_type", "application_year",
+        "application_number",
+        "application_suffix",
+        "application_type",
+        "application_year",
         "application_source",
     ]
 
@@ -284,13 +304,9 @@ async def _show_source_selection(update: Update, context: ContextTypes.DEFAULT_T
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     if edit:
-        await update.callback_query.edit_message_text(
-            message_texts[lang]["dialog_source"], reply_markup=reply_markup
-        )
+        await update.callback_query.edit_message_text(message_texts[lang]["dialog_source"], reply_markup=reply_markup)
     else:
-        await get_effective_message(update).reply_text(
-            message_texts[lang]["dialog_source"], reply_markup=reply_markup
-        )
+        await get_effective_message(update).reply_text(message_texts[lang]["dialog_source"], reply_markup=reply_markup)
     return SOURCE
 
 
@@ -492,12 +508,8 @@ async def _sync_user_profile(update, lang="EN"):
         await db.insert_user(chat.id, chat.first_name, chat.username, chat.last_name, lang=lang)
         return
 
-    if (profile["username"] != chat.username
-            or profile["first_name"] != chat.first_name
-            or profile["last_name"] != chat.last_name):
-        logger.info(
-            f"Profile changed for {user_label(chat.id, chat.username, chat.first_name, chat.last_name)}, updating DB"
-        )
+    if profile["username"] != chat.username or profile["first_name"] != chat.first_name or profile["last_name"] != chat.last_name:
+        logger.info(f"Profile changed for {user_label(chat.id, chat.username, chat.first_name, chat.last_name)}, updating DB")
         await db.update_user_profile(chat.id, chat.username, chat.first_name, chat.last_name)
 
 
@@ -660,8 +672,12 @@ async def _publish_force_request(update, caller, lang, app_details):
     try:
         chat = update.effective_chat
         request = create_request(
-            chat.id, app_details, True,
-            username=chat.username, first_name=chat.first_name, last_name=chat.last_name,
+            chat.id,
+            app_details,
+            True,
+            username=chat.username,
+            first_name=chat.first_name,
+            last_name=chat.last_name,
         )
         oam_full_string = generate_oam_full_string(request)
         logger.info(f"Publishing force refresh for {oam_full_string}, user: {user_info(update)}")
@@ -784,19 +800,35 @@ async def admin_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     user_count = await db.count_users_total()
     subscribed_users = await db.count_subscribed_users()
     active_users = await db.count_active_users()
+    inactive_users = await db.count_inactive_users()
     subscriptions_count = await db.count_all_subscriptions()
     active_subscriptions_count = await db.count_all_subscriptions(active_only=True)
     reminders_count = await db.count_all_reminders()
+    pending_notifications, oldest_pending_age = await db.count_pending_notifications()
+    pending_age_str = _format_pending_age(oldest_pending_age) if pending_notifications else "–"
 
     await update.message.reply_text(
         f"👥 Total users: <b>{user_count}</b>\n"
         f"✉️ Subscribed users: <b>{subscribed_users}</b>\n"
         f"🔍 Users with active (non-resolved) subscriptions: <b>{active_users}</b>\n"
+        f"🚫 Inactive users (blocked / deactivated chats): <b>{inactive_users}</b>\n"
         f"📑 Total subscriptions: <b>{subscriptions_count}</b>\n"
         f"🟡 Active (non-resolved) subscriptions: <b>{active_subscriptions_count}</b>\n"
         f"⏰ Total reminders set up: <b>{reminders_count}</b>\n"
+        f"📨 Pending notifications: <b>{pending_notifications}</b> (oldest: {pending_age_str})\n"
         f"🛠️ Current version: <i>{FULL_VERSION}</i>\n"
     )
+
+
+def _format_pending_age(seconds):
+    """Render seconds as a compact human duration for /admin_stats"""
+    if seconds < 60:
+        return f"{seconds}s"
+    if seconds < 3600:
+        return f"{seconds // 60}m"
+    if seconds < 86400:
+        return f"{seconds // 3600}h{(seconds % 3600) // 60}m"
+    return f"{seconds // 86400}d{(seconds % 86400) // 3600}h"
 
 
 # handler for /fetcher_stats
@@ -893,10 +925,20 @@ async def _broadcast_to_users(bot, admin_chat_id, chat_ids, message):
             except RetryAfter as e:
                 delay = e.retry_after
                 logger.warning(f"Broadcast RetryAfter for chat_id {chat_id}: waiting {delay}s")
+            # Forbidden / BadRequest / ChatMigrated must be caught BEFORE NetworkError —
+            # BadRequest is a subclass of NetworkError in PTB v20.5
+            except (Forbidden, BadRequest, ChatMigrated) as e:
+                verdict = classify_send_error(e)
+                logger.warning(f"Broadcast terminal {type(e).__name__} for chat_id {chat_id}, verdict={verdict}: {e}")
+                if verdict == "dead_user":
+                    await db.mark_user_inactive(chat_id, "broadcast send returned dead_user")
+                failed += 1
+                sent = True  # permanent failure, don't retry
+                break
             except (TimedOut, NetworkError) as e:
                 logger.warning(f"Broadcast {type(e).__name__} for chat_id {chat_id}: retry {attempt + 1}/{max_retries}")
             except Exception as e:
-                logger.error(f"Broadcast failed for chat_id {chat_id}: {e}")
+                logger.error(f"Broadcast failed for chat_id {chat_id}: {e!r}")
                 failed += 1
                 sent = True  # permanent failure, don't retry
                 break
@@ -930,9 +972,7 @@ async def admin_broadcast_confirm(update: Update, context: ContextTypes.DEFAULT_
         logger.warning(f"📢 Admin broadcast message was issued to all users by {user_info(update)}")
         await query.edit_message_text(f"Broadcast started, sending to {len(chat_ids)} users...")
 
-        asyncio.create_task(
-            _broadcast_to_users(context.bot, query.message.chat_id, chat_ids, user_message)
-        )
+        asyncio.create_task(_broadcast_to_users(context.bot, query.message.chat_id, chat_ids, user_message))
     elif query.data == "cancel_broadcast":
         await query.edit_message_text("Broadcast canceled.")
 

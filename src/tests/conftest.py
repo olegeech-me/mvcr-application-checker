@@ -37,11 +37,12 @@ def make_db_with_mock_pool():
 
 
 def make_rabbit():
-    """Create a RabbitMQ instance with mocked bot, db, metrics, and exchange"""
+    """Create a RabbitMQ instance with mocked bot, db, metrics, dispatcher, and exchange"""
     bot = Mock()
     db = AsyncMock()
     metrics = Mock()
-    rabbit = RabbitMQ("host", "user", "pass", bot, db, 300, metrics, None)
+    dispatcher = Mock()
+    rabbit = RabbitMQ("host", "user", "pass", bot, db, 300, metrics, None, dispatcher)
     rabbit.default_exchange = AsyncMock()
     return rabbit
 

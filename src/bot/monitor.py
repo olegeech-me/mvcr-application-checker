@@ -1,10 +1,28 @@
 import asyncio
 import logging
-from datetime import timedelta
-from bot.loader import REFRESH_PERIOD, SCHEDULER_PERIOD, NOT_FOUND_REFRESH_PERIOD, NOT_FOUND_MAX_DAYS
-from bot.utils import generate_oam_full_string, user_label_short
+from datetime import datetime, timedelta, timezone
+from bot.config import (
+    REFRESH_PERIOD,
+    SCHEDULER_PERIOD,
+    NOT_FOUND_REFRESH_PERIOD,
+    NOT_FOUND_MAX_DAYS,
+    NOTIFY_RETRY_BASE_INTERVAL,
+    NOTIFY_RETRY_MAX_INTERVAL,
+    NOTIFY_MONITOR_TICK,
+    NOTIFY_DELIVERED_RETENTION_DAYS,
+    NOTIFY_PENDING_MAX_AGE_DAYS,
+)
+from bot.utils import generate_oam_full_string, notify_user, user_label_short
 
 logger = logging.getLogger(__name__)
+
+
+def compute_next_retry_at(current_attempts, base_interval, max_interval, now=None):
+    """Capped exponential backoff: NOW + min(base * 2^current_attempts, max)"""
+    if now is None:
+        now = datetime.now(timezone.utc)
+    delay = min(base_interval * (2**current_attempts), max_interval)
+    return now + timedelta(seconds=delay)
 
 
 class ApplicationMonitor:
@@ -58,9 +76,7 @@ class ApplicationMonitor:
             }
             oam_full_string = generate_oam_full_string(app)
             label = user_label_short(app["chat_id"], app["username"], app["first_name"])
-            logger.info(
-                f"Scheduling status refresh for {oam_full_string}, user: {label}, last_updated: {app['last_updated']}"
-            )
+            logger.info(f"Scheduling status refresh for {oam_full_string}, user: {label}, last_updated: {app['last_updated']}")
             await self.rabbit.publish_message(message, routing_key="RefreshStatusQueue")
 
     async def expire_stale_not_found_applications(self):
@@ -89,6 +105,99 @@ class ApplicationMonitor:
             label = user_label_short(app["chat_id"], app["username"], app["first_name"])
             logger.info(f"Scheduling expiration for {oam_full_string}, user: {label}, created_at: {app['created_at']}")
             await self.rabbit.publish_message(message, routing_key="ExpirationQueue")
+
+    def stop(self):
+        self.shutdown_event.set()
+
+
+class NotificationDispatcher:
+    """Drain the Notifications outbox: claim due rows, send, route the verdict
+
+      ok                → mark_delivered
+      retryable_gave_up → bump_attempt with capped exponential backoff
+      dead_user         → mark_user_inactive; row stays pending so reactivation
+                          re-exposes it on a later tick
+      permanent_other   → mark_delivered with last_error to break the loop
+    """
+
+    def __init__(self, db, bot):
+        self.db = db
+        self.bot = bot
+        self.shutdown_event = asyncio.Event()
+        self.wakeup_event = asyncio.Event()
+
+    def wake(self):
+        """Signal the dispatcher that a new row was enqueued"""
+        self.wakeup_event.set()
+
+    async def start(self):
+        logger.info(
+            f"Notification dispatcher started, tick={NOTIFY_MONITOR_TICK}s, "
+            f"lock_window={NOTIFY_RETRY_BASE_INTERVAL}s, "
+            f"backoff base={NOTIFY_RETRY_BASE_INTERVAL}s, max={NOTIFY_RETRY_MAX_INTERVAL}s, "
+            f"delivered_retention={NOTIFY_DELIVERED_RETENTION_DAYS}d, "
+            f"pending_max_age={NOTIFY_PENDING_MAX_AGE_DAYS}d"
+        )
+        while not self.shutdown_event.is_set():
+            await self.deliver_pending()
+            await self.db.purge_old_notifications(
+                NOTIFY_DELIVERED_RETENTION_DAYS, NOTIFY_PENDING_MAX_AGE_DAYS,
+            )
+            self.wakeup_event.clear()
+            await self._wait_for_work()
+
+    async def _wait_for_work(self):
+        """Block until shutdown, a wake() call, or NOTIFY_MONITOR_TICK"""
+        shutdown_task = asyncio.create_task(self.shutdown_event.wait())
+        wakeup_task = asyncio.create_task(self.wakeup_event.wait())
+        try:
+            await asyncio.wait(
+                {shutdown_task, wakeup_task},
+                timeout=NOTIFY_MONITOR_TICK,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+        finally:
+            shutdown_task.cancel()
+            wakeup_task.cancel()
+
+    async def deliver_pending(self):
+        """Dispatch pending notifications"""
+
+        rows = await self.db.claim_due_notifications(
+            limit=100,
+            lock_window_seconds=NOTIFY_RETRY_BASE_INTERVAL,
+        )
+        if not rows:
+            logger.debug("No due notifications")
+            return
+        logger.info(f"Dispatching {len(rows)} notification(s)")
+        for row in rows:
+            verdict = await notify_user(self.bot, row["chat_id"], row["text"])
+            await self._finalize(row, verdict)
+
+    async def _finalize(self, row, verdict):
+        notification_id = row["id"]
+        chat_id = row["chat_id"]
+        if verdict == "ok":
+            await self.db.mark_delivered(notification_id)
+        elif verdict == "dead_user":
+            # Row stays pending; is_active=FALSE shields it until reactivation
+            await self.db.mark_user_inactive(chat_id, "send_message returned dead_user")
+        elif verdict == "retryable_gave_up":
+            next_at = compute_next_retry_at(
+                row["attempts"],
+                NOTIFY_RETRY_BASE_INTERVAL,
+                NOTIFY_RETRY_MAX_INTERVAL,
+            )
+            await self.db.bump_attempt(notification_id, next_at, last_error="retryable_gave_up")
+        elif verdict == "permanent_other":
+            logger.error(
+                f"Permanent send error for notification {notification_id}, chat {chat_id}; "
+                f"marking delivered to break the loop"
+            )
+            await self.db.mark_delivered(notification_id, last_error="permanent_other")
+        else:
+            logger.error(f"Unknown verdict from notify_user: {verdict!r}")
 
     def stop(self):
         self.shutdown_event.set()

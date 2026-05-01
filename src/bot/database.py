@@ -62,18 +62,17 @@ class Database:
             return
 
         async with self.pool.acquire() as conn:
-            await conn.execute("""
+            await conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS schema_migrations (
                     id SERIAL PRIMARY KEY,
                     filename VARCHAR(255) UNIQUE NOT NULL,
                     applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
-            """)
+            """
+            )
 
-            applied = {
-                row["filename"]
-                for row in await conn.fetch("SELECT filename FROM schema_migrations")
-            }
+            applied = {row["filename"] for row in await conn.fetch("SELECT filename FROM schema_migrations")}
 
             for filename in sql_files:
                 if filename in applied:
@@ -140,10 +139,14 @@ class Database:
     ):
         """Insert a new application to the Applications table"""
 
-        app_label = generate_oam_full_string({
-            "number": application_number, "suffix": application_suffix,
-            "type": application_type, "year": application_year,
-        })
+        app_label = generate_oam_full_string(
+            {
+                "number": application_number,
+                "suffix": application_suffix,
+                "type": application_type,
+                "year": application_year,
+            }
+        )
         logger.debug(f"Adding application {app_label} for chatID {chat_id} to DB")
         query = (
             "INSERT INTO Applications "
@@ -174,40 +177,42 @@ class Database:
         current_status,
         is_resolved,
         application_state,
-        has_changed,
     ):
-        """Update status, is_resolved, changed_at, and state for a specific application"""
-
-        base_query = """
+        """Record a status transition; stamps changed_at and returns application_id"""
+        query = """
             UPDATE Applications
             SET current_status = $1,
                 last_updated = CURRENT_TIMESTAMP,
                 is_resolved = $2,
-                application_state = $3
-                {changed_at_clause}
+                application_state = $3,
+                changed_at = CURRENT_TIMESTAMP
             WHERE user_id = (SELECT user_id FROM Users WHERE chat_id = $4)
               AND application_number = $5
               AND application_type = $6
               AND application_year = $7
+            RETURNING application_id
         """
-
-        # If the status has changed, add the changed_at clause
-        changed_at_clause = ", changed_at = CURRENT_TIMESTAMP" if has_changed else ""
-        query = base_query.format(changed_at_clause=changed_at_clause)
-
         params = (current_status, is_resolved, application_state, chat_id, application_number, application_type, application_year)
         async with self.pool.acquire() as conn:
             try:
-                await conn.execute(query, *params)
-                return True
+                application_id = await conn.fetchval(query, *params)
+                if application_id is None:
+                    logger.error(
+                        f"update_application_status matched no rows for chat ID {chat_id}, " f"number {application_number}"
+                    )
+                return application_id
             except Exception as e:
                 logger.error(
-                    f"Error while updating DB for chat ID: {chat_id} and application number: {application_number}. Error: {e}"
+                    f"Error while updating DB for chat ID: {chat_id} and " f"application number: {application_number}. Error: {e}"
                 )
-                return False
+                return None
 
     async def update_last_checked(self, chat_id, application_number, application_type, application_year):
-        """Update the last_checked timestamp for a specific application for a user"""
+        """Update the last_checked timestamp for a specific application for a user
+
+        Returns the row's application_id on success (callers use it as
+        Notifications.origin_ref), or None on miss / failure
+        """
 
         logger.debug(f"Updating last_updated timestamp for chatID {chat_id} and application number {application_number} in DB")
         query = """UPDATE Applications
@@ -215,11 +220,12 @@ class Database:
                    WHERE user_id = (SELECT user_id FROM Users WHERE chat_id = $1)
                    AND application_number = $2
                    AND application_type = $3
-                   AND application_year = $4"""
+                   AND application_year = $4
+                   RETURNING application_id"""
         params = (chat_id, application_number, application_type, application_year)
         async with self.pool.acquire() as conn:
             try:
-                await conn.execute(query, *params)
+                return await conn.fetchval(query, *params)
             except Exception as e:
                 logger.error(
                     f"Error while updating timestamp for user {chat_id} and application number: {application_number}. Error: {e}"
@@ -229,9 +235,7 @@ class Database:
         """Delete a specific application for a user based on number, type, and year"""
 
         app_details = {"number": application_number, "type": application_type, "year": application_year}
-        logger.info(
-            f"Removing application {generate_oam_full_string(app_details)} for chatID {chat_id} from DB"
-        )
+        logger.info(f"Removing application {generate_oam_full_string(app_details)} for chatID {chat_id} from DB")
         query = """DELETE FROM Applications
                 WHERE user_id = (SELECT user_id FROM Users WHERE chat_id = $1)
                 AND application_number = $2
@@ -342,6 +346,7 @@ class Database:
                  EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - COALESCE(a.last_updated, TIMESTAMP '1970-01-01'))) > $2)
             )
             AND a.is_resolved = FALSE
+            AND u.is_active = TRUE
         """
 
         async with self.pool.acquire() as conn:
@@ -364,6 +369,7 @@ class Database:
             WHERE a.application_state = 'NOT_FOUND'
               AND EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - a.created_at)) >= $1
               AND a.is_resolved = FALSE
+              AND u.is_active = TRUE
         """
 
         async with self.pool.acquire() as conn:
@@ -373,6 +379,121 @@ class Database:
             except Exception as e:
                 logger.error(f"Error while fetching applications to expire from DB: {e}")
                 return []
+
+    async def enqueue_notification(self, chat_id, kind, text, origin_ref=None):
+        """Insert a pre-rendered message into the outbox, return its id"""
+        query = """
+            INSERT INTO Notifications (chat_id, kind, text, origin_ref)
+            VALUES ($1, $2, $3, $4)
+            RETURNING id
+        """
+        async with self.pool.acquire() as conn:
+            try:
+                return await conn.fetchval(query, chat_id, kind, text, origin_ref)
+            except Exception as e:
+                logger.error(f"Error enqueuing notification (chat {chat_id}, kind {kind}): {e}")
+                return None
+
+    async def claim_due_notifications(self, limit, lock_window_seconds):
+        """Atomically claim due rows and push their next_attempt_at by lock_window_seconds"""
+        query = """
+            UPDATE Notifications
+            SET next_attempt_at = CURRENT_TIMESTAMP + ($2 * INTERVAL '1 second')
+            WHERE id IN (
+                SELECT n.id
+                FROM Notifications n
+                JOIN Users u ON n.chat_id = u.chat_id
+                WHERE n.delivered_at IS NULL
+                  AND n.next_attempt_at <= CURRENT_TIMESTAMP
+                  AND u.is_active = TRUE
+                ORDER BY n.next_attempt_at
+                LIMIT $1
+                FOR UPDATE SKIP LOCKED
+            )
+            RETURNING id, chat_id, kind, text, attempts, origin_ref
+        """
+        async with self.pool.acquire() as conn:
+            try:
+                rows = await conn.fetch(query, limit, lock_window_seconds)
+                return [dict(r) for r in rows]
+            except Exception as e:
+                logger.error(f"Error claiming due notifications: {e}")
+                return []
+
+    async def mark_delivered(self, notification_id, last_error=None):
+        """Stamp delivered_at, optionally recording last_error for permanent failures"""
+        query = """
+            UPDATE Notifications
+            SET delivered_at = CURRENT_TIMESTAMP,
+                last_error = $2
+            WHERE id = $1
+        """
+        async with self.pool.acquire() as conn:
+            try:
+                await conn.execute(query, notification_id, last_error)
+                return True
+            except Exception as e:
+                logger.error(f"Error marking notification {notification_id} delivered: {e}")
+                return False
+
+    async def bump_attempt(self, notification_id, next_attempt_at, last_error):
+        """Increment attempts and reschedule to the caller-supplied next_attempt_at"""
+        query = """
+            UPDATE Notifications
+            SET attempts = attempts + 1,
+                next_attempt_at = $2,
+                last_error = $3
+            WHERE id = $1
+        """
+        async with self.pool.acquire() as conn:
+            try:
+                await conn.execute(query, notification_id, next_attempt_at, last_error)
+                return True
+            except Exception as e:
+                logger.error(f"Error bumping notification {notification_id} attempt: {e}")
+                return False
+
+    async def purge_old_notifications(self, delivered_retention_days, pending_max_age_days):
+        """Drop delivered rows past retention and any row past max age"""
+        query = """
+            DELETE FROM Notifications
+            WHERE (delivered_at IS NOT NULL AND delivered_at < CURRENT_TIMESTAMP - ($1 * INTERVAL '1 day'))
+               OR (created_at < CURRENT_TIMESTAMP - ($2 * INTERVAL '1 day'))
+        """
+        async with self.pool.acquire() as conn:
+            try:
+                result = await conn.execute(query, delivered_retention_days, pending_max_age_days)
+                deleted = int(result.split()[-1]) if result and result.startswith("DELETE") else 0
+                if deleted:
+                    logger.info(f"Purged {deleted} old notification row(s)")
+                return deleted
+            except Exception as e:
+                logger.error(f"Error purging old notifications: {e}")
+                return 0
+
+    async def count_pending_notifications(self):
+        """Return (count, oldest_pending_age_seconds) for /admin_stats
+
+        Excludes inactive users (their rows are off-limits to the dispatcher)
+        """
+        query = """
+            SELECT COUNT(*) AS pending,
+                   COALESCE(
+                       EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - MIN(n.created_at)))::INT,
+                       0
+                   ) AS oldest_age
+            FROM Notifications n
+            JOIN Users u ON n.chat_id = u.chat_id
+            WHERE n.delivered_at IS NULL
+              AND u.is_active = TRUE
+        """
+        async with self.pool.acquire() as conn:
+            try:
+                row = await conn.fetchrow(query)
+                return int(row["pending"] or 0), int(row["oldest_age"] or 0)
+            except Exception as e:
+                logger.error(f"Error counting pending notifications: {e}")
+                return 0, 0
 
     async def resolve_application(self, application_id):
         """Mark application as resolved"""
@@ -507,10 +628,73 @@ class Database:
                 logger.error(f"Error while updating lang in DB for chat ID: {chat_id}. Error: {e}")
                 return False
 
-    async def fetch_all_chat_ids(self):
-        """Fetch all chat IDs from the Users table"""
+    async def mark_user_inactive(self, chat_id, reason):
+        """Mark a user as inactive so background workers stop targeting them
 
-        query = "SELECT chat_id FROM Users"
+        No-op if the user is already inactive (idempotent thanks to the
+        `is_active = TRUE` guard in the WHERE clause)
+        """
+        query = """
+            UPDATE Users
+            SET is_active = FALSE,
+                deactivated_at = CURRENT_TIMESTAMP,
+                deactivation_reason = $2
+            WHERE chat_id = $1
+              AND is_active = TRUE
+        """
+        async with self.pool.acquire() as conn:
+            try:
+                result = await conn.execute(query, chat_id, reason)
+                # asyncpg returns "UPDATE N" — only log when we actually flipped someone
+                if result.endswith(" 0"):
+                    return False
+                logger.info(f"Marked user {chat_id} inactive (reason: {reason})")
+                return True
+            except Exception as e:
+                logger.error(f"Error marking user {chat_id} inactive: {e}")
+                return False
+
+    async def reactivate_user_if_needed(self, chat_id):
+        """Flip a previously deactivated user back to active
+
+        Cheap no-op when the user is already active. Called on every
+        interaction so that a user who blocked the bot and unblocked it
+        starts receiving notifications again automatically
+        """
+        query = """
+            UPDATE Users
+            SET is_active = TRUE,
+                deactivated_at = NULL,
+                deactivation_reason = NULL
+            WHERE chat_id = $1
+              AND is_active = FALSE
+        """
+        async with self.pool.acquire() as conn:
+            try:
+                result = await conn.execute(query, chat_id)
+                if not result.endswith(" 0"):
+                    logger.info(f"Reactivated user {chat_id} on user interaction")
+                    return True
+                return False
+            except Exception as e:
+                logger.error(f"Error reactivating user {chat_id}: {e}")
+                return False
+
+    async def count_inactive_users(self):
+        """Count users that are currently flagged inactive"""
+
+        query = "SELECT COUNT(*) FROM Users WHERE is_active = FALSE"
+        async with self.pool.acquire() as conn:
+            try:
+                return await conn.fetchval(query)
+            except Exception as e:
+                logger.error(f"Error while fetching count of inactive users. Error: {e}")
+                return None
+
+    async def fetch_all_chat_ids(self):
+        """Fetch all chat IDs from the Users table for active users only"""
+
+        query = "SELECT chat_id FROM Users WHERE is_active = TRUE"
         async with self.pool.acquire() as conn:
             try:
                 rows = await conn.fetch(query)
@@ -604,6 +788,7 @@ class Database:
             INNER JOIN Users u ON r.user_id = u.user_id
             INNER JOIN Applications a ON r.application_id = a.application_id
             WHERE a.is_resolved = FALSE
+              AND u.is_active = TRUE
               AND EXTRACT(HOUR FROM r.reminder_time) = $1
               AND EXTRACT(MINUTE FROM r.reminder_time) = $2;
         """

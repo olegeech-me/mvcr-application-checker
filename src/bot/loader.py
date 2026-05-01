@@ -1,49 +1,29 @@
+"""Lazy-initialised singletons: PTB Application, Database, RabbitMQ, NotificationDispatcher"""
+
 import asyncio
 import uvloop
-import os
+
 from telegram.ext import Application, Defaults
 from telegram.constants import ParseMode
-from bot import database
-from bot import rabbitmq
-from bot import metrics
 
-# Version information
-BASE_VERSION = os.getenv("BASE_VERSION", "v2.0.0")
-GIT_COMMIT = os.getenv("GIT_COMMIT", "unknown")
-FULL_VERSION = f"{BASE_VERSION}-{GIT_COMMIT}"
-# Telegram bot config
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-# PTB v20.5: HTTPS_PROXY / ALL_PROXY also work via httpx when proxy_url is unset
-# (see telegram.request.HTTPXRequest). We mirror common env for explicit builder wiring.
-PROXY_URL = (
-    os.getenv("HTTPS_PROXY")
-    or os.getenv("HTTP_PROXY")
-    or os.getenv("ALL_PROXY")
+from bot import database
+from bot import metrics
+from bot import monitor
+from bot import rabbitmq
+from bot.config import (
+    TOKEN,
+    PROXY_URL,
+    RUN_MODE,
+    DB_NAME,
+    DB_USER,
+    DB_PASSWORD,
+    DB_HOST,
+    DB_PORT,
+    RABBIT_HOST,
+    RABBIT_USER,
+    RABBIT_PASSWORD,
+    REQUEUE_THRESHOLD_SECONDS,
 )
-ADMIN_CHAT_IDS = os.getenv("ADMIN_CHAT_IDS", "")
-ADMIN_CHAT_IDS = [chat_id.strip() for chat_id in ADMIN_CHAT_IDS.split(",")]
-LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
-# DB config
-DB_NAME = os.getenv("DB_NAME", "AppTrackerDB")
-DB_USER = os.getenv("DB_USER", "postgres")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "postgres")
-DB_HOST = os.getenv("DB_HOST", "localhost")
-DB_PORT = os.getenv("DB_PORT", 5432)
-# Rabbit config
-RABBIT_HOST = os.getenv("RABBIT_HOST", "localhost")
-RABBIT_USER = os.getenv("RABBIT_USER", "bunny_admin")
-RABBIT_PASSWORD = os.getenv("RABBIT_PASSWORD", "password")
-# Time in seconds before an application request can be requeued
-REQUEUE_THRESHOLD_SECONDS = int(os.getenv("REQUEUE_THRESHOLD_SECONDS", 3600))
-# Application monitor config
-REFRESH_PERIOD = int(os.getenv("REFRESH_PERIOD", 3600))
-SCHEDULER_PERIOD = int(os.getenv("SCHEDULER_PERIOD", 300))
-NOT_FOUND_MAX_DAYS = int(os.getenv("NOT_FOUND_MAX_DAYS", 30))
-NOT_FOUND_REFRESH_PERIOD = int(os.getenv("NOT_FOUND_REFRESH_PERIOD", 86400))
-# DB migrations
-DB_MIGRATIONS_DIR = os.getenv("DB_MIGRATIONS_DIR", "db-migrations")
-# Run mode for tests
-RUN_MODE = os.getenv("RUN_MODE", "PROD")
 
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 loop = asyncio.get_event_loop()
@@ -55,6 +35,7 @@ class Loader:
         self._bot = None
         self._db = None
         self._rabbit = None
+        self._notification_dispatcher = None
 
     @property
     def bot(self):
@@ -81,6 +62,15 @@ class Loader:
         return self._db
 
     @property
+    def notification_dispatcher(self):
+        if not self._notification_dispatcher and RUN_MODE != "TEST":
+            self._notification_dispatcher = monitor.NotificationDispatcher(
+                db=self.db,
+                bot=self.bot,
+            )
+        return self._notification_dispatcher
+
+    @property
     def rabbit(self):
         if not self._rabbit and RUN_MODE != "TEST":
             self._rabbit = rabbitmq.RabbitMQ(
@@ -92,6 +82,7 @@ class Loader:
                 requeue_ttl=REQUEUE_THRESHOLD_SECONDS,
                 metrics=metrics.Metrics(),
                 loop=loop,
+                notification_dispatcher=self.notification_dispatcher,
             )
         return self._rabbit
 

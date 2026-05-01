@@ -7,7 +7,7 @@ import cachetools
 from aiormq.exceptions import AMQPConnectionError
 from bot.texts import message_texts
 from bot.utils import generate_oam_full_string, user_label, user_label_short
-from bot.utils import MVCR_STATUSES, categorize_application_status, notify_user
+from bot.utils import MVCR_STATUSES, categorize_application_status
 
 MAX_RETRIES = 5  # maximum number of connection retries
 RETRY_DELAY = 5  # delay (in seconds) between retries
@@ -15,14 +15,33 @@ RETRY_DELAY = 5  # delay (in seconds) between retries
 logger = logging.getLogger(__name__)
 
 
+def render_status_notification_text(lang, status_text):
+    """Render the user-facing notification text for a status change
+
+    Categorises the status and prefixes it with the matching templated message
+    (or a generic "application_updated" string if categorisation fails). The
+    consumer enqueues this text into Notifications; the dispatcher sends it
+    verbatim
+    """
+    category, emoji_sign = categorize_application_status(status_text)
+    if not category:
+        message = message_texts[lang]["application_updated"]
+    else:
+        message = message_texts[lang][category].format(status_sign=emoji_sign)
+    return f"{message}\n\n{status_text}"
+
+
 class RabbitMQ:
-    def __init__(self, host, user, password, bot, db, requeue_ttl, metrics, loop):
+    def __init__(self, host, user, password, bot, db, requeue_ttl, metrics, loop, notification_dispatcher):
         self.host = host
         self.user = user
         self.password = password
         self.bot = bot
         self.db = db
         self.loop = loop
+        # Held to wake the dispatcher after each enqueue so happy-path delivery
+        # latency stays sub-second instead of waiting for NOTIFY_MONITOR_TICK
+        self.notification_dispatcher = notification_dispatcher
         self.connection = None
         self.channel = None
         self.queue = None
@@ -80,11 +99,7 @@ class RabbitMQ:
 
     def is_resolved(self, status):
         """Check if the application was resolved to its final status"""
-        final_statuses = (
-            MVCR_STATUSES.get("approved")[0]
-            + MVCR_STATUSES.get("denied")[0]
-            + MVCR_STATUSES.get("pre_approved")[0]
-        )
+        final_statuses = MVCR_STATUSES.get("approved")[0] + MVCR_STATUSES.get("denied")[0] + MVCR_STATUSES.get("pre_approved")[0]
         return any(final_status in status for final_status in final_statuses)
 
     def _generate_error_message(self, app_details, lang):
@@ -152,20 +167,44 @@ class RabbitMQ:
                     await self.db.update_last_checked(chat_id, number, type_, year)
                     return
 
-                if failed:
-                    if request_type == "fetch":
-                        # Tolerate failed fetch requests triggered by reminders, do not notify users / change status in db
-                        if is_reminder:
-                            logger.error(
-                                f"[REMINDER] Failed to to fetch status for {oam_full_string}, "
-                                f"user {label}, status: {received_status}"
-                            )
-                            return
-                        else:
-                            # If we failed during initial application fetch, further processing is frozen
-                            is_resolved = True
-                else:
-                    is_resolved = self.is_resolved(received_status)
+                # Reminder-triggered fetch failures are dropped silently;
+                # initial-fetch failures freeze the row and notify the user.
+                if failed and request_type == "fetch":
+                    if is_reminder:
+                        logger.error(
+                            f"[REMINDER] Failed to fetch status for {oam_full_string}, "
+                            f"user {label}, status: {received_status}"
+                        )
+                        return
+                    is_resolved = True
+                    application_state = "ERROR"
+                    application_id = await self.db.update_application_status(
+                        chat_id,
+                        number,
+                        type_,
+                        year,
+                        received_status,
+                        is_resolved,
+                        application_state,
+                    )
+                    if application_id is None:
+                        return
+                    lang = await self.db.fetch_user_language(chat_id)
+                    logger.warning(f"[FETCH FAILED] Fetch request failed for {oam_full_string}, user {label}")
+                    text = self._generate_error_message(msg_data, lang)
+                    await self.db.enqueue_notification(
+                        chat_id,
+                        kind="failed_fetch",
+                        text=text,
+                        origin_ref=application_id,
+                    )
+                    self.notification_dispatcher.wake()
+                    return
+
+                # Categorise the new status (used for application_state and the unrecognised-status warning)
+                category, emoji_sign = categorize_application_status(received_status)
+                application_state = category.upper() if category else "UNKNOWN"
+                is_resolved = self.is_resolved(received_status)
 
                 if force_refresh:
                     logger.info(
@@ -173,53 +212,58 @@ class RabbitMQ:
                         f"user {label}, status: {received_status}"
                     )
 
-                # Get category and status sign
-                category, emoji_sign = categorize_application_status(received_status)
-                application_state = category.upper() if category else "UNKNOWN"
-
-                # update application status in the DB
-                if await self.db.update_application_status(
-                    chat_id, number, type_, year, received_status, is_resolved, application_state, has_changed
-                ):
-                    lang = await self.db.fetch_user_language(chat_id)
-
-                    # if a fetch request failed miserably
-                    if failed and request_type == "fetch":
-                        logger.warning(f"[FETCH FAILED] Fetch request failed for {oam_full_string}, user {label}")
-                        notification_text = self._generate_error_message(msg_data, lang)
-                    else:
-                        # Log changes only if status has changed
-                        if has_changed:
-                            if is_resolved:
-                                logger.info(
-                                    f"[RESOLVED][{application_state}] Application {oam_full_string}, "
-                                    f"user {label} has been resolved to {received_status}"
-                                )
-                            elif not force_refresh:
-                                logger.info(
-                                    f"[CHANGED][{application_state}] Application status for {oam_full_string}, "
-                                    f"user {label} has changed to {received_status}"
-                                )
-                        # Log an error if the status couldn't be categorized on a non-failed update message
-                        # Here an Admin should probably take a closer look to wtf is happening, might be
-                        # that MVCR's text of response has changed. In any way we let the users know of the change
-                        if not category:
-                            logger.error(
-                                f"[UNRECOGNIZED STATUS] Could not categorize status: {received_status} "
-                                f"for application {oam_full_string}, user {label}"
-                            )
-                            message = message_texts[lang]["application_updated"]
-                        else:
-                            # Fetch the message's text using category
-                            message = message_texts[lang][category].format(status_sign=emoji_sign)
-
-                        notification_text = f"{message}\n\n{received_status}"
-
-                    # notify the user
-                    await notify_user(
-                        self.bot, chat_id, notification_text,
-                        username=username, first_name=first_name, last_name=last_name,
+                if not category:
+                    logger.error(
+                        f"[UNRECOGNIZED STATUS] Could not categorize status: {received_status} "
+                        f"for application {oam_full_string}, user {label}"
                     )
+
+                if has_changed:
+                    if is_resolved:
+                        logger.info(
+                            f"[RESOLVED][{application_state}] Application {oam_full_string}, "
+                            f"user {label} has been resolved to {received_status}"
+                        )
+                    elif not force_refresh:
+                        logger.info(
+                            f"[CHANGED][{application_state}] Application status for {oam_full_string}, "
+                            f"user {label} has changed to {received_status}"
+                        )
+                    application_id = await self.db.update_application_status(
+                        chat_id,
+                        number,
+                        type_,
+                        year,
+                        received_status,
+                        is_resolved,
+                        application_state,
+                    )
+                    if application_id is None:
+                        return
+                    lang = await self.db.fetch_user_language(chat_id)
+                    text = render_status_notification_text(lang, received_status)
+                    await self.db.enqueue_notification(
+                        chat_id,
+                        kind="status_change",
+                        text=text,
+                        origin_ref=application_id,
+                    )
+                    self.notification_dispatcher.wake()
+                else:
+                    # force_refresh && status came back identical: refresh last_updated,
+                    # acknowledge to the user via the outbox using the same renderer
+                    application_id = await self.db.update_last_checked(chat_id, number, type_, year)
+                    if application_id is None:
+                        return
+                    lang = await self.db.fetch_user_language(chat_id)
+                    text = render_status_notification_text(lang, received_status)
+                    await self.db.enqueue_notification(
+                        chat_id,
+                        kind="force_refresh_unchanged",
+                        text=text,
+                        origin_ref=application_id,
+                    )
+                    self.notification_dispatcher.wake()
 
     async def on_expiration_message(self, message: aio_pika.IncomingMessage):
         """Async function to handle messages from ExpirationQueue"""
@@ -239,13 +283,14 @@ class RabbitMQ:
 
             if await self.db.resolve_application(application_id):
                 lang = await self.db.fetch_user_language(chat_id)
-                notification_text = message_texts[lang]["not_found_expired"].format(app_string=oam_full_string)
-
-                # notify the user
-                await notify_user(
-                    self.bot, chat_id, notification_text,
-                    username=username, first_name=first_name, last_name=last_name,
+                text = message_texts[lang]["not_found_expired"].format(app_string=oam_full_string)
+                await self.db.enqueue_notification(
+                    chat_id,
+                    kind="expiration",
+                    text=text,
+                    origin_ref=application_id,
                 )
+                self.notification_dispatcher.wake()
 
     async def on_service_message(self, message: aio_pika.IncomingMessage):
         """Async function to handle service messages from FetcherMetricsQueue"""
@@ -278,8 +323,10 @@ class RabbitMQ:
         unique_id = self.generate_unique_id(message)
         oam_full_string = generate_oam_full_string(message)
         label = user_label(
-            message["chat_id"], message.get("username"),
-            message.get("first_name"), message.get("last_name"),
+            message["chat_id"],
+            message.get("username"),
+            message.get("first_name"),
+            message.get("last_name"),
         )
         message_tag = (
             f"request_type: {message['request_type']}, {oam_full_string}, "

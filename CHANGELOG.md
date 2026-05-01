@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## [v2.3.0] - 2026-04-22
+
+### Reliable user notifications
+
+- Transactional outbox: every system-initiated user-facing message (status change, force-refresh confirmation, failed-fetch error, NOT_FOUND expiration) is now persisted in a `Notifications` table before delivery, so nothing is lost on bot restart or transient Telegram API failure
+- New `NotificationDispatcher` drains the outbox with capped exponential backoff on retryable errors and an `asyncio.Event` wake-up signal from producers for sub-second happy-path latency
+- Auto-deactivate users whose Telegram chat is permanently unreachable (`Forbidden: bot was blocked`, `user is deactivated`, `chat not found`); auto-reactivate on their next interaction with the bot
+- Inlined cleanup keeps the outbox bounded: delivered rows purged after 1 day, anything older than 30 days dropped unconditionally
+- `/admin_stats` shows pending-notification backlog (count + oldest age) and inactive-user count
+- New env knobs: `NOTIFY_RETRY_BASE_INTERVAL`, `NOTIFY_RETRY_MAX_INTERVAL`, `NOTIFY_MONITOR_TICK`, `NOTIFY_DELIVERED_RETENTION_DAYS`, `NOTIFY_PENDING_MAX_AGE_DAYS`
+- 212 tests (up from 161)
+
 ## [v2.2.0] - 2026-03-27
 
 - Human-readable user identities in log output instead of bare chat IDs
