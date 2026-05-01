@@ -1,6 +1,19 @@
 import pytest
+from unittest.mock import AsyncMock, Mock
 
-from bot.utils import generate_oam_full_string, categorize_application_status, user_label, user_label_short, MVCR_STATUSES
+from telegram.error import (
+    BadRequest, ChatMigrated, Forbidden, NetworkError, RetryAfter, TimedOut,
+)
+
+from bot.utils import (
+    MVCR_STATUSES,
+    categorize_application_status,
+    classify_send_error,
+    generate_oam_full_string,
+    notify_user,
+    user_label,
+    user_label_short,
+)
 
 from conftest import make_rabbit
 
@@ -154,6 +167,121 @@ def test_pre_approved_in_resolved_statuses():
     rabbit = make_rabbit()
     for kw in MVCR_STATUSES.get("pre_approved")[0]:
         assert rabbit.is_resolved(f"Application {kw}"), f"'{kw}' must be treated as resolved"
+
+
+# ---------------------------------------------------------------------------
+# i18n
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# classify_send_error
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "exc, expected",
+    [
+        # Forbidden — dead-user signals
+        (Forbidden("Forbidden: bot was blocked by the user"), "dead_user"),
+        (Forbidden("Forbidden: user is deactivated"), "dead_user"),
+        (Forbidden("Forbidden: bot can't initiate conversation with a user"), "dead_user"),
+        # Forbidden — anything else is permanent_other (e.g. group-chat restrictions)
+        (Forbidden("Forbidden: bot is not a member of the group chat"), "permanent_other"),
+        # BadRequest — dead-user signals
+        (BadRequest("Bad Request: chat not found"), "dead_user"),
+        (BadRequest("Bad Request: user not found"), "dead_user"),
+        (BadRequest("Bad Request: PEER_ID_INVALID"), "dead_user"),
+        # BadRequest — anything else (formatting, parse errors, ...) is permanent_other
+        (BadRequest("Bad Request: message is too long"), "permanent_other"),
+        (BadRequest("Bad Request: can't parse entities"), "permanent_other"),
+        # ChatMigrated — terminal but not a dead-user signal in 1:1 chats
+        (ChatMigrated(new_chat_id=-1009999999999), "permanent_other"),
+    ],
+)
+def test_classify_send_error(exc, expected):
+    assert classify_send_error(exc) == expected
+
+
+def test_classify_send_error_rejects_unsupported_types():
+    """Transient errors must NOT be funnelled into classify_send_error;
+    they belong on the retry path
+    """
+    with pytest.raises(NotImplementedError):
+        classify_send_error(NetworkError("temporary glitch"))
+    with pytest.raises(NotImplementedError):
+        classify_send_error(TimedOut())
+    with pytest.raises(NotImplementedError):
+        classify_send_error(RetryAfter(retry_after=10))
+
+
+def test_classify_send_error_badrequest_is_subclass_of_networkerror():
+    """Regression guard: PTB v20.5 makes BadRequest a NetworkError subclass.
+    A naive `except (TimedOut, NetworkError)` would silently swallow terminal
+    400 responses and retry forever. Lock down the hierarchy assumption.
+    """
+    assert issubclass(BadRequest, NetworkError)
+
+
+# ---------------------------------------------------------------------------
+# notify_user verdict strings
+# ---------------------------------------------------------------------------
+
+
+def _make_bot_returning(side_effect):
+    bot = Mock()
+    bot.updater = Mock()
+    bot.updater.bot = Mock()
+    bot.updater.bot.send_message = AsyncMock(side_effect=side_effect)
+    return bot
+
+
+@pytest.mark.asyncio
+async def test_notify_user_ok():
+    bot = _make_bot_returning(None)
+    assert await notify_user(bot, 123, "hi") == "ok"
+    bot.updater.bot.send_message.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "exc, expected",
+    [
+        (Forbidden("Forbidden: bot was blocked by the user"), "dead_user"),
+        (BadRequest("Bad Request: chat not found"), "dead_user"),
+        (Forbidden("Forbidden: bot is not a member of the supergroup chat"), "permanent_other"),
+        (BadRequest("Bad Request: message is too long"), "permanent_other"),
+    ],
+)
+async def test_notify_user_terminal_returns_verdict_without_retry(exc, expected):
+    bot = _make_bot_returning(exc)
+    assert await notify_user(bot, 123, "hi", max_retries=5) == expected
+    # terminal errors must NOT be retried
+    bot.updater.bot.send_message.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_notify_user_retryable_gave_up_after_max_retries(monkeypatch):
+    """Persistent transient errors exhaust max_retries and return retryable_gave_up
+    (this is the verdict the NotificationMonitor will retry later)
+    """
+    monkeypatch.setattr("bot.utils.asyncio.sleep", AsyncMock())
+
+    bot = _make_bot_returning(TimedOut())
+    assert await notify_user(bot, 123, "hi", max_retries=3) == "retryable_gave_up"
+    assert bot.updater.bot.send_message.await_count == 3
+
+
+@pytest.mark.asyncio
+async def test_notify_user_unknown_exception_returns_permanent_other(monkeypatch):
+    """A non-Telegram exception is treated as terminal (permanent_other) — the
+    monitor will not retry it and it will not flag the user as dead
+    """
+    monkeypatch.setattr("bot.utils.asyncio.sleep", AsyncMock())
+
+    bot = _make_bot_returning(RuntimeError("kaboom"))
+    assert await notify_user(bot, 123, "hi", max_retries=3) == "permanent_other"
+    bot.updater.bot.send_message.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------

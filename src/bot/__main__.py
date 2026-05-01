@@ -4,7 +4,8 @@ import asyncio
 import logging
 import signal
 
-from bot.loader import loader, loop, FULL_VERSION, LOG_LEVEL, ADMIN_CHAT_IDS, DB_MIGRATIONS_DIR
+from bot.loader import loader, loop
+from bot.config import FULL_VERSION, LOG_LEVEL, ADMIN_CHAT_IDS, DB_MIGRATIONS_DIR
 from bot.handlers import start_command, help_command, unknown_text, unknown_command, status_command
 from bot.handlers import unsubscribe_command, subscribe_command, admin_stats_command, fetcher_stats_command
 from bot.handlers import force_refresh_command, subscribe_button, lang_command, set_language_startup, set_language_cmd
@@ -56,11 +57,16 @@ app_monitor = monitor.ApplicationMonitor(db=db, rabbit=rabbit)
 # Instantiate reminder scheduler
 reminder_monitor = monitor.ReminderMonitor(db=db, rabbit=rabbit)
 
+# Notification dispatcher (drains the Notifications outbox).
+# Resolved via loader so RabbitMQ holds the same instance and can wake() it
+notification_dispatcher = loader.notification_dispatcher
+
 
 async def shutdown():
     logger.info("Shutting down schedulers...")
     app_monitor.stop()
     reminder_monitor.stop()
+    notification_dispatcher.stop()
     # Stop bot
     logger.info("Shutting down bot...")
     await bot.updater.stop()
@@ -170,9 +176,13 @@ async def main():
         rabbit.consume_service_messages(),
     )
 
-    # Start ApplicationMonitor and ReminderMonitor
+    # Start ApplicationMonitor, ReminderMonitor and NotificationDispatcher
     await asyncio.sleep(15)  # wait some time before running schedulers
-    await asyncio.gather(app_monitor.start(), reminder_monitor.start())
+    await asyncio.gather(
+        app_monitor.start(),
+        reminder_monitor.start(),
+        notification_dispatcher.start(),
+    )
 
     logger.info("Main loop has exited")
 

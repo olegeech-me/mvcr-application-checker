@@ -3,7 +3,12 @@ import logging
 
 
 # https://docs.python-telegram-bot.org/en/v20.5/telegram.error.html
-from telegram.error import NetworkError, TimedOut, RetryAfter
+# Order matters: BadRequest is a subclass of NetworkError in PTB v20.5,
+# so it MUST be caught before NetworkError or terminal 400s (e.g. "chat not found")
+# get treated as transient and silently retried forever
+from telegram.error import (
+    Forbidden, BadRequest, RetryAfter, TimedOut, NetworkError, ChatMigrated,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +23,21 @@ MVCR_STATUSES = {
     "suspended": (["přerušeno", "has been suspended"], "🟠"),
     "error": (["ERROR"], "🔴"),
 }
+
+# Substrings (case-insensitive) inside a Forbidden / BadRequest message
+# that indicate the user is permanently unreachable. Anything else is
+# treated as "permanent_other" and the row is consumed without retry but
+# the user is NOT marked inactive
+DEAD_USER_FORBIDDEN_HINTS = (
+    "bot was blocked by the user",
+    "user is deactivated",
+    "bot can't initiate conversation with a user",
+)
+DEAD_USER_BADREQUEST_HINTS = (
+    "chat not found",
+    "user not found",
+    "peer_id_invalid",
+)
 
 
 def user_label_short(chat_id, username=None, first_name=None, **_):
@@ -77,29 +97,75 @@ def categorize_application_status(status):
     return None, None
 
 
+def classify_send_error(exc):
+    """Map a Telegram permanent exception to a delivery verdict
+
+    Returns:
+      "dead_user"       — chat permanently unreachable; mark the user inactive
+      "permanent_other" — terminal but not a known dead-user signal; log and
+                          stop retrying
+
+    Caller is expected to pass only Forbidden / BadRequest / ChatMigrated
+    instances. NetworkError / TimedOut / RetryAfter belong to the retry path
+    and must not be funnelled in here
+    """
+    msg = (getattr(exc, "message", None) or str(exc) or "").lower()
+    if isinstance(exc, Forbidden):
+        if any(hint in msg for hint in DEAD_USER_FORBIDDEN_HINTS):
+            return "dead_user"
+        return "permanent_other"
+    if isinstance(exc, BadRequest):
+        if any(hint in msg for hint in DEAD_USER_BADREQUEST_HINTS):
+            return "dead_user"
+        return "permanent_other"
+    if isinstance(exc, ChatMigrated):
+        # 1:1 chats don't migrate; if we ever see this, treat as terminal
+        return "permanent_other"
+    raise NotImplementedError(
+        f"classify_send_error called with unsupported exception: {type(exc).__name__}"
+    )
+
+
 async def notify_user(bot, chat_id, text, max_retries=5, username=None, first_name=None, last_name=None):
-    """Notify user with retries on intermittent issues"""
+    """Send a message to the user, retrying on intermittent issues
+
+    Returns one of:
+      "ok"                — delivered
+      "dead_user"         — chat permanently unreachable (Forbidden / BadRequest
+                            matching the dead-user substring tables)
+      "permanent_other"   — terminal Telegram error, not a known dead-user signal;
+                            don't retry, don't mark the user inactive
+      "retryable_gave_up" — exhausted max_retries against a transient error
+                            (TimedOut / NetworkError / RetryAfter)
+    """
     label = user_label(chat_id, username, first_name, last_name)
     attempt = 0
     delay = 1
     while attempt < max_retries:
         try:
             await bot.updater.bot.send_message(chat_id=chat_id, text=text)
-            logger.debug(f"Sent status update to {label}")
-            return
+            logger.debug(f"Sent message to {label}")
+            return "ok"
         except RetryAfter as e:
             delay = e.retry_after
             logger.warning(f"RetryAfter: failed to notify {label}: retrying after {delay} seconds")
+        except (Forbidden, BadRequest, ChatMigrated) as e:
+            verdict = classify_send_error(e)
+            logger.warning(
+                f"{type(e).__name__}: terminal send error for {label}, verdict={verdict}: {e}"
+            )
+            return verdict
         except TimedOut:
             logger.warning(f"TimedOut: failed to notify {label}: retrying after {delay} seconds")
         except NetworkError:
             logger.warning(f"NetworkError: failed to notify {label}: retrying after {delay} seconds")
         except Exception as e:
-            logger.error(f"Failed to send status update to {label}: {e}")
-            return
+            logger.error(f"Unexpected error sending message to {label}: {e!r}")
+            return "permanent_other"
 
         await asyncio.sleep(delay)
         attempt += 1
         delay *= 2  # exponential retry increase
 
     logger.error(f"Failed to send message to {label} after {max_retries} attempts")
+    return "retryable_gave_up"

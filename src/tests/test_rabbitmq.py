@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 from conftest import make_rabbit, make_incoming_message, OAM_BASE_MSG, ZOV_BASE_MSG
 
@@ -94,184 +94,207 @@ async def test_rabbit_publish_message_dedup():
 
 
 # ---------------------------------------------------------------------------
-# on_update_message — OAM
+# on_update_message — early-return paths (no DB write, no enqueue)
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_rabbit_on_update_status_unchanged():
-    """Status unchanged, not forced: update_last_checked, no notification"""
+async def test_rabbit_on_update_status_unchanged_polled_only_updates_last_checked():
+    """Plain polled refresh with no change: bump last_updated, do NOT enqueue —
+    silent path is the most common one and must stay silent
+    """
     rabbit = make_rabbit()
     status_text = "Application 12345 is still being processed"
     rabbit.db.fetch_application_status = AsyncMock(return_value=status_text)
 
-    msg_dict = {**OAM_BASE_MSG, "status": status_text}
-    msg = make_incoming_message(msg_dict)
+    msg = make_incoming_message({**OAM_BASE_MSG, "status": status_text})
+    await rabbit.on_update_message(msg)
 
-    with patch("bot.rabbitmq.notify_user", new_callable=AsyncMock) as mock_notify:
-        await rabbit.on_update_message(msg)
-        rabbit.db.update_last_checked.assert_called_once_with(100, "12345", "TP", 2023)
-        mock_notify.assert_not_called()
-        rabbit.db.update_application_status.assert_not_called()
+    rabbit.db.update_last_checked.assert_called_once_with(100, "12345", "TP", 2023)
+    rabbit.db.enqueue_notification.assert_not_called()
+    rabbit.db.update_application_status.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_rabbit_on_update_status_changed_approved():
-    """Status changed to approved: is_resolved=True, user notified"""
-    rabbit = make_rabbit()
-    old_status = "Application 12345 is still being processed"
-    new_status = "Vaše žádost 12345 bylo <b>povoleno</b>"
-    rabbit.db.fetch_application_status = AsyncMock(return_value=old_status)
-    rabbit.db.update_application_status = AsyncMock(return_value=True)
-    rabbit.db.fetch_user_language = AsyncMock(return_value="EN")
-
-    msg_dict = {**OAM_BASE_MSG, "status": new_status}
-    msg = make_incoming_message(msg_dict)
-
-    with patch("bot.rabbitmq.notify_user", new_callable=AsyncMock) as mock_notify:
-        await rabbit.on_update_message(msg)
-        rabbit.db.update_application_status.assert_called_once()
-        call_args = rabbit.db.update_application_status.call_args[0]
-        assert call_args[5] is True  # is_resolved
-        mock_notify.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_rabbit_on_update_failed_refresh():
-    """Failed refresh: returns early, no DB update, no notification"""
+async def test_rabbit_on_update_failed_refresh_drops_silently():
+    """Failed refresh: do not rewrite the DB (avoid mass status loss on fetcher
+    outage) and do not enqueue
+    """
     rabbit = make_rabbit()
     rabbit.db.fetch_application_status = AsyncMock(return_value="old status")
 
-    msg_dict = {
+    msg = make_incoming_message({
         **OAM_BASE_MSG,
         "status": "12345 ERROR",
         "failed": True,
         "request_type": "refresh",
-    }
-    msg = make_incoming_message(msg_dict)
+    })
+    await rabbit.on_update_message(msg)
 
-    with patch("bot.rabbitmq.notify_user", new_callable=AsyncMock) as mock_notify:
-        await rabbit.on_update_message(msg)
-        rabbit.db.update_application_status.assert_not_called()
-        mock_notify.assert_not_called()
+    rabbit.db.update_application_status.assert_not_called()
+    rabbit.db.update_last_checked.assert_not_called()
+    rabbit.db.enqueue_notification.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_rabbit_on_update_number_mismatch():
-    """Number not in status text: returns early"""
+async def test_rabbit_on_update_number_mismatch_drops_silently():
+    """Number not in fetcher's response text → suspect mis-routing, drop"""
     rabbit = make_rabbit()
     rabbit.db.fetch_application_status = AsyncMock(return_value="old status")
 
-    msg_dict = {
+    msg = make_incoming_message({
         **OAM_BASE_MSG,
         "status": "Status for 99999 is being processed",
-    }
-    msg = make_incoming_message(msg_dict)
+    })
+    await rabbit.on_update_message(msg)
 
-    with patch("bot.rabbitmq.notify_user", new_callable=AsyncMock) as mock_notify:
-        await rabbit.on_update_message(msg)
-        rabbit.db.update_application_status.assert_not_called()
-        rabbit.db.update_last_checked.assert_not_called()
-        mock_notify.assert_not_called()
+    rabbit.db.update_application_status.assert_not_called()
+    rabbit.db.update_last_checked.assert_not_called()
+    rabbit.db.enqueue_notification.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_rabbit_on_update_failed_fetch_non_reminder():
-    """Failed fetch (not reminder): is_resolved=True, error notification sent"""
-    rabbit = make_rabbit()
-    rabbit.db.fetch_application_status = AsyncMock(return_value="old status")
-    rabbit.db.update_application_status = AsyncMock(return_value=True)
-    rabbit.db.fetch_user_language = AsyncMock(return_value="EN")
-
-    msg_dict = {
-        **OAM_BASE_MSG,
-        "status": "OAM-12345-0/TP-2023 ERROR",
-        "failed": True,
-        "request_type": "fetch",
-        "is_reminder": False,
-    }
-    msg = make_incoming_message(msg_dict)
-
-    with patch("bot.rabbitmq.notify_user", new_callable=AsyncMock) as mock_notify:
-        await rabbit.on_update_message(msg)
-        rabbit.db.update_application_status.assert_called_once()
-        call_args = rabbit.db.update_application_status.call_args[0]
-        assert call_args[5] is True  # is_resolved
-        mock_notify.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_rabbit_on_update_failed_fetch_reminder():
-    """Failed fetch triggered by reminder: returns early, no update"""
+async def test_rabbit_on_update_failed_fetch_reminder_silently_returns():
+    """Failed fetch triggered by a reminder: stay silent — the user did not
+    initiate the lookup, so nothing to surface
+    """
     rabbit = make_rabbit()
     rabbit.db.fetch_application_status = AsyncMock(return_value="old status")
 
-    msg_dict = {
+    msg = make_incoming_message({
         **OAM_BASE_MSG,
         "status": "12345 ERROR",
         "failed": True,
         "request_type": "fetch",
         "is_reminder": True,
-    }
-    msg = make_incoming_message(msg_dict)
+    })
+    await rabbit.on_update_message(msg)
 
-    with patch("bot.rabbitmq.notify_user", new_callable=AsyncMock) as mock_notify:
-        await rabbit.on_update_message(msg)
-        rabbit.db.update_application_status.assert_not_called()
-        mock_notify.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_rabbit_on_update_pre_approved_is_resolved():
-    """pre_approved is always a final/resolved status"""
-    rabbit = make_rabbit()
-    old_status = "Application 12345 not found"
-    new_status = "Application 12345 has been preliminarily assessed positively"
-    rabbit.db.fetch_application_status = AsyncMock(return_value=old_status)
-    rabbit.db.update_application_status = AsyncMock(return_value=True)
-    rabbit.db.fetch_user_language = AsyncMock(return_value="EN")
-
-    msg_dict = {**OAM_BASE_MSG, "status": new_status}
-    msg = make_incoming_message(msg_dict)
-
-    with patch("bot.rabbitmq.notify_user", new_callable=AsyncMock) as mock_notify:
-        await rabbit.on_update_message(msg)
-        rabbit.db.update_application_status.assert_called_once()
-        call_args = rabbit.db.update_application_status.call_args[0]
-        assert call_args[5] is True, "pre_approved must be is_resolved"
-        mock_notify.assert_called_once()
+    rabbit.db.update_application_status.assert_not_called()
+    rabbit.db.enqueue_notification.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
-# on_update_message — ZOV
+# on_update_message — outbox enqueue paths (one assertion per kind)
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_rabbit_on_update_zov_status_changed():
-    """ZOV status change flows through on_update_message correctly"""
+async def test_rabbit_on_update_status_changed_enqueues_status_change():
+    """Status genuinely changed: write to Applications, enqueue a status_change
+    row carrying the rendered text and the application_id as origin_ref
+    """
     rabbit = make_rabbit()
-    old_status = "Visa application number ISTA202504220001 not found"
-    new_status = "Visa application number ISTA202504220001 is still being processed"
+    old_status = "Application 12345 is still being processed"
+    new_status = "Vaše žádost 12345 bylo <b>povoleno</b>"
     rabbit.db.fetch_application_status = AsyncMock(return_value=old_status)
-    rabbit.db.update_application_status = AsyncMock(return_value=True)
+    rabbit.db.update_application_status = AsyncMock(return_value=42)
     rabbit.db.fetch_user_language = AsyncMock(return_value="EN")
+    rabbit.db.enqueue_notification = AsyncMock(return_value=999)
 
-    msg_dict = {**ZOV_BASE_MSG, "status": new_status}
-    msg = make_incoming_message(msg_dict)
+    msg = make_incoming_message({**OAM_BASE_MSG, "status": new_status})
+    await rabbit.on_update_message(msg)
 
-    with patch("bot.rabbitmq.notify_user", new_callable=AsyncMock) as mock_notify:
-        await rabbit.on_update_message(msg)
-        rabbit.db.update_application_status.assert_called_once()
-        call_args = rabbit.db.update_application_status.call_args[0]
-        assert call_args[5] is False  # in_progress is NOT resolved
-        mock_notify.assert_called_once()
+    rabbit.db.update_application_status.assert_called_once()
+    call_args = rabbit.db.update_application_status.call_args[0]
+    assert call_args[5] is True  # is_resolved (povoleno is final)
+
+    rabbit.db.enqueue_notification.assert_awaited_once()
+    kwargs = rabbit.db.enqueue_notification.call_args.kwargs
+    assert kwargs["kind"] == "status_change"
+    assert kwargs["origin_ref"] == 42
+    assert new_status in kwargs["text"]
+    rabbit.notification_dispatcher.wake.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_rabbit_on_update_force_refresh_unchanged_enqueues_force_refresh_unchanged():
+    """force_refresh + identical status: refresh last_updated and enqueue an
+    acknowledgement row so the user always sees a response to /force_refresh
+    """
+    rabbit = make_rabbit()
+    status_text = "Application 12345 is still being processed"
+    rabbit.db.fetch_application_status = AsyncMock(return_value=status_text)
+    rabbit.db.update_last_checked = AsyncMock(return_value=42)
+    rabbit.db.fetch_user_language = AsyncMock(return_value="EN")
+    rabbit.db.enqueue_notification = AsyncMock(return_value=999)
+
+    msg = make_incoming_message({
+        **OAM_BASE_MSG,
+        "status": status_text,
+        "force_refresh": True,
+    })
+    await rabbit.on_update_message(msg)
+
+    rabbit.db.update_last_checked.assert_called_once_with(100, "12345", "TP", 2023)
+    rabbit.db.update_application_status.assert_not_called()
+
+    rabbit.db.enqueue_notification.assert_awaited_once()
+    kwargs = rabbit.db.enqueue_notification.call_args.kwargs
+    assert kwargs["kind"] == "force_refresh_unchanged"
+    assert kwargs["origin_ref"] == 42
+    rabbit.notification_dispatcher.wake.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_rabbit_on_update_failed_fetch_initial_enqueues_failed_fetch():
+    """Failed initial fetch (not a reminder): freeze the row, enqueue a
+    failed_fetch row carrying the user-facing error text
+    """
+    rabbit = make_rabbit()
+    rabbit.db.fetch_application_status = AsyncMock(return_value="old status")
+    rabbit.db.update_application_status = AsyncMock(return_value=42)
+    rabbit.db.fetch_user_language = AsyncMock(return_value="EN")
+    rabbit.db.enqueue_notification = AsyncMock(return_value=999)
+
+    msg = make_incoming_message({
+        **OAM_BASE_MSG,
+        "status": "OAM-12345-0/TP-2023 ERROR",
+        "failed": True,
+        "request_type": "fetch",
+        "is_reminder": False,
+    })
+    await rabbit.on_update_message(msg)
+
+    rabbit.db.update_application_status.assert_called_once()
+    call_args = rabbit.db.update_application_status.call_args[0]
+    assert call_args[5] is True  # is_resolved on failed initial fetch
+
+    rabbit.db.enqueue_notification.assert_awaited_once()
+    kwargs = rabbit.db.enqueue_notification.call_args.kwargs
+    assert kwargs["kind"] == "failed_fetch"
+    assert kwargs["origin_ref"] == 42
+    rabbit.notification_dispatcher.wake.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_rabbit_on_update_skips_enqueue_when_update_returns_none():
+    """If update_application_status matched no rows (e.g. user unsubscribed
+    while the fetch was in flight), do not enqueue a notification
+    """
+    rabbit = make_rabbit()
+    rabbit.db.fetch_application_status = AsyncMock(return_value="old status")
+    rabbit.db.update_application_status = AsyncMock(return_value=None)
+
+    msg = make_incoming_message({
+        **OAM_BASE_MSG,
+        "status": "Vaše žádost 12345 bylo <b>povoleno</b>",
+    })
+    await rabbit.on_update_message(msg)
+
+    rabbit.db.enqueue_notification.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# on_update_message — ZOV-specific resolution semantics
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 async def test_rabbit_on_update_zov_pre_approved_is_resolved():
     """ZOV pre_approved must be treated as resolved (final positive status for ZOV),
-    even without 'rizeni-povoleno' link in the response"""
+    even without the 'rizeni-povoleno' marker. Same enqueue path as OAM
+    """
     rabbit = make_rabbit()
     old_status = "ISTA202504220001 not found"
     new_status = (
@@ -279,57 +302,63 @@ async def test_rabbit_on_update_zov_pre_approved_is_resolved():
         '<b>předběžně vyhodnoceno kladně</b>.'
     )
     rabbit.db.fetch_application_status = AsyncMock(return_value=old_status)
-    rabbit.db.update_application_status = AsyncMock(return_value=True)
+    rabbit.db.update_application_status = AsyncMock(return_value=42)
     rabbit.db.fetch_user_language = AsyncMock(return_value="EN")
+    rabbit.db.enqueue_notification = AsyncMock(return_value=999)
 
-    msg_dict = {**ZOV_BASE_MSG, "status": new_status}
-    msg = make_incoming_message(msg_dict)
+    msg = make_incoming_message({**ZOV_BASE_MSG, "status": new_status})
+    await rabbit.on_update_message(msg)
 
-    with patch("bot.rabbitmq.notify_user", new_callable=AsyncMock) as mock_notify:
-        await rabbit.on_update_message(msg)
-        rabbit.db.update_application_status.assert_called_once()
-        call_args = rabbit.db.update_application_status.call_args[0]
-        assert call_args[5] is True, "ZOV pre_approved must be is_resolved=True"
-        mock_notify.assert_called_once()
+    call_args = rabbit.db.update_application_status.call_args[0]
+    assert call_args[5] is True, "ZOV pre_approved must be is_resolved=True"
+    rabbit.db.enqueue_notification.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------
-# on_expiration_message
+# on_expiration_message — durable via the outbox now
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_rabbit_on_expiration_message():
-    """Expiration message: resolve application, notify user"""
+async def test_rabbit_on_expiration_enqueues_expiration_row():
+    """Expiration: resolve the application, then enqueue an expiration row.
+    No more inline notify_user / mark_user_inactive — the dispatcher handles
+    delivery and dead-user verdict centrally
+    """
     rabbit = make_rabbit()
     rabbit.db.resolve_application = AsyncMock(return_value=True)
     rabbit.db.fetch_user_language = AsyncMock(return_value="EN")
+    rabbit.db.enqueue_notification = AsyncMock(return_value=999)
 
-    msg_dict = {
+    msg = make_incoming_message({
         **OAM_BASE_MSG,
         "application_id": 42,
         "request_type": "expire",
-    }
-    msg = make_incoming_message(msg_dict)
+    })
+    await rabbit.on_expiration_message(msg)
 
-    with patch("bot.rabbitmq.notify_user", new_callable=AsyncMock) as mock_notify:
-        await rabbit.on_expiration_message(msg)
-        rabbit.db.resolve_application.assert_called_once_with(42)
-        mock_notify.assert_called_once()
+    rabbit.db.resolve_application.assert_called_once_with(42)
+    rabbit.db.enqueue_notification.assert_awaited_once()
+    kwargs = rabbit.db.enqueue_notification.call_args.kwargs
+    assert kwargs["kind"] == "expiration"
+    assert kwargs["origin_ref"] == 42
+    assert "OAM-12345/TP-2023" in kwargs["text"]
+    rabbit.notification_dispatcher.wake.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_rabbit_on_expiration_zov():
-    """ZOV expiration message uses correct identifier in notification"""
+async def test_rabbit_on_expiration_zov_uses_correct_identifier():
+    """ZOV expiration carries the ISTA identifier in the rendered text"""
     rabbit = make_rabbit()
     rabbit.db.resolve_application = AsyncMock(return_value=True)
     rabbit.db.fetch_user_language = AsyncMock(return_value="EN")
+    rabbit.db.enqueue_notification = AsyncMock(return_value=999)
 
-    msg_dict = {**ZOV_BASE_MSG, "application_id": 99, "request_type": "expire"}
-    msg = make_incoming_message(msg_dict)
+    msg = make_incoming_message({
+        **ZOV_BASE_MSG, "application_id": 99, "request_type": "expire",
+    })
+    await rabbit.on_expiration_message(msg)
 
-    with patch("bot.rabbitmq.notify_user", new_callable=AsyncMock) as mock_notify:
-        await rabbit.on_expiration_message(msg)
-        rabbit.db.resolve_application.assert_called_once_with(99)
-        notification_text = mock_notify.call_args[0][2]
-        assert "ISTA202504220001" in notification_text
+    rabbit.db.resolve_application.assert_called_once_with(99)
+    text = rabbit.db.enqueue_notification.call_args.kwargs["text"]
+    assert "ISTA202504220001" in text
