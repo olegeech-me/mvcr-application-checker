@@ -805,7 +805,9 @@ async def admin_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     active_subscriptions_count = await db.count_all_subscriptions(active_only=True)
     reminders_count = await db.count_all_reminders()
     pending_notifications, oldest_pending_age = await db.count_pending_notifications()
-    pending_age_str = _format_pending_age(oldest_pending_age) if pending_notifications else "–"
+    pending_suffix = (
+        f" (oldest: {_format_pending_age(oldest_pending_age)})" if pending_notifications else ""
+    )
 
     await update.message.reply_text(
         f"👥 Total users: <b>{user_count}</b>\n"
@@ -815,7 +817,7 @@ async def admin_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         f"📑 Total subscriptions: <b>{subscriptions_count}</b>\n"
         f"🟡 Active (non-resolved) subscriptions: <b>{active_subscriptions_count}</b>\n"
         f"⏰ Total reminders set up: <b>{reminders_count}</b>\n"
-        f"📨 Pending notifications: <b>{pending_notifications}</b> (oldest: {pending_age_str})\n"
+        f"📨 Pending notifications: <b>{pending_notifications}</b>{pending_suffix}\n"
         f"🛠️ Current version: <i>{FULL_VERSION}</i>\n"
     )
 
