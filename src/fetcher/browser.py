@@ -72,12 +72,29 @@ class Browser:
         """Load cookies from a file and add them to the Selenium browser"""
         ua_hash = self._get_ua_hash()
         cookie_file = f'cookies/{ua_hash}.json'
-        if os.path.exists(cookie_file):
-            self._log(logging.INFO, "Found cookies for the current User-Agent, loading from %s", cookie_file)
+        if not os.path.exists(cookie_file):
+            return False
+
+        loaded_cookies = 0
+        self._log(logging.INFO, "Found cookies for the current User-Agent, loading from %s", cookie_file)
+        try:
             with open(cookie_file, 'r') as f:
                 cookies = json.load(f)
-                for cookie in cookies:
-                    self.browser.add_cookie(cookie)
+        except (OSError, json.JSONDecodeError) as err:
+            self._log(logging.WARNING, "Failed to read cookie file %s: %s", cookie_file, err)
+            return False
+
+        for cookie in cookies:
+            try:
+                cookie = cookie.copy()
+                if cookie.get("sameSite") == "None" and not cookie.get("secure"):
+                    cookie.pop("sameSite", None)
+                self.browser.add_cookie(cookie)
+                loaded_cookies += 1
+            except WebDriverException as err:
+                self._log(logging.WARNING, "Skipping cookie that could not be loaded: %s", err)
+
+        return loaded_cookies > 0
 
     def clean_html(self, html_content):
         """Filter out unsupported TG html tags"""
@@ -149,7 +166,6 @@ class Browser:
         options.headless = False
         self.browser = webdriver.Firefox(options=options)
         self.browser.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-        self.load_cookies()
 
     def _get_browser(self, force=False):
         if not force and self.browser:
@@ -180,11 +196,16 @@ class Browser:
         """Try to dismiss the cookie consent dialog if present"""
         try:
             cookies_btn = self.browser.find_element_by_xpath(
-                '//button[@class="button button__primary" and text()="Souhlasím se všemi"]'
+                '//button[contains(@class, "button__primary") and normalize-space(.)="Souhlasím se všemi"]'
             )
-            cookies_btn.click()
+            try:
+                cookies_btn.click()
+            except WebDriverException:
+                self.browser.execute_script("arguments[0].scrollIntoView({block: 'center'});", cookies_btn)
+                self.random_sleep()
+                self.browser.execute_script("arguments[0].click();", cookies_btn)
             self._log(logging.INFO, "Cookies button found, clicked.")
-        except (ElementClickInterceptedException, NoSuchElementException):
+        except (ElementClickInterceptedException, NoSuchElementException, WebDriverException):
             self._log(logging.INFO, "Cookies button not active or not found")
 
     def _click_submit(self):
@@ -329,6 +350,8 @@ class Browser:
 
         try:
             browser.get(url)
+            if self.load_cookies():
+                browser.get(url)
             WebDriverWait(browser, PAGE_LOAD_LIMIT_SECONDS).until(
                 lambda x: _has_recaptcha(x) or x.find_element(By.CLASS_NAME, "wrapper__form"),
                 message="Application submit form wasn't found in the HTML",

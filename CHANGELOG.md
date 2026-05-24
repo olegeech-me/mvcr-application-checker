@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [v2.3.1] - 2026-05-24
+
+### Fetcher stability
+
+- Fixed Selenium cookie loading so saved cookies are added only after navigating to the target domain, preventing `Document is cookie-averse` failures
+- Made cookie loading best-effort: malformed, stale, or Selenium-rejected cookies are skipped instead of failing the fetch
+- Hardened cookie consent dismissal with a scroll/JavaScript click fallback for cases where the button cannot be scrolled into view
+
 ## [v2.3.0] - 2026-04-22
 
 ### Reliable user notifications
