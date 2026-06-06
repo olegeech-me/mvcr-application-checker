@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS Applications (
     application_suffix VARCHAR(255),
     application_type VARCHAR(255) NOT NULL,
     application_year INT NOT NULL,
-    current_status VARCHAR(1000) DEFAULT 'Unknown',
+    current_status TEXT DEFAULT 'Unknown',
     application_state VARCHAR(50) NOT NULL DEFAULT 'UNKNOWN',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     changed_at TIMESTAMP,

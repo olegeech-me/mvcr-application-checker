@@ -1,6 +1,30 @@
 import pytest
+from pathlib import Path
 
 from conftest import make_db_with_mock_pool
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def test_applications_current_status_schema_is_unbounded_text():
+    """MVCR resolved/pre-approved responses can exceed 1000 characters."""
+    init_sql = (REPO_ROOT / "db-init-scripts" / "init.sql").read_text()
+    helm_init = (
+        REPO_ROOT
+        / "deploy"
+        / "mvcr-application-checker-helm"
+        / "templates"
+        / "postgresql"
+        / "configmap-init.yaml"
+    ).read_text()
+
+    assert "current_status TEXT DEFAULT 'Unknown'" in init_sql
+    assert "current_status TEXT DEFAULT 'Unknown'" in helm_init
+
+    migrations_dir = REPO_ROOT / "db-migrations"
+    migration_sql = "\n".join(path.read_text() for path in migrations_dir.glob("*.sql"))
+    assert "ALTER COLUMN current_status TYPE TEXT" in migration_sql
 
 
 @pytest.mark.asyncio

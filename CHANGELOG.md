@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## [v2.3.2] - 2026-06-06
+
+### Database
+
+- Store application status text without a 1000-character limit so long resolved/pre-approved MVCR responses can be saved and notified
+
 ## [v2.3.1] - 2026-05-24
 
 ### Fetcher stability
