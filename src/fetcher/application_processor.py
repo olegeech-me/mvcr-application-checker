@@ -3,7 +3,8 @@ import logging
 import sys
 import asyncio
 import random
-from fetcher.config import JITTER_SECONDS, MAX_RETRIES
+from fetcher.config import JITTER_SECONDS, MAX_RETRIES, MAX_STATUS_LENGTH
+from fetcher import prometheus_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,8 @@ class ApplicationProcessor:
         """Manage failed requests by rescheduling them or sending an error message"""
         app_details = self._get_app_details_from_message(message)
         retry_count = message.headers.get("x-retry-count", 0) + 1
+        request_type = app_details.get("request_type", "fetch")
+        source = app_details.get("source", "oam")
 
         if retry_count > MAX_RETRIES:
             logger.error("Message exceeded max retries: %s", app_details)
@@ -61,11 +64,13 @@ class ApplicationProcessor:
             await self.messaging.publish_message("StatusUpdateQueue", app_details)
             await message.ack()
             self.metrics_collector.record_fetch_status("failed")
+            prometheus_metrics.record_fetch_result(request_type, source, "failed")
         else:
             logger.info("Rescheduling message, x-retry-count: %d", retry_count)
             await self.messaging.publish_message(queue_name, app_details, headers={"x-retry-count": retry_count})
             await message.ack()
             self.metrics_collector.record_fetch_status("retried")
+            prometheus_metrics.record_fetch_result(request_type, source, "retry")
 
     def _generate_error_message(self, app_details):
         """Generate an error message for an application number"""
@@ -121,8 +126,14 @@ class ApplicationProcessor:
             app_status = await self.browser.fetch(self.url, app_details)
 
             # Check if the app number is not in the received_status
-            if app_status and str(number) not in app_status:
+            if app_status and len(app_status) > MAX_STATUS_LENGTH:
+                logger.error("%s Status response is too large: %d chars", log_prefix, len(app_status))
+                prometheus_metrics.record_error("browser", "status_too_large")
+                queue_name = "ApplicationFetchQueue" if request_type == "fetch" else "RefreshStatusQueue"
+                await self._manage_failed_request(message, queue_name)
+            elif app_status and str(number) not in app_status:
                 logger.warning(f"{log_prefix} Retrieved status does not match the expected app number. Requeueing...")
+                prometheus_metrics.record_error("processor", "status_mismatch")
                 queue_name = "ApplicationFetchQueue" if request_type == "fetch" else "RefreshStatusQueue"
                 await self._manage_failed_request(message, queue_name)
             elif app_status:
@@ -132,13 +143,16 @@ class ApplicationProcessor:
                 await self.messaging.publish_message("StatusUpdateQueue", app_details)
                 logger.debug("%s Update message was pushed to StateUpdateQueue", log_prefix)
                 self.metrics_collector.record_fetch_status("success")
+                prometheus_metrics.record_fetch_result(request_type, source, "success")
             else:
                 logger.error("%s Status update failed", log_prefix)
+                prometheus_metrics.record_error("browser", "empty_status")
                 queue_name = "ApplicationFetchQueue" if request_type == "fetch" else "RefreshStatusQueue"
                 await self._manage_failed_request(message, queue_name)
 
         except Exception as e:
             logger.error("%s Error processing request: %s", log_prefix, e)
+            prometheus_metrics.record_error("processor", "unexpected")
             queue_name = "ApplicationFetchQueue" if request_type == "fetch" else "RefreshStatusQueue"
             await self._manage_failed_request(message, queue_name)
         finally:

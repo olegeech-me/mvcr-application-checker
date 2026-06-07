@@ -13,6 +13,7 @@ from bot.config import (
     NOTIFY_PENDING_MAX_AGE_DAYS,
 )
 from bot.utils import generate_oam_full_string, notify_user, user_label_short
+from bot import prometheus_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -178,6 +179,8 @@ class NotificationDispatcher:
     async def _finalize(self, row, verdict):
         notification_id = row["id"]
         chat_id = row["chat_id"]
+        notification_kind = row["kind"]
+        prometheus_metrics.record_notification(notification_kind, verdict)
         if verdict == "ok":
             await self.db.mark_delivered(notification_id)
         elif verdict == "dead_user":
@@ -197,6 +200,7 @@ class NotificationDispatcher:
             )
             await self.db.mark_delivered(notification_id, last_error="permanent_other")
         else:
+            prometheus_metrics.record_error("notification_dispatcher", "unexpected")
             logger.error(f"Unknown verdict from notify_user: {verdict!r}")
 
     def stop(self):

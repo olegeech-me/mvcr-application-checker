@@ -2,8 +2,9 @@
 
 import os
 
+
 # Version information
-BASE_VERSION = os.getenv("BASE_VERSION", "v2.0.0")
+BASE_VERSION = os.getenv("BASE_VERSION", "v2.4.0")
 GIT_COMMIT = os.getenv("GIT_COMMIT", "unknown")
 FULL_VERSION = f"{BASE_VERSION}-{GIT_COMMIT}"
 
@@ -48,6 +49,10 @@ NOTIFY_PENDING_MAX_AGE_DAYS = int(os.getenv("NOTIFY_PENDING_MAX_AGE_DAYS", 30))
 
 # DB migrations
 DB_MIGRATIONS_DIR = os.getenv("DB_MIGRATIONS_DIR", "db-migrations")
+
+# Prometheus metrics
+METRICS_HOST = os.getenv("METRICS_HOST", "0.0.0.0")
+METRICS_PORT = int(os.getenv("METRICS_PORT", 8000))
 
 # Run mode for tests
 RUN_MODE = os.getenv("RUN_MODE", "PROD")

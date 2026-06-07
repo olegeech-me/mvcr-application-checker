@@ -4,6 +4,7 @@ import json
 import logging
 import ssl
 from fetcher.config import MAX_MESSAGES
+from fetcher import prometheus_metrics
 from aiormq.exceptions import AMQPConnectionError
 
 MAX_RETRIES = 25  # maximum number of connection retries
@@ -74,6 +75,7 @@ class Messaging:
                     await asyncio.sleep(RETRY_DELAY)
                 else:
                     logger.error("Max retries reached. Could not connect to RabbitMQ.")
+                    prometheus_metrics.record_error("rabbitmq", "connection")
                     raise
 
     async def setup_queues(self, **queues):
@@ -94,6 +96,7 @@ class Messaging:
             logger.debug(f"Successfully published message to {queue_name}")
         except Exception as e:
             logger.error(f"Failed to publish message: {e}")
+            prometheus_metrics.record_error("rabbitmq", "publish_failed")
             raise
         logger.debug(f"Successfully published message to {queue_name}")
 
@@ -108,6 +111,7 @@ class Messaging:
             logger.debug(f"Successfully published message to {queue_name}")
         except Exception as e:
             logger.error(f"Failed to publish service message: {e}")
+            prometheus_metrics.record_error("rabbitmq", "publish_failed")
             raise
         logger.debug(f"Successfully published message to {queue_name}")
 

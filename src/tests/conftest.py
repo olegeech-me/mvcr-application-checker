@@ -37,12 +37,13 @@ def make_db_with_mock_pool():
 
 
 def make_rabbit():
-    """Create a RabbitMQ instance with mocked bot, db, metrics, dispatcher, and exchange"""
+    """Create a RabbitMQ instance with mocked bot, db, fetcher stats, dispatcher, and exchange"""
     bot = Mock()
     db = AsyncMock()
-    metrics = Mock()
+    fetcher_stats = Mock()
+    fetcher_stats.update_fetcher_metrics = AsyncMock()
     dispatcher = Mock()
-    rabbit = RabbitMQ("host", "user", "pass", bot, db, 300, metrics, None, dispatcher)
+    rabbit = RabbitMQ("host", "user", "pass", bot, db, 300, fetcher_stats, None, dispatcher)
     rabbit.default_exchange = AsyncMock()
     return rabbit
 
@@ -53,6 +54,7 @@ def make_incoming_message(msg_dict, headers=None):
     msg.body = json.dumps(msg_dict).encode("utf-8")
     msg.headers = headers or {}
     msg.process = Mock(return_value=AsyncMock())
+    msg.ack = AsyncMock()
     return msg
 
 
@@ -131,6 +133,7 @@ def make_processor():
     metrics = Mock()
     metrics.increment_request_state = Mock()
     metrics.decrement_request_state = Mock()
+    metrics.record_fetch_status = Mock()
     return ApplicationProcessor(messaging, browser, metrics, "http://test.url")
 
 

@@ -1,0 +1,19 @@
+{{- if and .Values.fetcher.enabled .Values.metrics.enabled .Values.metrics.fetcher.enabled .Values.metrics.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "mvcr-application-checker.fullname" . }}-fetcher
+  labels:
+    {{- include "mvcr-application-checker.componentLabels" (dict "context" . "component" "fetcher") | nindent 4 }}
+    {{- with .Values.metrics.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "mvcr-application-checker.selectorLabels" (dict "context" . "component" "fetcher") | nindent 6 }}
+  endpoints:
+    - port: metrics
+      interval: {{ .Values.metrics.serviceMonitor.interval | default "30s" }}
+      scrapeTimeout: {{ .Values.metrics.serviceMonitor.scrapeTimeout | default "10s" }}
+{{- end }}

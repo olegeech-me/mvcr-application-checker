@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 from conftest import make_rabbit, make_incoming_message, OAM_BASE_MSG, ZOV_BASE_MSG
 
@@ -50,7 +50,7 @@ def test_rabbit_generate_unique_id_zov():
 )
 def test_rabbit_is_resolved(status_text, expected):
     rabbit = make_rabbit()
-    assert rabbit.is_resolved(status_text) is expected
+    assert rabbit.processor._is_resolved(status_text) is expected
 
 
 # ---------------------------------------------------------------------------
@@ -61,7 +61,7 @@ def test_rabbit_is_resolved(status_text, expected):
 def test_rabbit_generate_error_message():
     rabbit = make_rabbit()
     app_details = {**OAM_BASE_MSG}
-    result = rabbit._generate_error_message(app_details, "EN")
+    result = rabbit.processor._generate_error_message(app_details, "EN")
     assert "OAM-12345/TP-2023" in result
 
 
@@ -80,17 +80,27 @@ def test_rabbit_dedup_cycle():
     assert rabbit.is_message_published(uid) is False
 
 
+def test_rabbit_exposes_fetcher_stats_cache_for_admin_command():
+    """The /fetcher_stats command reads the same cache used by FetcherMetricsQueue"""
+    rabbit = make_rabbit()
+    assert rabbit.fetcher_stats is rabbit.processor.fetcher_stats
+
+
 @pytest.mark.asyncio
 async def test_rabbit_publish_message_dedup():
     """First publish goes through, duplicate is skipped"""
     rabbit = make_rabbit()
     msg = {**OAM_BASE_MSG}
 
-    await rabbit.publish_message(msg, routing_key="TestQueue")
-    assert rabbit.default_exchange.publish.call_count == 1
+    with patch("bot.rabbitmq.prometheus_metrics.record_published_message") as record_published_message:
+        await rabbit.publish_message(msg, routing_key="TestQueue")
+        assert rabbit.default_exchange.publish.call_count == 1
 
-    await rabbit.publish_message(msg, routing_key="TestQueue")
-    assert rabbit.default_exchange.publish.call_count == 1
+        await rabbit.publish_message(msg, routing_key="TestQueue")
+        assert rabbit.default_exchange.publish.call_count == 1
+
+    record_published_message.assert_any_call("TestQueue", "published")
+    record_published_message.assert_any_call("TestQueue", "duplicate_skipped")
 
 
 # ---------------------------------------------------------------------------
@@ -108,11 +118,13 @@ async def test_rabbit_on_update_status_unchanged_polled_only_updates_last_checke
     rabbit.db.fetch_application_status = AsyncMock(return_value=status_text)
 
     msg = make_incoming_message({**OAM_BASE_MSG, "status": status_text})
-    await rabbit.on_update_message(msg)
+    with patch("bot.rabbitmq.prometheus_metrics.record_rabbitmq_message") as record_rabbitmq_message:
+        await rabbit.on_update_message(msg)
 
     rabbit.db.update_last_checked.assert_called_once_with(100, "12345", "TP", 2023)
     rabbit.db.enqueue_notification.assert_not_called()
     rabbit.db.update_application_status.assert_not_called()
+    record_rabbitmq_message.assert_called_once_with("StatusUpdateQueue", "ignored")
 
 
 @pytest.mark.asyncio
@@ -362,3 +374,37 @@ async def test_rabbit_on_expiration_zov_uses_correct_identifier():
     rabbit.db.resolve_application.assert_called_once_with(99)
     text = rabbit.db.enqueue_notification.call_args.kwargs["text"]
     assert "ISTA202504220001" in text
+
+
+# ---------------------------------------------------------------------------
+# on_service_message — fetcher stats cache
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_rabbit_on_service_updates_fetcher_stats_cache():
+    """FetcherMetricsQueue updates the Telegram-facing stats cache"""
+    rabbit = make_rabbit()
+    payload = {"fetcher_id": "fetcher-1", "connection_status": "OK"}
+    msg = make_incoming_message(payload)
+
+    with patch("bot.rabbitmq.prometheus_metrics.record_rabbitmq_message") as record_rabbitmq_message:
+        await rabbit.on_service_message(msg)
+
+    rabbit.processor.fetcher_stats.update_fetcher_metrics.assert_awaited_once_with("fetcher-1", payload)
+    record_rabbitmq_message.assert_called_once_with("FetcherMetricsQueue", "processed")
+
+
+@pytest.mark.asyncio
+async def test_rabbit_on_service_missing_fetcher_id_records_failure():
+    """Fetcher stats without fetcher_id are handled as known bad service messages"""
+    rabbit = make_rabbit()
+    msg = make_incoming_message({"connection_status": "OK"})
+
+    with patch("bot.processor.prometheus_metrics.record_error") as record_error, \
+         patch("bot.rabbitmq.prometheus_metrics.record_rabbitmq_message") as record_rabbitmq_message:
+        await rabbit.on_service_message(msg)
+
+    rabbit.processor.fetcher_stats.update_fetcher_metrics.assert_not_called()
+    record_error.assert_called_once_with("rabbitmq", "missing_fetcher_id")
+    record_rabbitmq_message.assert_called_once_with("FetcherMetricsQueue", "failed")

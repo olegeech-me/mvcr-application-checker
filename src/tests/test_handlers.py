@@ -25,6 +25,7 @@ from bot.handlers import (
     application_dialog_source,
     force_refresh_command,
     force_refresh_button,
+    fetcher_stats_command,
     unsubscribe_command,
     unsubscribe_button,
     admin_broadcast_command,
@@ -1091,6 +1092,51 @@ async def test_unsubscribe_button_zov_label():
     call_args = update.callback_query.edit_message_text.call_args[0][0]
     assert "ISTA202504220001" in call_args
     assert "OAM" not in call_args, "ZOV unsubscribe message must not show OAM prefix"
+
+
+# ---------------------------------------------------------------------------
+# Commands: fetcher_stats
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_fetcher_stats_command_shows_hard_failures_and_freshness():
+    """Fetcher stats keep Telegram admin view but align failure wording"""
+    update = Mock()
+    update.effective_chat.id = 1234567
+    update.effective_chat.username = "admin"
+    update.effective_chat.first_name = "Admin"
+    update.effective_chat.last_name = "User"
+    update.message.reply_text = AsyncMock()
+    context = Mock()
+
+    rabbit_mock = Mock()
+    rabbit_mock.fetcher_stats.get_all_fetcher_metrics = AsyncMock(
+        return_value={
+            "fetcher-1": {
+                "connection_status": "✅ Connected",
+                "average_latency": 0.42,
+                "fetch_status": {"success": 5, "failed": 2, "retries": 3},
+                "request_state": {"waiting": 1, "locked": 0},
+                "rates": {"success_rate": 1.0, "failure_rate": 0.4, "retry_rate": 0.6},
+                "rate_interval": 600,
+                "ttl": 1800,
+                "uptime": 3660,
+                "version": "v2.3.3-test",
+                "reported_at": 988,
+            }
+        }
+    )
+
+    with patch("bot.handlers.rabbit", rabbit_mock), \
+         patch("bot.handlers.time.time", return_value=1000):
+        await fetcher_stats_command(update, context)
+
+    text = update.message.reply_text.call_args.args[0]
+    assert "Hard failures" in text
+    assert "Hard failure rate" in text
+    assert "Last report" in text
+    assert "12s</b> ago" in text
 
 
 # ---------------------------------------------------------------------------

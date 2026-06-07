@@ -1,7 +1,8 @@
 import os
 
+
 # Version information
-BASE_VERSION = os.getenv("BASE_VERSION", "v2.0.0")
+BASE_VERSION = os.getenv("BASE_VERSION", "v2.4.0")
 GIT_COMMIT = os.getenv("GIT_COMMIT", "unknown")
 FULL_VERSION = f"{BASE_VERSION}-{GIT_COMMIT}"
 # The URL to fetch
@@ -20,6 +21,8 @@ CAPTCHA_WAIT_SECONDS = 120
 MAX_MESSAGES = int(os.getenv("MAX_MESSAGES", 10))
 # The max number of message processing attempts
 MAX_RETRIES = int(os.getenv("MAX_RETRIES", 10))
+# The max accepted status text length before treating the response as invalid
+MAX_STATUS_LENGTH = int(os.getenv("MAX_STATUS_LENGTH", 20000))
 # Max time to disperse to refresh requests
 JITTER_SECONDS = int(os.getenv("JITTER_SECONDS", 900))
 # RabbitMQ settings
@@ -36,3 +39,5 @@ ID = os.getenv("ID", "fetcher")
 METRICS_TTL = int(os.getenv("METRICS_TTL", 1800))
 METRICS_RATE = int(os.getenv("METRICS_RATE", 600))
 METRICS_SEND_INTERVAL = int(os.getenv("METRICS_SEND_INTERVAL", 30))
+METRICS_HOST = os.getenv("METRICS_HOST", "0.0.0.0")
+METRICS_PORT = int(os.getenv("METRICS_PORT", 8000))

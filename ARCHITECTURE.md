@@ -154,6 +154,10 @@ The tick is a backstop. The rabbit consumer calls `dispatcher.wake()` immediatel
 a notification, so happy-path delivery latency is sub-second instead of bounded by the tick.
 Missed wakes (e.g. dispatcher restart with rows already in the table) recover on the next tick.
 
+System-initiated user messages go through the `Notifications` outbox. User-initiated synchronous
+replies (`/start`, `/help`, menu navigation, validation errors) stay inline because the user is
+actively waiting for the response.
+
 ### 2.4 Database Layer
 
 PostgreSQL via `asyncpg` connection pool (min 5, max 20 connections).
@@ -180,6 +184,8 @@ Key behaviors:
   reschedules to caller-supplied timestamp (backoff lives in `compute_next_retry_at()`)
 - `purge_old_notifications(delivered_retention_days, pending_max_age_days)` — single `DELETE`
   covering both retention classes
+- `count_pending_notifications()` — returns pending count and oldest pending age, filtered by
+  active users for `/admin_stats`
 
 **User deactivation:**
 
@@ -192,11 +198,24 @@ Key behaviors:
 
 The bot both **publishes** and **consumes** messages.
 
+`src/bot/rabbitmq.py` is the RabbitMQ adapter. It owns connections, queue declarations,
+message decoding, publishing, deduplication, and the `message.process()` ack/nack boundary.
+
+`src/bot/processor.py` owns the business workflows for messages received from RabbitMQ:
+
+- `process_status_update()` — handles status responses from fetchers
+- `process_expiration()` — handles stale NOT_FOUND expiration messages
+- `process_fetcher_stats()` — updates the Telegram-facing fetcher stats cache
+
+This keeps queue mechanics separate from business decisions. If a processor raises
+unexpectedly, the exception bubbles through `message.process()` and aio-pika keeps the
+normal nack/retry behavior.
+
 **Consumes from:**
 
 - `StatusUpdateQueue` (durable) — status results from fetchers
 - `ExpirationQueue` (durable) — expiration requests from its own monitor
-- `FetcherMetricsQueue` (non-durable) — fetcher health/performance metrics
+- `FetcherMetricsQueue` (durable, short-lived messages) — fetcher health/performance metrics
 
 **Publishes to:**
 
@@ -207,7 +226,43 @@ The bot both **publishes** and **consumes** messages.
 TTL = `REQUEUE_THRESHOLD_SECONDS`, default 3600s) prevents publishing duplicate requests.
 When a response arrives, its ID is removed from the cache, allowing re-requests.
 
-**Status update processing (`on_update_message`):**
+**Processor flow:**
+
+```text
+RabbitMQ consumer
+  |
+  |  decode JSON, enter message.process()
+  v
+Processor
+  |
+  +-- StatusUpdateQueue -> process_status_update()
+  |     |
+  |     +-- invalid / mismatched / failed refresh -> drop
+  |     |
+  |     +-- unchanged normal refresh -------------> update_last_checked()
+  |     |
+  |     +-- failed initial fetch -----------------> update_application_status(ERROR)
+  |     |                                           enqueue failed_fetch notification
+  |     |
+  |     +-- changed status -----------------------> update_application_status(...)
+  |     |                                           enqueue status_change notification
+  |     |
+  |     +-- unchanged force_refresh --------------> update_last_checked()
+  |                                                 enqueue force_refresh_unchanged notification
+  |
+  +-- ExpirationQueue ----> process_expiration()
+  |     |
+  |     +-- resolve application ------------------> enqueue expiration notification
+  |
+  +-- FetcherMetricsQueue -> process_fetcher_stats()
+        |
+        +-- update in-memory fetcher stats cache for /fetcher_stats
+
+Any enqueued notification wakes NotificationDispatcher, which sends it later from
+the Notifications outbox.
+```
+
+**Status update processing (`Processor.process_status_update`):**
 
 1. Discard if application number is not found in the status text (misroute guard)
 2. If failed refresh → log and drop (prevents mass status overwrites during fetcher issues)
@@ -222,8 +277,10 @@ In all enqueue cases, the consumer calls `dispatcher.wake()` immediately after t
 delivery happens within milliseconds. The dispatcher (§2.3) owns the actual Telegram send,
 retries, and dead-user handling. This is the transactional outbox pattern: the consumer's job
 ends at "row is durably in the DB" — delivery is asynchronous and survives bot restarts.
+The producer stores the final Telegram text in `Notifications.text`. The dispatcher just sends
+that text.
 
-**Expiration processing (`on_expiration_message`):** marks the row resolved and enqueues
+**Expiration processing (`Processor.process_expiration`):** marks the row resolved and enqueues
 an `expiration` notification on the same outbox.
 
 ## 3. Fetcher Service (`src/fetcher/`)
@@ -313,7 +370,7 @@ Runs a background loop (interval: `METRICS_SEND_INTERVAL`, default 30s):
 2. Computes rates from counters within a sliding window (`METRICS_TTL`, default 1800s):
    - Success / failure / retry counts and rates per `METRICS_RATE` interval (default 600s)
 3. Tracks current request states (waiting for jitter vs. actively locked/fetching)
-4. Publishes metrics to `FetcherMetricsQueue` (30s message expiration, non-durable queue)
+4. Publishes metrics to `FetcherMetricsQueue` (durable queue, 30s message expiration)
 
 Bot displays these via `/fetcher_stats` command from an in-memory TTL cache (300s).
 
@@ -339,7 +396,7 @@ Bot displays these via `/fetcher_stats` command from an in-memory TTL cache (300
                  (bot publishes & consumes)
 
   consume <----- [ FetcherMetricsQueue    ] <----- publish
-                     (non-durable)
+                     (durable, 30s messages)
 ```
 
 ### 4.2 Message Lifecycle: Subscription to Notification
@@ -437,6 +494,8 @@ When `is_resolved = TRUE`, the application is excluded from all future refresh c
   `Bad Request: chat not found`) flip `Users.is_active = FALSE`. The row stays pending.
   The dispatcher's claim query joins on `is_active = TRUE`, so these rows become invisible
   until the user reactivates by interacting with the bot
+- **Notification replay:** Any row can be replayed by resetting `delivered_at = NULL`,
+  `attempts = 0`, and `next_attempt_at = NOW()` in `Notifications`
 - **PostgreSQL:** Connection retries with exponential backoff (up to 5 attempts, starting at 2s)
 - **RabbitMQ:** Connection retries (up to 5 attempts, 5s delay)
 - **Bot startup:** Polling start retried up to 15 times on `NetworkError`
@@ -468,7 +527,7 @@ When `is_resolved = TRUE`, the application is excluded from all future refresh c
   | first_name           |  |+-->| application_suffix     |   |   | user_id       (FK)|
   | last_name            |  |    | application_type       |   |   | reminder_time     |
   | language (def EN)    |  |    | application_year       |   |   | created_at        |
-  | is_active (def TRUE) |  |    | current_status (1000)  |   |   +-------------------+
+  | is_active (def TRUE) |  |    | current_status (TEXT)  |   |   +-------------------+
   | deactivated_at       |  |    | application_state (50) |   |
   | deactivation_reason  |  |    | created_at             |   |   +-------------------+
   +----------------------+  |    | changed_at             |   |   |   Notifications   |
@@ -489,7 +548,7 @@ When `is_resolved = TRUE`, the application is excluded from all future refresh c
 
 Key fields:
 
-- `current_status` — raw HTML from the MVCR website (up to 1000 chars)
+- `current_status` — raw status HTML/text from the MVCR website
 - `application_state` — categorized state: NOT_FOUND, IN_PROGRESS, PRE_APPROVED, APPROVED, DENIED, SUSPENDED, UNKNOWN
 - `changed_at` — updated only when status text changes
 - `last_updated` — updated on every successful check (even if status unchanged)
@@ -542,8 +601,9 @@ Two separate compose files for independent scaling:
 
 ### 9.3 Kubernetes
 
-Sample manifests in `k8s/`: ConfigMaps, Secrets, Deployments for both services.
-Supports SSL certificates as Kubernetes secrets.
+Helm chart manifests live in `deploy/mvcr-application-checker-helm/`: workloads, services,
+ConfigMaps, Secrets, ServiceMonitors, and PrometheusRules for both services.
+RabbitMQ TLS certificates are mounted from Kubernetes secrets.
 
 ### 9.4 RabbitMQ TLS
 

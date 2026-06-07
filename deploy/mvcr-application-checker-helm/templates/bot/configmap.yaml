@@ -12,6 +12,8 @@ data:
   DB_USER: {{ include "mvcr-application-checker.db.user" . | quote }}
   RABBIT_HOST: {{ include "mvcr-application-checker.rabbit.host" . | quote }}
   RABBIT_USER: {{ include "mvcr-application-checker.rabbit.user" . | quote }}
+  METRICS_HOST: "0.0.0.0"
+  METRICS_PORT: {{ .Values.metrics.port | quote }}
   {{- range $key, $value := .Values.bot.config }}
   {{ $key }}: {{ $value | quote }}
   {{- end }}

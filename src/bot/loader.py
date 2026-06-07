@@ -7,7 +7,7 @@ from telegram.ext import Application, Defaults
 from telegram.constants import ParseMode
 
 from bot import database
-from bot import metrics
+from bot import fetcher_stats
 from bot import monitor
 from bot import rabbitmq
 from bot.config import (
@@ -80,7 +80,7 @@ class Loader:
                 bot=self.bot,
                 db=self.db,
                 requeue_ttl=REQUEUE_THRESHOLD_SECONDS,
-                metrics=metrics.Metrics(),
+                fetcher_stats=fetcher_stats.FetcherStats(),
                 loop=loop,
                 notification_dispatcher=self.notification_dispatcher,
             )

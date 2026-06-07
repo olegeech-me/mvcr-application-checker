@@ -1,0 +1,17 @@
+{{- if and .Values.bot.enabled .Values.metrics.enabled .Values.metrics.bot.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "mvcr-application-checker.fullname" . }}-bot-metrics
+  labels:
+    {{- include "mvcr-application-checker.componentLabels" (dict "context" . "component" "bot") | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: metrics
+      port: {{ .Values.metrics.port }}
+      targetPort: metrics
+      protocol: TCP
+  selector:
+    {{- include "mvcr-application-checker.selectorLabels" (dict "context" . "component" "bot") | nindent 4 }}
+{{- end }}

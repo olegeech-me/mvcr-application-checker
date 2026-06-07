@@ -32,6 +32,8 @@ services:
       dockerfile: Dockerfile_bot
     env_file:
       - ./bot.env
+    ports:
+      - "8000:8000"     # Prometheus metrics
     depends_on:
       - apptrackerdb
       - rabbitmq

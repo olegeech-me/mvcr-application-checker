@@ -4,3 +4,4 @@ asyncpg==0.28.0
 uvloop==0.21.0
 pytz
 cachetools
+prometheus-client

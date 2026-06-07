@@ -19,6 +19,12 @@ spec:
         - name: fetcher
           image: "{{ .Values.fetcher.image.repository }}:{{ .Values.fetcher.image.tag }}"
           imagePullPolicy: {{ .Values.fetcher.image.pullPolicy | default "IfNotPresent" }}
+          {{- if and .Values.metrics.enabled .Values.metrics.fetcher.enabled }}
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
+              protocol: TCP
+          {{- end }}
           {{- if .Values.fetcher.privileged }}
           securityContext:
             privileged: true

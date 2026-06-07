@@ -158,7 +158,7 @@ def test_user_label_short_ignores_extra_kwargs():
 
 
 # ---------------------------------------------------------------------------
-# pre_approved resolution check (uses RabbitMQ.is_resolved)
+# pre_approved resolution check
 # ---------------------------------------------------------------------------
 
 
@@ -166,7 +166,7 @@ def test_pre_approved_in_resolved_statuses():
     """pre_approved IS a final/resolved status (ZOV has no separate approved)"""
     rabbit = make_rabbit()
     for kw in MVCR_STATUSES.get("pre_approved")[0]:
-        assert rabbit.is_resolved(f"Application {kw}"), f"'{kw}' must be treated as resolved"
+        assert rabbit.processor._is_resolved(f"Application {kw}"), f"'{kw}' must be treated as resolved"
 
 
 # ---------------------------------------------------------------------------

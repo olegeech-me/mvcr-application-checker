@@ -1,0 +1,94 @@
+{{- if and .Values.metrics.enabled .Values.metrics.prometheusRule.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "mvcr-application-checker.fullname" . }}-app
+  labels:
+    {{- include "mvcr-application-checker.componentLabels" (dict "context" . "component" "app-metrics") | nindent 4 }}
+    {{- with .Values.metrics.prometheusRule.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  groups:
+    - name: mvcr-application-checker.app
+      rules:
+        {{- if .Values.metrics.fetcher.enabled }}
+        - alert: MvcrFetcherHardFailures
+          expr: |
+            sum(increase(mvcr_fetcher_requests_total{result="failed"}[{{ .Values.metrics.prometheusRule.fetcherHardFailuresWindow }}])) >= {{ .Values.metrics.prometheusRule.fetcherHardFailuresThreshold }}
+          for: {{ .Values.metrics.prometheusRule.fetcherHardFailuresDuration }}
+          labels:
+            severity: critical
+            service: mvcr
+          annotations:
+            summary: "MVCR fetcher has many exhausted failures"
+            description: >-
+              Fetcher produced {{ "{{ $value }}" }} request(s) that exhausted
+              MAX_RETRIES during the last {{ .Values.metrics.prometheusRule.fetcherHardFailuresWindow }}.
+        - alert: MvcrFetcherRetryStorm
+          expr: |
+            (
+              sum(rate(mvcr_fetcher_requests_total{result=~"retry|failed"}[{{ .Values.metrics.prometheusRule.fetcherRetryStormWindow }}]))
+              /
+              clamp_min(sum(rate(mvcr_fetcher_requests_total[{{ .Values.metrics.prometheusRule.fetcherRetryStormWindow }}])), 0.001)
+            ) > {{ .Values.metrics.prometheusRule.fetcherRetryStormRatio }}
+            and
+            sum(increase(mvcr_fetcher_requests_total{result=~"retry|failed"}[{{ .Values.metrics.prometheusRule.fetcherRetryStormWindow }}])) >= {{ .Values.metrics.prometheusRule.fetcherRetryStormThreshold }}
+          for: {{ .Values.metrics.prometheusRule.fetcherRetryStormDuration }}
+          labels:
+            severity: warning
+            service: mvcr
+          annotations:
+            summary: "MVCR fetcher retry/failure storm"
+            description: >-
+              More than {{ .Values.metrics.prometheusRule.fetcherRetryStormRatio }} of fetcher requests
+              are retrying or failing, with at least {{ .Values.metrics.prometheusRule.fetcherRetryStormThreshold }}
+              retry/failure events in {{ .Values.metrics.prometheusRule.fetcherRetryStormWindow }}.
+        - alert: MvcrFetcherTargetDown
+          expr: |
+            max(mvcr_fetcher_target_up) == 0
+          for: {{ .Values.metrics.prometheusRule.fetcherTargetDownDuration }}
+          labels:
+            severity: critical
+            service: mvcr
+          annotations:
+            summary: "MVCR target website check is failing"
+            description: "All reporting fetchers say that the MVCR target website is unreachable or unhealthy."
+        - alert: MvcrFetcherNoSuccessfulFetch
+          expr: |
+            (time() - max(mvcr_fetcher_last_success_timestamp_seconds) > {{ .Values.metrics.prometheusRule.fetcherNoSuccessSeconds }})
+            and
+            sum(increase(mvcr_fetcher_requests_total[{{ .Values.metrics.prometheusRule.fetcherNoSuccessWindow }}])) > 0
+          for: {{ .Values.metrics.prometheusRule.fetcherNoSuccessDuration }}
+          labels:
+            severity: critical
+            service: mvcr
+          annotations:
+            summary: "No successful MVCR fetch for over two hours"
+            description: >-
+              Fetchers have had request activity, but no fetcher has reported
+              a successful fetch for more than {{ .Values.metrics.prometheusRule.fetcherNoSuccessSeconds }} seconds.
+        {{- end }}
+        {{- if .Values.metrics.bot.enabled }}
+        - alert: MvcrBotErrorBurst
+          expr: |
+            sum(increase(mvcr_bot_errors_total[{{ .Values.metrics.prometheusRule.botErrorBurstWindow }}])) >= {{ .Values.metrics.prometheusRule.botErrorBurstThreshold }}
+          for: {{ .Values.metrics.prometheusRule.botErrorBurstDuration }}
+          labels:
+            severity: warning
+            service: mvcr
+          annotations:
+            summary: "MVCR bot error burst"
+            description: "Bot recorded {{ "{{ $value }}" }} operational error(s) during the last {{ .Values.metrics.prometheusRule.botErrorBurstWindow }}."
+        - alert: MvcrTelegramDeliveryFailures
+          expr: |
+            sum(increase(mvcr_bot_notifications_total{result=~"retryable_gave_up|permanent_other"}[{{ .Values.metrics.prometheusRule.notificationFailuresWindow }}])) >= {{ .Values.metrics.prometheusRule.notificationFailuresThreshold }}
+          for: {{ .Values.metrics.prometheusRule.notificationFailuresDuration }}
+          labels:
+            severity: warning
+            service: mvcr
+          annotations:
+            summary: "MVCR bot notification delivery failures"
+            description: "Bot had {{ "{{ $value }}" }} notification(s) fail delivery during the last {{ .Values.metrics.prometheusRule.notificationFailuresWindow }}."
+        {{- end }}
+{{- end }}

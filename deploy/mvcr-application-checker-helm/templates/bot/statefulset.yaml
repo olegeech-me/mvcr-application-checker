@@ -20,6 +20,12 @@ spec:
         - name: bot
           image: "{{ .Values.bot.image.repository }}:{{ .Values.bot.image.tag }}"
           imagePullPolicy: {{ .Values.bot.image.pullPolicy | default "IfNotPresent" }}
+          {{- if and .Values.metrics.enabled .Values.metrics.bot.enabled }}
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
+              protocol: TCP
+          {{- end }}
           envFrom:
             - configMapRef:
                 name: {{ include "mvcr-application-checker.fullname" . }}-bot

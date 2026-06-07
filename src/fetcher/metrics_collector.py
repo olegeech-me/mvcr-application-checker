@@ -3,6 +3,7 @@ import asyncio
 import time
 import logging
 from fetcher.config import FULL_VERSION
+from fetcher import prometheus_metrics
 from collections import deque
 
 logger = logging.getLogger(__name__)
@@ -33,21 +34,31 @@ class MetricsCollector:
                     self.record_latency(latency)
                     if response.status == 200:
                         self.connection_status = "✅ Connected"
+                        prometheus_metrics.set_target_up(True)
                     else:
                         self.connection_status = f"❌ Failed (HTTP {response.status})"
+                        prometheus_metrics.set_target_up(False)
+                        prometheus_metrics.record_error("latency_check", "unexpected")
                         logger.error(f"HTTP latency check failed: {response.status}")
         except aiohttp.client_exceptions.ClientConnectorError as e:
             self.connection_status = "⚠️ Connection Failed"
             latency = time.time() - start_time
+            prometheus_metrics.set_target_latency(latency)
+            prometheus_metrics.set_target_up(False)
+            prometheus_metrics.record_error("latency_check", "connection")
             logger.error(f"Failed to connect to {self.url}. Error: {e}. Latency: {latency}s")
         except Exception as e:
             self.connection_status = "🚨 Error"
             latency = time.time() - start_time
+            prometheus_metrics.set_target_latency(latency)
+            prometheus_metrics.set_target_up(False)
+            prometheus_metrics.record_error("latency_check", "unexpected")
             logger.error(f"An unexpected error occurred while connecting to {self.url}. Error: {e}. Latency: {latency}s")
 
     def record_latency(self, latency):
         """Record the latency data"""
         self.latency_data.append(latency)
+        prometheus_metrics.set_target_latency(latency)
 
     def get_avg_latency(self):
         """Get average latency from the recorded data"""
@@ -59,16 +70,21 @@ class MetricsCollector:
         """Increment the specified request status"""
         if status in self.request_state:
             self.request_state[status] += 1
+            prometheus_metrics.set_request_state(status, self.request_state[status])
 
     def decrement_request_state(self, status):
         """Decrement the specified request status"""
         if status in self.request_state:
             self.request_state[status] -= 1
+            prometheus_metrics.set_request_state(status, self.request_state[status])
 
     def record_fetch_status(self, status):
         """Record fetch status timestamp (either success or failed)"""
         if status in self.fetch_status:
-            self.fetch_status[status].append(time.time())
+            current_time = time.time()
+            self.fetch_status[status].append(current_time)
+            if status == "success":
+                prometheus_metrics.mark_success(current_time)
 
     def get_metrics(self):
         """Retrieve the collected metrics"""
@@ -102,6 +118,7 @@ class MetricsCollector:
             "ttl": self.ttl,
             "uptime": uptime,
             "version": FULL_VERSION,
+            "reported_at": current_time,
         }
 
     async def send_metrics(self):

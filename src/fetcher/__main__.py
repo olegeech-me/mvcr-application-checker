@@ -7,14 +7,16 @@ import signal
 import asyncio
 import uvloop
 
-from fetcher.config import FULL_VERSION, URL, LOG_LEVEL
+from fetcher.config import BASE_VERSION, GIT_COMMIT, FULL_VERSION, URL, LOG_LEVEL
 from fetcher.config import RABBIT_HOST, RABBIT_SSL_PORT, RABBIT_USER, RABBIT_PASSWORD
 from fetcher.config import RABBIT_SSL_CACERTFILE, RABBIT_SSL_CERTFILE, RABBIT_SSL_KEYFILE
 from fetcher.config import ID, METRICS_TTL, METRICS_RATE, METRICS_SEND_INTERVAL
+from fetcher.config import METRICS_HOST, METRICS_PORT
 from fetcher.browser import Browser
 from fetcher.messaging import Messaging
 from fetcher.application_processor import ApplicationProcessor
 from fetcher.metrics_collector import MetricsCollector
+from fetcher import prometheus_metrics
 
 
 # Set up logging
@@ -41,6 +43,8 @@ async def main():
     """Connect to the message queue, run fetch for the application data, post back status"""
     # Set up shutdown event
     shutdown_event = asyncio.Event()
+    prometheus_metrics.start_metrics_server(METRICS_HOST, METRICS_PORT)
+    prometheus_metrics.set_build_info(BASE_VERSION, GIT_COMMIT)
 
     browser_instance = Browser()
     messaging_instance = Messaging(RABBIT_HOST, RABBIT_USER, RABBIT_PASSWORD)

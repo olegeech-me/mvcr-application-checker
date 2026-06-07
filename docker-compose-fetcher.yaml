@@ -13,6 +13,8 @@ services:
       - ./ssl/client.key:/etc/ssl/client.key:ro
     env_file:
       - ./fetcher.env
+    ports:
+      - "8001:8000"     # Prometheus metrics
     restart: always
     deploy:
       resources:

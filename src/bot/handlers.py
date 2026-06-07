@@ -805,9 +805,7 @@ async def admin_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     active_subscriptions_count = await db.count_all_subscriptions(active_only=True)
     reminders_count = await db.count_all_reminders()
     pending_notifications, oldest_pending_age = await db.count_pending_notifications()
-    pending_suffix = (
-        f" (oldest: {_format_pending_age(oldest_pending_age)})" if pending_notifications else ""
-    )
+    pending_suffix = f" (oldest: {_format_pending_age(oldest_pending_age)})" if pending_notifications else ""
 
     await update.message.reply_text(
         f"👥 Total users: <b>{user_count}</b>\n"
@@ -841,7 +839,7 @@ async def fetcher_stats_command(update: Update, context: ContextTypes.DEFAULT_TY
         await update.message.reply_text("Unauthorized. This command is only for admins.")
         return
 
-    metrics = await rabbit.metrics.get_all_fetcher_metrics()
+    metrics = await rabbit.fetcher_stats.get_all_fetcher_metrics()
     if metrics:
         for fetcher_id, data in metrics.items():
             interval = int(data["rate_interval"] / 60)
@@ -849,19 +847,24 @@ async def fetcher_stats_command(update: Update, context: ContextTypes.DEFAULT_TY
             uptime_minutes = int(data["uptime"] / 60)
             uptime_hours = uptime_minutes // 60
             uptime_minutes %= 60
+            reported_at = data.get("reported_at")
+            freshness = ""
+            if reported_at:
+                freshness = f"🕒 Last report: <b>{_format_pending_age(int(time.time() - reported_at))}</b> ago\n"
             fetcher_stats = (
                 f"🤖 Fetcher ID: <b>{fetcher_id}</b>\n"
                 f"🌐 Connection to ipc.gov.cz: <b>{data['connection_status']}</b>\n"
                 f"🕐 Average latency to ipc.gov.cz: <b>{data['average_latency']:.2f}</b> seconds\n"
                 f"✅ Successes (last {ttl} mins): <b>{data['fetch_status']['success']}</b>\n"
-                f"❌ Failures (last {ttl} mins): <b>{data['fetch_status']['failed']}</b>\n"
+                f"❌ Hard failures (last {ttl} mins): <b>{data['fetch_status']['failed']}</b>\n"
                 f"🔄 Retries (last {ttl} mins): <b>{data['fetch_status']['retries']}</b>\n"
                 f"📤 Requests state - Waiting: <b>{data['request_state']['waiting']}</b> |"
                 f" Locked: <b>{data['request_state']['locked']}</b>\n"
                 f"📊 Success rate: <b>{data['rates']['success_rate']:.2f}</b>/{interval} min(s)\n"
-                f"📊 Failure rate: <b>{data['rates']['failure_rate']:.2f}</b>/{interval} min(s)\n"
+                f"📊 Hard failure rate: <b>{data['rates']['failure_rate']:.2f}</b>/{interval} min(s)\n"
                 f"📊 Retry rate: <b>{data['rates']['retry_rate']:.2f}</b>/{interval} min(s)\n"
-                f"⏱ Uptime: <b>{uptime_hours}h {uptime_minutes}m</b>\n"
+                f"{freshness}"
+                f"🕞 Uptime: <b>{uptime_hours}h {uptime_minutes}m</b>\n"
                 f"🛠️ Version: {data['version']}\n"
             )
 

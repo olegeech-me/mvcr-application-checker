@@ -219,12 +219,14 @@ async def test_dispatcher_ok_verdict_marks_delivered():
     db.claim_due_notifications = AsyncMock(return_value=[_make_outbox_row(notification_id=7)])
 
     disp = NotificationDispatcher(db, bot)
-    with patch("bot.monitor.notify_user", new_callable=AsyncMock, return_value="ok"):
+    with patch("bot.monitor.notify_user", new_callable=AsyncMock, return_value="ok"), \
+         patch("bot.monitor.prometheus_metrics.record_notification") as record_notification:
         await disp.deliver_pending()
 
     db.mark_delivered.assert_awaited_once_with(7)
     db.bump_attempt.assert_not_called()
     db.mark_user_inactive.assert_not_called()
+    record_notification.assert_called_once_with("status_change", "ok")
 
 
 @pytest.mark.asyncio

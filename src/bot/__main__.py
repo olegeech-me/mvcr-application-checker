@@ -5,7 +5,8 @@ import logging
 import signal
 
 from bot.loader import loader, loop
-from bot.config import FULL_VERSION, LOG_LEVEL, ADMIN_CHAT_IDS, DB_MIGRATIONS_DIR
+from bot.config import BASE_VERSION, GIT_COMMIT, FULL_VERSION, LOG_LEVEL, ADMIN_CHAT_IDS, DB_MIGRATIONS_DIR
+from bot.config import METRICS_HOST, METRICS_PORT
 from bot.handlers import start_command, help_command, unknown_text, unknown_command, status_command
 from bot.handlers import unsubscribe_command, subscribe_command, admin_stats_command, fetcher_stats_command
 from bot.handlers import force_refresh_command, subscribe_button, lang_command, set_language_startup, set_language_cmd
@@ -35,6 +36,7 @@ from bot.handlers import (
     delete_reminder_callback,
 )
 from bot import monitor
+from bot import prometheus_metrics
 
 MAX_RETRIES = 15  # maximum number bot of connection retries
 RETRY_DELAY = 5  # delay (in seconds) between retries
@@ -81,6 +83,8 @@ async def shutdown():
 
 
 async def main():
+    prometheus_metrics.start_metrics_server(METRICS_HOST, METRICS_PORT)
+    prometheus_metrics.set_build_info(BASE_VERSION, GIT_COMMIT)
     # Connect to postgres
     await db.connect(migrations_dir=DB_MIGRATIONS_DIR)
     # Connect to rabbit
@@ -161,6 +165,7 @@ async def main():
             await bot.start()
             break
         except NetworkError as e:
+            prometheus_metrics.record_error("telegram", "network")
             if retry < MAX_RETRIES:
                 logger.error(f"Failed to start bot due to network error: {e}")
                 await asyncio.sleep(RETRY_DELAY)

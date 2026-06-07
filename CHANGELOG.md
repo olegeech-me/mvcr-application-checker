@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## [v2.4.0] - 2026-06-07
+
+### Bot architecture
+
+- Split bot RabbitMQ queue mechanics from business workflows: `rabbitmq.py` is now the adapter, `processor.py` owns status update, expiration, and fetcher-stats processing
+
+### Fetcher guardrails
+
+- Limit fetched status text to 20000 characters so accidental oversized responses are retried and reported instead of being stored
+
+### Monitoring
+
+- Added Prometheus `/metrics` endpoints for bot and fetcher services
+- Added Prometheus metrics covering bot and fetcher health, queue processing, notification delivery, MVCR target availability, and fetcher processing state
+- Added Helm metrics services, ServiceMonitors, and PrometheusRule alerts for high-signal app failures
+
 ## [v2.3.2] - 2026-06-06
 
 ### Database

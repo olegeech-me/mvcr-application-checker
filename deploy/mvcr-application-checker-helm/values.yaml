@@ -53,7 +53,42 @@ fetcher:
     JITTER_SECONDS: "600"
     MAX_MESSAGES: "10"
     MAX_RETRIES: "5"
+    MAX_STATUS_LENGTH: "20000"
   resources: {}
+
+# -- Bot and fetcher Prometheus metrics
+metrics:
+  enabled: true
+  port: 8000
+  bot:
+    enabled: true
+  fetcher:
+    enabled: true
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    scrapeTimeout: 10s
+    labels: {}
+  prometheusRule:
+    enabled: true
+    labels: {}
+    fetcherHardFailuresThreshold: 25
+    fetcherHardFailuresWindow: 30m
+    fetcherHardFailuresDuration: 10m
+    fetcherRetryStormRatio: 0.7
+    fetcherRetryStormThreshold: 30
+    fetcherRetryStormWindow: 30m
+    fetcherRetryStormDuration: 15m
+    fetcherTargetDownDuration: 10m
+    fetcherNoSuccessSeconds: 7200
+    fetcherNoSuccessWindow: 2h
+    fetcherNoSuccessDuration: 10m
+    botErrorBurstThreshold: 10
+    botErrorBurstWindow: 15m
+    botErrorBurstDuration: 10m
+    notificationFailuresThreshold: 10
+    notificationFailuresWindow: 30m
+    notificationFailuresDuration: 10m
 
 # -- Database dump CronJob
 dbDump:
