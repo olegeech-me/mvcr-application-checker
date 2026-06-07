@@ -26,6 +26,7 @@
         },
         "enable": true,
         "expr": "ALERTS{namespace=\"$namespace\",alertstate=\"firing\",alertname=~\"Mvcr.*|RabbitMQ.*\"}",
+        "hide": false,
         "iconColor": "red",
         "name": "Firing MVCR Alerts",
         "titleFormat": "{{alertname}}",
@@ -51,7 +52,6 @@
       "url": "https://prometheus.sytkovo.su"
     }
   ],
-  "liveNow": false,
   "panels": [
     {
       "collapsed": false,
@@ -60,6 +60,211 @@
         "w": 24,
         "x": 0,
         "y": 0
+      },
+      "id": 25,
+      "panels": [],
+      "title": "Build",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Build metadata exposed by the bot metrics endpoint.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "center",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "footer": {
+              "reducers": []
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 12,
+        "x": 0,
+        "y": 1
+      },
+      "id": 26,
+      "options": {
+        "cellHeight": "md",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "pluginVersion": "12.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "mvcr_bot_build_info{namespace=\"$namespace\",job=\"$bot_job\"}",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "bot",
+          "refId": "A"
+        }
+      ],
+      "title": "Bot Build",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "Value #A": true,
+              "__name__": true,
+              "container": true,
+              "endpoint": true,
+              "instance": true,
+              "job": true,
+              "namespace": true,
+              "pod": true,
+              "service": true
+            },
+            "indexByName": {
+              "commit": 1,
+              "version": 0
+            },
+            "renameByName": {
+              "commit": "Commit",
+              "version": "Version"
+            }
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Build metadata exposed by the fetcher metrics endpoint.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "center",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "footer": {
+              "reducers": []
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 12,
+        "x": 12,
+        "y": 1
+      },
+      "id": 27,
+      "options": {
+        "cellHeight": "md",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "pluginVersion": "12.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "mvcr_fetcher_build_info{job=~\"${fetcher_job:regex}\",site!=\"\"} or label_replace(mvcr_fetcher_build_info{job=~\"${fetcher_job:regex}\",site=\"\"}, \"site\", \"local\", \"job\", \".*\")",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "fetcher",
+          "refId": "A"
+        }
+      ],
+      "title": "Fetcher Build",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "Value #A": true,
+              "__name__": true,
+              "container": true,
+              "endpoint": true,
+              "instance": true,
+              "job": true,
+              "namespace": true,
+              "pod": true,
+              "service": true
+            },
+            "indexByName": {
+              "commit": 1,
+              "site": 2,
+              "version": 0
+            },
+            "renameByName": {
+              "commit": "Commit",
+              "site": "site",
+              "version": "Version"
+            }
+          }
+        }
+      ],
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 6
       },
       "id": 1,
       "panels": [],
@@ -83,7 +288,7 @@
             "steps": [
               {
                 "color": "red",
-                "value": null
+                "value": 0
               },
               {
                 "color": "orange",
@@ -103,7 +308,7 @@
         "h": 4,
         "w": 4,
         "x": 0,
-        "y": 1
+        "y": 7
       },
       "id": 2,
       "options": {
@@ -111,6 +316,7 @@
         "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
+        "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -118,16 +324,18 @@
           "fields": "",
           "values": false
         },
+        "showPercentChange": false,
         "textMode": "auto",
         "wideLayout": true
       },
+      "pluginVersion": "12.4.0",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(up{namespace=\"$namespace\",job=~\"$bot_job|$fetcher_job|$rabbitmq_job\"})",
+          "expr": "sum(up{namespace=\"$namespace\",job=~\"$bot_job|$rabbitmq_job\"}) + sum(up{job=~\"${fetcher_job:regex}\"})",
           "legendFormat": "targets up",
           "refId": "A"
         }
@@ -168,7 +376,7 @@
             "steps": [
               {
                 "color": "red",
-                "value": null
+                "value": 0
               },
               {
                 "color": "green",
@@ -184,7 +392,7 @@
         "h": 4,
         "w": 4,
         "x": 4,
-        "y": 1
+        "y": 7
       },
       "id": 3,
       "options": {
@@ -192,6 +400,7 @@
         "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
+        "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -199,17 +408,19 @@
           "fields": "",
           "values": false
         },
+        "showPercentChange": false,
         "textMode": "auto",
         "wideLayout": true
       },
+      "pluginVersion": "12.4.0",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "max(mvcr_fetcher_target_up{namespace=\"$namespace\",job=\"$fetcher_job\"})",
-          "legendFormat": "target up",
+          "expr": "max by (job) (mvcr_fetcher_target_up{job=~\"${fetcher_job:regex}\"})",
+          "legendFormat": "{{job}}",
           "refId": "A"
         }
       ],
@@ -233,7 +444,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "orange",
@@ -253,7 +464,7 @@
         "h": 4,
         "w": 4,
         "x": 8,
-        "y": 1
+        "y": 7
       },
       "id": 4,
       "options": {
@@ -261,6 +472,7 @@
         "graphMode": "area",
         "justifyMode": "auto",
         "orientation": "auto",
+        "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -268,17 +480,19 @@
           "fields": "",
           "values": false
         },
+        "showPercentChange": false,
         "textMode": "auto",
         "wideLayout": true
       },
+      "pluginVersion": "12.4.0",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "time() - max(mvcr_fetcher_last_success_timestamp_seconds{namespace=\"$namespace\",job=\"$fetcher_job\"})",
-          "legendFormat": "age",
+          "expr": "time() - max by (job) (mvcr_fetcher_last_success_timestamp_seconds{job=~\"${fetcher_job:regex}\"})",
+          "legendFormat": "{{job}}",
           "refId": "A"
         }
       ],
@@ -290,34 +504,26 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Share of fetcher queue requests that completed successfully.",
+      "description": "Fetcher request volume during the last 30 minutes. Use Retry / Failure Ratio for health.",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "thresholds"
+            "fixedColor": "blue",
+            "mode": "fixed"
           },
-          "decimals": 1,
+          "decimals": 0,
           "mappings": [],
-          "max": 1,
           "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "red",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 0.8
-              },
-              {
                 "color": "green",
-                "value": 0.95
+                "value": 0
               }
             ]
           },
-          "unit": "percentunit"
+          "unit": "short"
         },
         "overrides": []
       },
@@ -325,14 +531,15 @@
         "h": 4,
         "w": 4,
         "x": 12,
-        "y": 1
+        "y": 7
       },
       "id": 5,
       "options": {
-        "colorMode": "background",
-        "graphMode": "area",
+        "colorMode": "value",
+        "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
+        "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -340,21 +547,23 @@
           "fields": "",
           "values": false
         },
+        "showPercentChange": false,
         "textMode": "auto",
         "wideLayout": true
       },
+      "pluginVersion": "12.4.0",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(rate(mvcr_fetcher_requests_total{namespace=\"$namespace\",job=\"$fetcher_job\",source=~\"$source\",request_type=~\"$request_type\",result=\"success\"}[$__rate_interval])) / clamp_min(sum(rate(mvcr_fetcher_requests_total{namespace=\"$namespace\",job=\"$fetcher_job\",source=~\"$source\",request_type=~\"$request_type\"}[$__rate_interval])), 0.001)",
-          "legendFormat": "success rate",
+          "expr": "sum by (job) (increase(mvcr_fetcher_requests_total{job=~\"${fetcher_job:regex}\",source=~\"${source:regex}\",request_type=~\"${request_type:regex}\"}[30m]))",
+          "legendFormat": "{{job}}",
           "refId": "A"
         }
       ],
-      "title": "Fetcher Success Rate",
+      "title": "Fetcher Requests 30m",
       "type": "stat"
     },
     {
@@ -377,7 +586,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "orange",
@@ -397,7 +606,7 @@
         "h": 4,
         "w": 4,
         "x": 16,
-        "y": 1
+        "y": 7
       },
       "id": 6,
       "options": {
@@ -405,6 +614,7 @@
         "graphMode": "area",
         "justifyMode": "auto",
         "orientation": "auto",
+        "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -412,17 +622,19 @@
           "fields": "",
           "values": false
         },
+        "showPercentChange": false,
         "textMode": "auto",
         "wideLayout": true
       },
+      "pluginVersion": "12.4.0",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(rate(mvcr_fetcher_requests_total{namespace=\"$namespace\",job=\"$fetcher_job\",source=~\"$source\",request_type=~\"$request_type\",result=~\"retry|failed\"}[$__rate_interval])) / clamp_min(sum(rate(mvcr_fetcher_requests_total{namespace=\"$namespace\",job=\"$fetcher_job\",source=~\"$source\",request_type=~\"$request_type\"}[$__rate_interval])), 0.001)",
-          "legendFormat": "retry/failure ratio",
+          "expr": "((sum by (job) (rate(mvcr_fetcher_requests_total{job=~\"${fetcher_job:regex}\",source=~\"${source:regex}\",request_type=~\"${request_type:regex}\",result=~\"retry|failed\"}[$__rate_interval]))) or (0 * sum by (job) (rate(mvcr_fetcher_requests_total{job=~\"${fetcher_job:regex}\",source=~\"${source:regex}\",request_type=~\"${request_type:regex}\"}[$__rate_interval])))) / clamp_min(sum by (job) (rate(mvcr_fetcher_requests_total{job=~\"${fetcher_job:regex}\",source=~\"${source:regex}\",request_type=~\"${request_type:regex}\"}[$__rate_interval])), 0.001)",
+          "legendFormat": "{{job}}",
           "refId": "A"
         }
       ],
@@ -446,7 +658,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "orange",
@@ -466,7 +678,7 @@
         "h": 4,
         "w": 4,
         "x": 20,
-        "y": 1
+        "y": 7
       },
       "id": 7,
       "options": {
@@ -474,6 +686,7 @@
         "graphMode": "area",
         "justifyMode": "auto",
         "orientation": "auto",
+        "percentChangeColorMode": "standard",
         "reduceOptions": {
           "calcs": [
             "lastNotNull"
@@ -481,9 +694,11 @@
           "fields": "",
           "values": false
         },
+        "showPercentChange": false,
         "textMode": "auto",
         "wideLayout": true
       },
+      "pluginVersion": "12.4.0",
       "targets": [
         {
           "datasource": {
@@ -504,343 +719,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 5
-      },
-      "id": 8,
-      "panels": [],
-      "title": "Fetcher",
-      "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "Fetcher queue request throughput split by source, request type, and result.",
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "spanNulls": false
-          },
-          "unit": "reqps"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 6
-      },
-      "id": 9,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "sum by (source, request_type, result) (rate(mvcr_fetcher_requests_total{namespace=\"$namespace\",job=\"$fetcher_job\",source=~\"$source\",request_type=~\"$request_type\"}[$__rate_interval]))",
-          "legendFormat": "{{source}} {{request_type}} {{result}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Fetcher Request Rate",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "Operational errors by stable fetcher stage and error type.",
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "showPoints": "never",
-            "spanNulls": false
-          },
-          "unit": "ops"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 6
-      },
-      "id": 10,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "sum by (stage, error_type) (rate(mvcr_fetcher_errors_total{namespace=\"$namespace\",job=\"$fetcher_job\"}[$__rate_interval]))",
-          "legendFormat": "{{stage}} {{error_type}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Fetcher Error Rate",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "Current average latency to the MVCR target website.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "orange",
-                "value": 5
-              },
-              {
-                "color": "red",
-                "value": 15
-              }
-            ]
-          },
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 6,
-        "w": 8,
-        "x": 0,
-        "y": 14
-      },
-      "id": 11,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "max(mvcr_fetcher_target_latency_seconds{namespace=\"$namespace\",job=\"$fetcher_job\"})",
-          "legendFormat": "latency",
-          "refId": "A"
-        }
-      ],
-      "title": "Target Latency",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "Current fetcher request state. This is debug context, not a primary alert signal.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 6,
-        "w": 8,
-        "x": 8,
-        "y": 14
-      },
-      "id": 12,
-      "options": {
-        "displayMode": "gradient",
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "maxVizHeight": 300,
-        "minVizHeight": 16,
-        "minVizWidth": 8,
-        "namePlacement": "auto",
-        "orientation": "horizontal",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showUnfilled": true,
-        "sizing": "auto",
-        "valueMode": "color"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "sum by (state) (mvcr_fetcher_request_state{namespace=\"$namespace\",job=\"$fetcher_job\"})",
-          "legendFormat": "{{state}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Request State",
-      "type": "bargauge"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "Successful fetches over the selected time range.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 6,
-        "w": 8,
-        "x": 16,
-        "y": 14
-      },
-      "id": 13,
-      "options": {
-        "displayMode": "gradient",
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "maxVizHeight": 300,
-        "minVizHeight": 16,
-        "minVizWidth": 8,
-        "namePlacement": "auto",
-        "orientation": "horizontal",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "showUnfilled": true,
-        "sizing": "auto",
-        "valueMode": "color"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "sum by (source, request_type) (increase(mvcr_fetcher_requests_total{namespace=\"$namespace\",job=\"$fetcher_job\",source=~\"$source\",request_type=~\"$request_type\",result=\"success\"}[$__range]))",
-          "legendFormat": "{{source}} {{request_type}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Successful Fetches In Range",
-      "type": "bargauge"
-    },
-    {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 20
+        "y": 11
       },
       "id": 14,
       "panels": [],
@@ -855,14 +734,56 @@
       "description": "Bot operational errors by stable stage and error category.",
       "fieldConfig": {
         "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
             "showPoints": "never",
-            "spanNulls": false
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
           },
           "unit": "ops"
         },
@@ -872,7 +793,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 21
+        "y": 12
       },
       "id": 15,
       "options": {
@@ -890,13 +811,14 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.4.0",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (stage, error_type) (rate(mvcr_bot_errors_total{namespace=\"$namespace\",job=\"$bot_job\"}[$__rate_interval]))",
+          "expr": "sum by (stage, error_type) (rate(mvcr_bot_errors_total{namespace=\"$namespace\",job=\"$bot_job\"}[$__rate_interval])) or on() vector(0)",
           "legendFormat": "{{stage}} {{error_type}}",
           "refId": "A"
         }
@@ -912,14 +834,56 @@
       "description": "Telegram notification outcomes. Dead users are expected product outcomes; delivery failures are retryable_gave_up and permanent_other.",
       "fieldConfig": {
         "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
             "showPoints": "never",
-            "spanNulls": false
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
           },
           "unit": "ops"
         },
@@ -929,7 +893,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 21
+        "y": 12
       },
       "id": 16,
       "options": {
@@ -947,13 +911,14 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.4.0",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (notification_kind, result) (rate(mvcr_bot_notifications_total{namespace=\"$namespace\",job=\"$bot_job\"}[$__rate_interval]))",
+          "expr": "sum by (notification_kind, result) (rate(mvcr_bot_notifications_total{namespace=\"$namespace\",job=\"$bot_job\"}[$__rate_interval])) or on() vector(0)",
           "legendFormat": "{{notification_kind}} {{result}}",
           "refId": "A"
         }
@@ -969,24 +934,66 @@
       "description": "Bot RabbitMQ consumer handling throughput.",
       "fieldConfig": {
         "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
             "showPoints": "never",
-            "spanNulls": false
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
           },
           "unit": "ops"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 8,
         "x": 0,
-        "y": 29
+        "y": 20
       },
       "id": 17,
       "options": {
@@ -1004,6 +1011,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.4.0",
       "targets": [
         {
           "datasource": {
@@ -1026,24 +1034,66 @@
       "description": "Messages the bot publishes to RabbitMQ.",
       "fieldConfig": {
         "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
             "showPoints": "never",
-            "spanNulls": false
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
           },
           "unit": "ops"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 8,
         "x": 8,
-        "y": 29
+        "y": 20
       },
       "id": 18,
       "options": {
@@ -1061,6 +1111,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.4.0",
       "targets": [
         {
           "datasource": {
@@ -1083,24 +1134,66 @@
       "description": "Scheduled monitor loop runs and failures.",
       "fieldConfig": {
         "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
             "showPoints": "never",
-            "spanNulls": false
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
           },
           "unit": "ops"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 8,
         "x": 16,
-        "y": 29
+        "y": 20
       },
       "id": 19,
       "options": {
@@ -1118,13 +1211,14 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.4.0",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (scheduler, result) (rate(mvcr_bot_scheduler_runs_total{namespace=\"$namespace\",job=\"$bot_job\"}[$__rate_interval]))",
+          "expr": "sum by (scheduler, result) (rate(mvcr_bot_scheduler_runs_total{namespace=\"$namespace\",job=\"$bot_job\"}[$__rate_interval])) or on() vector(0)",
           "legendFormat": "{{scheduler}} {{result}}",
           "refId": "A"
         }
@@ -1138,7 +1232,515 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 37
+        "y": 29
+      },
+      "id": 8,
+      "panels": [],
+      "title": "Fetcher",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Fetcher queue request throughput split by source, request type, and result.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 0,
+        "y": 30
+      },
+      "id": 9,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "12.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (job, source, request_type, result) (rate(mvcr_fetcher_requests_total{job=~\"${fetcher_job:regex}\",source=~\"${source:regex}\",request_type=~\"${request_type:regex}\"}[$__rate_interval]))",
+          "legendFormat": "{{job}} {{source}} {{request_type}} {{result}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Fetcher Request Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Operational errors by stable fetcher stage and error type.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 30
+      },
+      "id": 10,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "12.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (job, stage, error_type) (rate(mvcr_fetcher_errors_total{job=~\"${fetcher_job:regex}\"}[$__rate_interval])) or label_replace(label_replace((0 * max by (job) (mvcr_fetcher_target_up{job=~\"${fetcher_job:regex}\"})) unless on (job) sum by (job) (rate(mvcr_fetcher_errors_total{job=~\"${fetcher_job:regex}\"}[$__rate_interval])), \"stage\", \"no_errors\", \"job\", \".*\"), \"error_type\", \"\", \"job\", \".*\")",
+          "legendFormat": "{{job}} {{stage}} {{error_type}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Fetcher Error Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Current average latency to the MVCR target website.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "max": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "orange",
+                "value": 5
+              },
+              {
+                "color": "red",
+                "value": 15
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 11,
+        "w": 8,
+        "x": 0,
+        "y": 39
+      },
+      "id": 11,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "max by (job) (mvcr_fetcher_target_latency_seconds{job=~\"${fetcher_job:regex}\"})",
+          "legendFormat": "{{job}}",
+          "refId": "A"
+        }
+      ],
+      "title": "IPC.gov.cz Latency",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Current fetcher request state. This is debug context, not a primary alert signal.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 11,
+        "w": 8,
+        "x": 8,
+        "y": 39
+      },
+      "id": 12,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "12.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (job, state) (mvcr_fetcher_request_state{job=~\"${fetcher_job:regex}\"})",
+          "legendFormat": "{{job}} {{state}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Request State Over Time",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Successful fetches over the selected time range.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 11,
+        "w": 8,
+        "x": 16,
+        "y": 39
+      },
+      "id": 13,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "12.4.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum by (job, source, request_type) (increase(mvcr_fetcher_requests_total{job=~\"${fetcher_job:regex}\",source=~\"${source:regex}\",request_type=~\"${request_type:regex}\",result=\"success\"}[$__rate_interval]))",
+          "legendFormat": "{{job}} {{source}} {{request_type}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Successful Fetches Over Time",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 50
       },
       "id": 20,
       "panels": [],
@@ -1153,21 +1755,50 @@
       "description": "Ready messages per queue. Uses max by queue because RabbitMQ queue gauges should not be summed across duplicate scrape targets.",
       "fieldConfig": {
         "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
             "showPoints": "never",
-            "spanNulls": false
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
           },
+          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "orange",
@@ -1184,10 +1815,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 12,
         "x": 0,
-        "y": 38
+        "y": 51
       },
       "id": 21,
       "options": {
@@ -1206,6 +1837,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.4.0",
       "targets": [
         {
           "datasource": {
@@ -1228,21 +1860,50 @@
       "description": "Consumer count per queue.",
       "fieldConfig": {
         "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
             "drawStyle": "line",
             "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
             "lineInterpolation": "linear",
             "lineWidth": 1,
             "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
             "showPoints": "never",
-            "spanNulls": false
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
           },
+          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
                 "color": "red",
-                "value": null
+                "value": 0
               },
               {
                 "color": "green",
@@ -1255,10 +1916,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 8,
+        "h": 9,
         "w": 12,
         "x": 12,
-        "y": 38
+        "y": 51
       },
       "id": 22,
       "options": {
@@ -1277,6 +1938,7 @@
           "sort": "desc"
         }
       },
+      "pluginVersion": "12.4.0",
       "targets": [
         {
           "datasource": {
@@ -1308,7 +1970,7 @@
             "steps": [
               {
                 "color": "green",
-                "value": null
+                "value": 0
               },
               {
                 "color": "orange",
@@ -1328,7 +1990,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 46
+        "y": 60
       },
       "id": 23,
       "options": {
@@ -1355,6 +2017,7 @@
         "sizing": "auto",
         "valueMode": "color"
       },
+      "pluginVersion": "12.4.0",
       "targets": [
         {
           "datasource": {
@@ -1386,7 +2049,7 @@
             "steps": [
               {
                 "color": "red",
-                "value": null
+                "value": 0
               },
               {
                 "color": "green",
@@ -1402,7 +2065,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 46
+        "y": 60
       },
       "id": 24,
       "options": {
@@ -1429,6 +2092,7 @@
         "sizing": "auto",
         "valueMode": "color"
       },
+      "pluginVersion": "12.4.0",
       "targets": [
         {
           "datasource": {
@@ -1442,148 +2106,11 @@
       ],
       "title": "Current Queue Consumers",
       "type": "bargauge"
-    },
-    {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 53
-      },
-      "id": 25,
-      "panels": [],
-      "title": "Build",
-      "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "Build metadata exposed by the bot metrics endpoint.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "fixed"
-          },
-          "displayName": "${__field.labels.version} @ ${__field.labels.commit}",
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 12,
-        "x": 0,
-        "y": 54
-      },
-      "id": 26,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "name",
-        "wideLayout": true
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "mvcr_bot_build_info{namespace=\"$namespace\",job=\"$bot_job\"}",
-          "instant": true,
-          "legendFormat": "bot",
-          "refId": "A"
-        }
-      ],
-      "title": "Bot Build",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "description": "Build metadata exposed by the fetcher metrics endpoint.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "fixed"
-          },
-          "displayName": "${__field.labels.version} @ ${__field.labels.commit}",
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 12,
-        "x": 12,
-        "y": 54
-      },
-      "id": 27,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "name",
-        "wideLayout": true
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "mvcr_fetcher_build_info{namespace=\"$namespace\",job=\"$fetcher_job\"}",
-          "instant": true,
-          "legendFormat": "fetcher",
-          "refId": "A"
-        }
-      ],
-      "title": "Fetcher Build",
-      "type": "stat"
     }
   ],
   "preload": false,
   "refresh": "30s",
-  "schemaVersion": 41,
+  "schemaVersion": 42,
   "tags": [
     "mvcr",
     "telegram-bot",
@@ -1594,23 +2121,17 @@
       {
         "current": {},
         "description": "Prometheus datasource used by this dashboard.",
-        "hide": 0,
         "includeAll": false,
         "label": "Data source",
-        "multi": false,
         "name": "datasource",
         "options": [],
         "query": "prometheus",
-        "queryValue": "",
         "refresh": 1,
         "regex": "",
-        "skipUrlSync": false,
         "type": "datasource"
       },
       {
-        "allValue": null,
         "current": {
-          "selected": true,
           "text": "mvcr-telegram-bot",
           "value": "mvcr-telegram-bot"
         },
@@ -1620,10 +2141,8 @@
         },
         "definition": "label_values(up{job=~\"mvcr-.*\"}, namespace)",
         "description": "Kubernetes namespace containing the MVCR release.",
-        "hide": 0,
         "includeAll": false,
         "label": "Namespace",
-        "multi": false,
         "name": "namespace",
         "options": [],
         "query": {
@@ -1632,14 +2151,12 @@
         },
         "refresh": 1,
         "regex": "",
-        "skipUrlSync": false,
+        "regexApplyTo": "value",
         "sort": 1,
         "type": "query"
       },
       {
-        "allValue": null,
         "current": {
-          "selected": true,
           "text": "mvcr-bot-metrics",
           "value": "mvcr-bot-metrics"
         },
@@ -1649,10 +2166,8 @@
         },
         "definition": "label_values(mvcr_bot_build_info{namespace=\"$namespace\"}, job)",
         "description": "Prometheus job for the bot metrics service.",
-        "hide": 0,
         "includeAll": false,
         "label": "Bot job",
-        "multi": false,
         "name": "bot_job",
         "options": [],
         "query": {
@@ -1661,43 +2176,38 @@
         },
         "refresh": 1,
         "regex": "",
-        "skipUrlSync": false,
+        "regexApplyTo": "value",
         "sort": 1,
         "type": "query"
       },
       {
-        "allValue": null,
         "current": {
-          "selected": true,
-          "text": "mvcr-fetcher-metrics",
-          "value": "mvcr-fetcher-metrics"
+          "text": "All",
+          "value": "$__all"
         },
         "datasource": {
           "type": "prometheus",
           "uid": "${datasource}"
         },
-        "definition": "label_values(mvcr_fetcher_target_up{namespace=\"$namespace\"}, job)",
-        "description": "Prometheus job for the fetcher metrics service.",
-        "hide": 0,
-        "includeAll": false,
+        "definition": "label_values(mvcr_fetcher_target_up, job)",
+        "description": "Prometheus job(s) for fetcher metrics, including in-cluster and external fetchers.",
+        "includeAll": true,
         "label": "Fetcher job",
-        "multi": false,
+        "multi": true,
         "name": "fetcher_job",
         "options": [],
         "query": {
-          "query": "label_values(mvcr_fetcher_target_up{namespace=\"$namespace\"}, job)",
+          "query": "label_values(mvcr_fetcher_target_up, job)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 1,
         "regex": "",
-        "skipUrlSync": false,
+        "regexApplyTo": "value",
         "sort": 1,
         "type": "query"
       },
       {
-        "allValue": null,
         "current": {
-          "selected": true,
           "text": "mvcr-rabbitmq",
           "value": "mvcr-rabbitmq"
         },
@@ -1707,10 +2217,8 @@
         },
         "definition": "label_values(rabbitmq_detailed_queue_consumers{namespace=\"$namespace\"}, job)",
         "description": "Prometheus job for the RabbitMQ metrics service.",
-        "hide": 0,
         "includeAll": false,
         "label": "RabbitMQ job",
-        "multi": false,
         "name": "rabbitmq_job",
         "options": [],
         "query": {
@@ -1719,14 +2227,13 @@
         },
         "refresh": 1,
         "regex": "",
-        "skipUrlSync": false,
+        "regexApplyTo": "value",
         "sort": 1,
         "type": "query"
       },
       {
         "allValue": ".*",
         "current": {
-          "selected": true,
           "text": "All",
           "value": "$__all"
         },
@@ -1736,7 +2243,6 @@
         },
         "definition": "label_values(rabbitmq_detailed_queue_consumers{namespace=\"$namespace\",job=\"$rabbitmq_job\"}, queue)",
         "description": "RabbitMQ queues to show.",
-        "hide": 0,
         "includeAll": true,
         "label": "Queue",
         "multi": true,
@@ -1748,14 +2254,13 @@
         },
         "refresh": 1,
         "regex": "",
-        "skipUrlSync": false,
+        "regexApplyTo": "value",
         "sort": 1,
         "type": "query"
       },
       {
         "allValue": ".*",
         "current": {
-          "selected": true,
           "text": "All",
           "value": "$__all"
         },
@@ -1763,28 +2268,26 @@
           "type": "prometheus",
           "uid": "${datasource}"
         },
-        "definition": "label_values(mvcr_fetcher_requests_total{namespace=\"$namespace\",job=\"$fetcher_job\"}, source)",
+        "definition": "label_values(mvcr_fetcher_requests_total{job=~\"${fetcher_job:regex}\"}, source)",
         "description": "MVCR application source.",
-        "hide": 0,
         "includeAll": true,
         "label": "Source",
         "multi": true,
         "name": "source",
         "options": [],
         "query": {
-          "query": "label_values(mvcr_fetcher_requests_total{namespace=\"$namespace\",job=\"$fetcher_job\"}, source)",
+          "query": "label_values(mvcr_fetcher_requests_total{job=~\"${fetcher_job:regex}\"}, source)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 1,
         "regex": "",
-        "skipUrlSync": false,
+        "regexApplyTo": "value",
         "sort": 1,
         "type": "query"
       },
       {
         "allValue": ".*",
         "current": {
-          "selected": true,
           "text": "All",
           "value": "$__all"
         },
@@ -1792,21 +2295,20 @@
           "type": "prometheus",
           "uid": "${datasource}"
         },
-        "definition": "label_values(mvcr_fetcher_requests_total{namespace=\"$namespace\",job=\"$fetcher_job\"}, request_type)",
+        "definition": "label_values(mvcr_fetcher_requests_total{job=~\"${fetcher_job:regex}\"}, request_type)",
         "description": "Fetcher request type.",
-        "hide": 0,
         "includeAll": true,
         "label": "Request type",
         "multi": true,
         "name": "request_type",
         "options": [],
         "query": {
-          "query": "label_values(mvcr_fetcher_requests_total{namespace=\"$namespace\",job=\"$fetcher_job\"}, request_type)",
+          "query": "label_values(mvcr_fetcher_requests_total{job=~\"${fetcher_job:regex}\"}, request_type)",
           "refId": "StandardVariableQuery"
         },
         "refresh": 1,
         "regex": "",
-        "skipUrlSync": false,
+        "regexApplyTo": "value",
         "sort": 1,
         "type": "query"
       }
@@ -1830,6 +2332,6 @@
   "timezone": "browser",
   "title": "MVCR Application Checker",
   "uid": "mvcr-application-checker",
-  "version": 1,
+  "version": 19,
   "weekStart": ""
 }
