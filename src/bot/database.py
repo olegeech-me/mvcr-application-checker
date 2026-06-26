@@ -4,6 +4,7 @@ import logging
 import os
 import pytz
 import asyncio
+from bot import prometheus_metrics
 from bot.texts import message_texts
 from bot.utils import categorize_application_status, generate_oam_full_string
 
@@ -451,6 +452,7 @@ class Database:
                 return True
             except Exception as e:
                 logger.error(f"Error bumping notification {notification_id} attempt: {e}")
+                prometheus_metrics.record_error("db", "db_error")
                 return False
 
     async def purge_old_notifications(self, delivered_retention_days, pending_max_age_days):

@@ -19,11 +19,15 @@ logger = logging.getLogger(__name__)
 
 
 def compute_next_retry_at(current_attempts, base_interval, max_interval, now=None):
-    """Capped exponential backoff: NOW + min(base * 2^current_attempts, max)"""
+    """Capped exponential backoff: NOW + min(base * 2^current_attempts, max)
+
+    Returns naive UTC — Notifications.next_attempt_at is TIMESTAMP WITHOUT
+    TIME ZONE and asyncpg rejects tz-aware values for that column
+    """
     if now is None:
         now = datetime.now(timezone.utc)
     delay = min(base_interval * (2**current_attempts), max_interval)
-    return now + timedelta(seconds=delay)
+    return (now + timedelta(seconds=delay)).replace(tzinfo=None)
 
 
 class ApplicationMonitor:

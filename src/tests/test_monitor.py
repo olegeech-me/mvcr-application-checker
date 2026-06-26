@@ -187,7 +187,16 @@ def test_compute_next_retry_at_caps_exponential_growth(current_attempts, base, m
     """
     now = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
     result = compute_next_retry_at(current_attempts, base, max_, now=now)
-    assert result == now + timedelta(seconds=expected_seconds)
+    expected = (now + timedelta(seconds=expected_seconds)).replace(tzinfo=None)
+    assert result == expected
+
+
+def test_compute_next_retry_at_returns_naive_timestamp_for_pg_timestamp_column():
+    """Notifications.next_attempt_at is TIMESTAMP WITHOUT TIME ZONE; asyncpg
+    rejects tz-aware values when encoding $2 for bump_attempt
+    """
+    result = compute_next_retry_at(3, base_interval=300, max_interval=3600)
+    assert result.tzinfo is None
 
 
 # ---------------------------------------------------------------------------
@@ -269,7 +278,8 @@ async def test_dispatcher_retryable_gave_up_verdict_bumps_with_capped_backoff():
     args, kwargs = db.bump_attempt.call_args
     assert args[0] == 7
     assert isinstance(args[1], datetime)
-    assert args[1] > datetime.now(timezone.utc)
+    assert args[1].tzinfo is None
+    assert args[1] > datetime.utcnow()
     assert kwargs.get("last_error") == "retryable_gave_up"
     db.mark_delivered.assert_not_called()
     db.mark_user_inactive.assert_not_called()

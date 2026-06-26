@@ -90,5 +90,17 @@ spec:
           annotations:
             summary: "MVCR bot notification delivery failures"
             description: "Bot had {{ "{{ $value }}" }} notification(s) fail delivery during the last {{ .Values.metrics.prometheusRule.notificationFailuresWindow }}."
+        - alert: MvcrBotTelegramStale
+          expr: |
+            (time() - max(mvcr_bot_telegram_last_ok_timestamp_seconds) > {{ .Values.metrics.prometheusRule.botTelegramStaleSeconds }})
+          for: {{ .Values.metrics.prometheusRule.botTelegramStaleDuration }}
+          labels:
+            severity: warning
+            service: mvcr
+          annotations:
+            summary: "MVCR bot Telegram path appears stale"
+            description: >-
+              No successful Telegram send or inbound update for more than
+              {{ .Values.metrics.prometheusRule.botTelegramStaleSeconds }} seconds.
         {{- end }}
 {{- end }}

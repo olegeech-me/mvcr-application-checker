@@ -1,4 +1,5 @@
 import logging
+import time
 
 from prometheus_client import CollectorRegistry, Counter, Gauge, REGISTRY, start_http_server
 
@@ -71,6 +72,11 @@ class BotPrometheusMetrics:
             ["version", "commit"],
             registry=registry,
         )
+        self.telegram_last_ok_timestamp_seconds = Gauge(
+            "mvcr_bot_telegram_last_ok_timestamp_seconds",
+            "Unix timestamp of the last successful Telegram send or received update.",
+            registry=registry,
+        )
 
     def record_error(self, stage, error_type):
         """Record a bot operational error"""
@@ -111,6 +117,10 @@ class BotPrometheusMetrics:
         """Expose bot version and git commit"""
         self.build_info.labels(version=version, commit=commit).set(1)
 
+    def set_telegram_last_ok(self):
+        """Stamp the last time a Telegram send or inbound update succeeded"""
+        self.telegram_last_ok_timestamp_seconds.set(time.time())
+
 
 metrics = BotPrometheusMetrics()
 
@@ -143,6 +153,10 @@ def record_published_message(queue, result):
 
 def record_scheduler_run(scheduler, result):
     metrics.record_scheduler_run(scheduler, result)
+
+
+def set_telegram_last_ok():
+    metrics.set_telegram_last_ok()
 
 
 def new_test_metrics():

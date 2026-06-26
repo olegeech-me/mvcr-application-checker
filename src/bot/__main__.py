@@ -1,5 +1,6 @@
-from telegram.ext import CallbackQueryHandler, CommandHandler, ConversationHandler, MessageHandler, filters
-from telegram.error import NetworkError
+from telegram import Update
+from telegram.ext import CallbackQueryHandler, CommandHandler, ConversationHandler, MessageHandler, TypeHandler, filters
+from telegram.error import NetworkError, TimedOut
 import asyncio
 import logging
 import signal
@@ -40,6 +41,23 @@ from bot import prometheus_metrics
 
 MAX_RETRIES = 15  # maximum number bot of connection retries
 RETRY_DELAY = 5  # delay (in seconds) between retries
+
+
+async def record_telegram_inbound_activity(update, context):
+    """Inbound updates prove polling is alive"""
+    prometheus_metrics.set_telegram_last_ok()
+
+
+async def telegram_error_handler(update, context):
+    """Meter runtime Telegram failures from polling and handler delivery"""
+    exc = context.error
+    if isinstance(exc, TimedOut):
+        prometheus_metrics.record_error("telegram", "timeout")
+        logger.warning("Telegram TimedOut while handling an update")
+    elif isinstance(exc, NetworkError):
+        prometheus_metrics.record_error("telegram", "network")
+        logger.warning(f"Telegram NetworkError while handling an update: {exc}")
+
 
 # Set up logging
 log_level_int = eval(f"logging.{LOG_LEVEL}")
@@ -85,6 +103,7 @@ async def shutdown():
 async def main():
     prometheus_metrics.start_metrics_server(METRICS_HOST, METRICS_PORT)
     prometheus_metrics.set_build_info(BASE_VERSION, GIT_COMMIT)
+    prometheus_metrics.set_telegram_last_ok()
     # Connect to postgres
     await db.connect(migrations_dir=DB_MIGRATIONS_DIR)
     # Connect to rabbit
@@ -155,6 +174,11 @@ async def main():
     bot.add_handler(reminder_handler)
     bot.add_handler(MessageHandler(filters.TEXT, unknown_text))
     bot.add_handler(MessageHandler(filters.COMMAND, unknown_command))
+    bot.add_handler(
+        TypeHandler(Update, record_telegram_inbound_activity, block=False),
+        group=0,
+    )
+    bot.add_error_handler(telegram_error_handler)
 
     # Run the bot
     logger.info("Starting telegram bot")
@@ -172,6 +196,7 @@ async def main():
             else:
                 logger.error("Max retries reached. Could not start telegram bot")
                 raise
+    prometheus_metrics.set_telegram_last_ok()
     logger.info(f"Admins are: {ADMIN_CHAT_IDS}")
 
     # Run RabbitMQ consumers

@@ -1,6 +1,8 @@
 import pytest
 from pathlib import Path
+from unittest.mock import patch
 
+from bot.monitor import compute_next_retry_at
 from conftest import make_db_with_mock_pool
 
 
@@ -254,6 +256,38 @@ async def test_db_bump_attempt_persists_caller_supplied_timestamp():
     assert args[1] == 42
     assert args[2] == next_at
     assert args[3] == "retryable_gave_up"
+
+
+@pytest.mark.asyncio
+async def test_db_bump_attempt_accepts_compute_next_retry_at_output():
+    """Production path: dispatcher computes backoff, DB persists it — the
+    timestamp must survive asyncpg encoding for TIMESTAMP columns
+    """
+    db, conn = make_db_with_mock_pool()
+    conn.execute.return_value = "UPDATE 1"
+
+    next_at = compute_next_retry_at(3, 300, 3600)
+    assert next_at.tzinfo is None
+
+    assert await db.bump_attempt(42, next_at, last_error="retryable_gave_up") is True
+    assert conn.execute.call_args[0][2] is next_at
+
+
+@pytest.mark.asyncio
+async def test_db_bump_attempt_records_metric_on_failure():
+    import datetime as _dt
+    db, conn = make_db_with_mock_pool()
+    conn.execute.side_effect = TypeError(
+        "invalid input for query argument $2: can't subtract offset-naive and offset-aware datetimes"
+    )
+    with patch("bot.database.prometheus_metrics.record_error") as record_error:
+        result = await db.bump_attempt(
+            181,
+            _dt.datetime(2026, 6, 24, 6, 6, 38),
+            last_error="retryable_gave_up",
+        )
+    assert result is False
+    record_error.assert_called_once_with("db", "db_error")
 
 
 @pytest.mark.asyncio

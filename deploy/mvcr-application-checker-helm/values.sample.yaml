@@ -71,12 +71,14 @@ metrics:
     fetcherNoSuccessSeconds: 7200
     fetcherNoSuccessWindow: 2h
     fetcherNoSuccessDuration: 10m
-    botErrorBurstThreshold: 10
+    botErrorBurstThreshold: 5
     botErrorBurstWindow: 15m
-    botErrorBurstDuration: 10m
-    notificationFailuresThreshold: 10
+    botErrorBurstDuration: 5m
+    notificationFailuresThreshold: 5
     notificationFailuresWindow: 30m
-    notificationFailuresDuration: 10m
+    notificationFailuresDuration: 5m
+    botTelegramStaleSeconds: 3600
+    botTelegramStaleDuration: 15m
 
 dbDump:
   enabled: true

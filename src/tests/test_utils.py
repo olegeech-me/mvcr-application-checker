@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, patch
 
 from telegram.error import (
     BadRequest, ChatMigrated, Forbidden, NetworkError, RetryAfter, TimedOut,
@@ -239,8 +239,10 @@ def _make_bot_returning(side_effect):
 @pytest.mark.asyncio
 async def test_notify_user_ok():
     bot = _make_bot_returning(None)
-    assert await notify_user(bot, 123, "hi") == "ok"
+    with patch("bot.utils.prometheus_metrics.set_telegram_last_ok") as set_ok:
+        assert await notify_user(bot, 123, "hi") == "ok"
     bot.updater.bot.send_message.assert_awaited_once()
+    set_ok.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -268,8 +270,22 @@ async def test_notify_user_retryable_gave_up_after_max_retries(monkeypatch):
     monkeypatch.setattr("bot.utils.asyncio.sleep", AsyncMock())
 
     bot = _make_bot_returning(TimedOut())
-    assert await notify_user(bot, 123, "hi", max_retries=3) == "retryable_gave_up"
+    with patch("bot.utils.prometheus_metrics.record_error") as record_error:
+        assert await notify_user(bot, 123, "hi", max_retries=3) == "retryable_gave_up"
     assert bot.updater.bot.send_message.await_count == 3
+    assert record_error.call_count == 3
+    record_error.assert_called_with("telegram", "timeout")
+
+
+@pytest.mark.asyncio
+async def test_notify_user_network_error_records_telegram_network_metric(monkeypatch):
+    monkeypatch.setattr("bot.utils.asyncio.sleep", AsyncMock())
+
+    bot = _make_bot_returning(NetworkError("connect failed"))
+    with patch("bot.utils.prometheus_metrics.record_error") as record_error:
+        assert await notify_user(bot, 123, "hi", max_retries=2) == "retryable_gave_up"
+    assert record_error.call_count == 2
+    record_error.assert_called_with("telegram", "network")
 
 
 @pytest.mark.asyncio

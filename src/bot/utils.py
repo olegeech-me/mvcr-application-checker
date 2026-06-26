@@ -1,6 +1,7 @@
 import asyncio
 import logging
 
+from bot import prometheus_metrics
 
 # https://docs.python-telegram-bot.org/en/v20.5/telegram.error.html
 # Order matters: BadRequest is a subclass of NetworkError in PTB v20.5,
@@ -145,6 +146,7 @@ async def notify_user(bot, chat_id, text, max_retries=5, username=None, first_na
         try:
             await bot.updater.bot.send_message(chat_id=chat_id, text=text)
             logger.debug(f"Sent message to {label}")
+            prometheus_metrics.set_telegram_last_ok()
             return "ok"
         except RetryAfter as e:
             delay = e.retry_after
@@ -156,8 +158,10 @@ async def notify_user(bot, chat_id, text, max_retries=5, username=None, first_na
             )
             return verdict
         except TimedOut:
+            prometheus_metrics.record_error("telegram", "timeout")
             logger.warning(f"TimedOut: failed to notify {label}: retrying after {delay} seconds")
         except NetworkError:
+            prometheus_metrics.record_error("telegram", "network")
             logger.warning(f"NetworkError: failed to notify {label}: retrying after {delay} seconds")
         except Exception as e:
             logger.error(f"Unexpected error sending message to {label}: {e!r}")

@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## [v2.4.1] - 2026-06-26
+
+### Notification retry fix
+
+- Fixed `compute_next_retry_at()` to return naive UTC timestamps compatible with the `Notifications.next_attempt_at` `TIMESTAMP` column; tz-aware values caused `bump_attempt` to fail and stuck notifications to retry every lock window instead of backing off
+- Record `db_error` in Prometheus when `bump_attempt` fails
+
+### Bot Telegram observability
+
+- Record runtime `telegram/timeout` and `telegram/network` errors from `notify_user` retries and the PTB error handler (startup was the only path counted before)
+- Added `mvcr_bot_telegram_last_ok_timestamp_seconds` gauge, updated on successful sends and inbound updates
+- Added `MvcrBotTelegramStale` PrometheusRule alert when Telegram activity goes silent for over an hour
+- Lowered `MvcrBotErrorBurst` and `MvcrTelegramDeliveryFailures` thresholds and `for` durations so scattered outages page sooner
+
+### Tests
+
+- Added contract tests locking the monitor-to-database timestamp shape for notification backoff
+
 ## [v2.4.0] - 2026-06-07
 
 ### Bot architecture
