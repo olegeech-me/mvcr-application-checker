@@ -124,6 +124,8 @@ Rate limiting uses a sliding window of timestamps per user per command (stored i
 
 ### 2.3 Application Monitor (Scheduler)
 
+**Startup** (`__main__.py`): Telegram polling, then `asyncio.gather(...)` without `await` to register Rabbit consumers (`consume` returns after `queue.consume`; aio_pika callbacks handle messages). After 15s, `await asyncio.gather(...)` runs the schedulers below until shutdown. Fetcher `__main__.py` uses the same fire-and-forget `gather` for its consumers.
+
 Three background loops run after a 15-second startup delay:
 
 **ApplicationMonitor** (interval: `SCHEDULER_PERIOD`, default 300s):
@@ -161,6 +163,7 @@ actively waiting for the response.
 ### 2.4 Database Layer
 
 PostgreSQL via `asyncpg` connection pool (min 5, max 20 connections).
+`TIMESTAMP` columns are without time zone — Python callers must use naive UTC datetimes.
 Auto-runs migrations from `db-migrations/` on startup.
 
 See [Section 7: Database Schema](#7-database-schema) for table definitions.

@@ -43,7 +43,7 @@ Fetcher (`src/fetcher/`):
 
 ## Where To Look
 
-- `ARCHITECTURE.md` — system design, message flow, DB schema, state machine. Read it before changing message flow, DB state, queue handling, notification delivery, or deployment.
+- `ARCHITECTURE.md` — read the section for your change area before editing; do not infer behaviour from code alone.
 - `metrics.md` — exposed metrics and alert semantics.
 - `deploy/mvcr-application-checker-helm/` — Helm chart.
 - `db-init-scripts/init.sql` + `db-migrations/` — schema; migrations run on bot startup.
