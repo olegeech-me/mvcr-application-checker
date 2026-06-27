@@ -98,9 +98,10 @@ spec:
             severity: warning
             service: mvcr
           annotations:
-            summary: "MVCR bot Telegram path appears stale"
+            summary: "MVCR bot lost contact with Telegram"
             description: >-
-              No successful Telegram send or inbound update for more than
-              {{ .Values.metrics.prometheusRule.botTelegramStaleSeconds }} seconds.
+              The bot has not received a user message or sent a notification
+              successfully for more than {{ .Values.metrics.prometheusRule.botTelegramStaleSeconds }} seconds.
+              It may be disconnected from Telegram or stuck — check bot logs and HTTP_PROXY.
         {{- end }}
 {{- end }}

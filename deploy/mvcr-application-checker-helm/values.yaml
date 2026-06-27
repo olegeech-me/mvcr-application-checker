@@ -89,8 +89,8 @@ metrics:
     notificationFailuresThreshold: 5
     notificationFailuresWindow: 30m
     notificationFailuresDuration: 5m
-    botTelegramStaleSeconds: 3600
-    botTelegramStaleDuration: 15m
+    botTelegramStaleSeconds: 14400
+    botTelegramStaleDuration: 30m
 
 # -- Database dump CronJob
 dbDump:

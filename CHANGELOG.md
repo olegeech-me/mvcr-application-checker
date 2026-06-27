@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## [v2.4.2] - 2026-06-27
+
+### Bot monitoring
+
+- Fix `MvcrBotTelegramStale` false alerts: inbound activity handler now runs in group -1 before command handlers
+- Raise stale threshold to 4h / 30m `for`; clearer alert summary and description
+
 ## [v2.4.1] - 2026-06-26
 
 ### Notification retry fix

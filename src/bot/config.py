@@ -4,7 +4,7 @@ import os
 
 
 # Version information
-BASE_VERSION = os.getenv("BASE_VERSION", "v2.4.1")
+BASE_VERSION = os.getenv("BASE_VERSION", "v2.4.2")
 GIT_COMMIT = os.getenv("GIT_COMMIT", "unknown")
 FULL_VERSION = f"{BASE_VERSION}-{GIT_COMMIT}"
 

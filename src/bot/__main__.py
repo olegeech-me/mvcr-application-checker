@@ -113,6 +113,12 @@ async def main():
     signal.signal(signal.SIGINT, lambda s, f: asyncio.create_task(shutdown()))
     signal.signal(signal.SIGTERM, lambda s, f: asyncio.create_task(shutdown()))
 
+    # group -1 so this runs before command handlers (which block group 0)
+    bot.add_handler(
+        TypeHandler(Update, record_telegram_inbound_activity, block=False),
+        group=-1,
+    )
+
     # Register command and message handlers
     bot.add_handler(CommandHandler("status", status_command, has_args=False))
     bot.add_handler(CallbackQueryHandler(status_button, pattern="status_*"))
@@ -174,10 +180,6 @@ async def main():
     bot.add_handler(reminder_handler)
     bot.add_handler(MessageHandler(filters.TEXT, unknown_text))
     bot.add_handler(MessageHandler(filters.COMMAND, unknown_command))
-    bot.add_handler(
-        TypeHandler(Update, record_telegram_inbound_activity, block=False),
-        group=0,
-    )
     bot.add_error_handler(telegram_error_handler)
 
     # Run the bot
