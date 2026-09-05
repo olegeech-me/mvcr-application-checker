@@ -53,6 +53,7 @@ fetcher:
     JITTER_SECONDS: "600"
     MAX_MESSAGES: "10"
     MAX_RETRIES: "5"
+    MAX_SESSION_DEAD_FAILURES: "2"
     MAX_STATUS_LENGTH: "20000"
   resources: {}
 

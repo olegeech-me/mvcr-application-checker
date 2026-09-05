@@ -299,11 +299,14 @@ Firefox WebDriver running in a virtual display (Xvfb, 1420x1080):
 
 - **User-Agent:** Randomized via `fake_useragent` (Firefox variants)
 - **Language:** Czech (`cs-CZ`) to match MVCR's expected locale
-- **JavaScript:** Disabled in Firefox preferences
 - **Anti-detection:** `navigator.webdriver` property overridden to `undefined`
 - **Cookies:** Persisted per user-agent hash to `cookies/` directory (avoids repeated consent dialogs)
 - **Human-like behavior:** Random delays between keystrokes (50-150ms) and between actions (0.5-1.5s)
 - **Recaptcha:** If detected, waits up to `CAPTCHA_WAIT_SECONDS` (default 120s) for manual solving
+- **Session recovery:** Soft/site errors keep the warm browser. Dead Selenium sessions
+  (marionette/connection loss) always clear driver refs, then cold-start on the next
+  attempt. After `MAX_SESSION_DEAD_FAILURES` consecutive deaths (default 2) the process
+  exits so Docker/K8s can restart it
 
 ### 3.2 Form Filling
 
@@ -645,6 +648,7 @@ increases throughput. Each fetcher reports metrics independently via `fetcher_id
 | `URL`                     | ipc.gov.cz | MVCR website URL                           |
 | `JITTER_SECONDS`          | 900        | Max random delay before refresh requests   |
 | `MAX_RETRIES`             | 10         | Max requeue attempts per failed message    |
+| `MAX_SESSION_DEAD_FAILURES` | 2        | Exit fetcher after N consecutive Selenium session deaths |
 | `MAX_MESSAGES`            | 10         | RabbitMQ prefetch count per fetcher        |
 | `PAGE_LOAD_LIMIT_SECONDS` | 20         | Selenium page load timeout                 |
 | `CAPTCHA_WAIT_SECONDS`    | 120        | Max wait for manual captcha solving        |

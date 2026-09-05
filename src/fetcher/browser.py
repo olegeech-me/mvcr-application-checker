@@ -8,6 +8,7 @@ import logging
 import asyncio
 import random
 import os
+import sys
 import time
 import json
 import hashlib
@@ -22,19 +23,43 @@ from selenium.common.exceptions import (
     ElementClickInterceptedException,
     TimeoutException,
     NoSuchElementException,
+    InvalidSessionIdException,
 )
 from selenium.webdriver.common.action_chains import ActionChains
 import fake_useragent
 
-from fetcher.config import PAGE_LOAD_LIMIT_SECONDS, CAPTCHA_WAIT_SECONDS, OUTPUT_DIR, RETRY_INTERVAL
+from fetcher.config import (
+    PAGE_LOAD_LIMIT_SECONDS,
+    CAPTCHA_WAIT_SECONDS,
+    OUTPUT_DIR,
+    RETRY_INTERVAL,
+    MAX_SESSION_DEAD_FAILURES,
+)
 
 logger = logging.getLogger(__name__)
+
+# Match Selenium/geckodriver messages seen when Firefox/marionette is gone
+SESSION_DEAD_HINTS = (
+    "tried to run command without establishing a connection",
+    "failed to decode response from marionette",
+    "invalid session id",
+    "browsing context has been discarded",
+    "no such window",
+)
 
 
 class CustomMaxRetryError(Exception):
     def __init__(self, url, msg):
         super().__init__(msg)
         self.url = url
+
+
+def is_session_dead(exc):
+    """Return True when the Selenium driver/session can no longer be used"""
+    if isinstance(exc, InvalidSessionIdException):
+        return True
+    msg = str(exc).lower()
+    return any(hint in msg for hint in SESSION_DEAD_HINTS)
 
 
 class Browser:
@@ -44,6 +69,7 @@ class Browser:
         self.useragent = None
         self.retries = retries
         self.app_details = {}
+        self._consecutive_session_dead = 0
 
     def _log(self, log_level, message, *args):
         """Wrapper around logger to add application number to the log messages."""
@@ -277,10 +303,9 @@ class Browser:
 
         except (WebDriverException, CustomMaxRetryError, TimeoutException):
             self._log(logging.ERROR, "Error waiting for Type list to appear")
-            self.close()
+            raise
         except Exception as e:
             self._log(logging.ERROR, "Error selecting 'Type': %s", e)
-            self.close()
             raise
 
         # Select the "Year" from the dropdown
@@ -314,11 +339,44 @@ class Browser:
 
         except (WebDriverException, CustomMaxRetryError, TimeoutException):
             self._log(logging.ERROR, "Error waiting for year list to appear")
-            self.close()
+            raise
         except Exception as e:
             self._log(logging.ERROR, "Error selecting 'Year': %s", e)
-            self.close()
             raise
+
+    def _safe_save_page_source(self, browser, app_details):
+        """Best-effort page dump; must never block browser cleanup"""
+        if browser is None:
+            return
+        try:
+            if not os.path.exists(OUTPUT_DIR):
+                os.makedirs(OUTPUT_DIR)
+            out_file = f"{OUTPUT_DIR}/{app_details['number']}-{app_details['type']}-{app_details['year']}.html"
+            page_source = browser.page_source
+            if page_source:
+                with open(out_file, "w") as f:
+                    f.write(page_source)
+        except Exception as err:
+            self._log(logging.WARNING, "Failed to save page source: %s", err)
+
+    def _handle_browser_failure(self, err):
+        """Close only on dead Selenium sessions; soft errors keep the warm browser"""
+        if not is_session_dead(err):
+            return
+
+        self._log(logging.ERROR, "Selenium session is dead, closing browser")
+        self.close()
+        self._consecutive_session_dead += 1
+        if self._consecutive_session_dead >= MAX_SESSION_DEAD_FAILURES:
+            logger.error(
+                "Exiting after %d consecutive Selenium session deaths",
+                self._consecutive_session_dead,
+            )
+            sys.exit(1)
+
+    def _note_fetch_success(self):
+        """Reset session-death counter after a successful fetch"""
+        self._consecutive_session_dead = 0
 
     async def _do_fetch_with_browser(self, url, app_details):
         def _has_recaptcha(browser):
@@ -332,16 +390,6 @@ class Browser:
             # Also the POST request is being denyed with the statement "Recaptcha verification failed"
             # It's not possible to easily see the POST reply in Selenium, so we just check for the results.
             return False
-
-        def _save_page_source(browser):
-            # save page source in case of issues
-            if not os.path.exists(OUTPUT_DIR):
-                os.makedirs(OUTPUT_DIR)
-            out_file = f"{OUTPUT_DIR}/{app_details['number']}-{app_details['type']}-{app_details['year']}.html"
-            page_source = browser.page_source
-            if page_source:
-                with open(out_file, "w") as f:
-                    f.write(page_source)
 
         self.app_details = app_details
         browser = self._get_browser()
@@ -381,6 +429,8 @@ class Browser:
                     application_status = browser.find_element_by_class_name("alert__content")
                     break
                 except (WebDriverException, NoSuchElementException, TimeoutException) as e:
+                    if is_session_dead(e):
+                        raise
                     retry_count += 1
                     self._log(logging.ERROR, f"Submit failed on attempt {retry_count}: {e}")
                     await asyncio.sleep(1)
@@ -391,17 +441,18 @@ class Browser:
                 self.save_cookies()
                 # Filter out / replace unsupported HTML tags
                 application_status_text = self.clean_html(application_status_text)
+                self._note_fetch_success()
             else:
                 raise CustomMaxRetryError(url=url, msg="Couldn't fetch application status")
 
         except (WebDriverException, CustomMaxRetryError, TimeoutException) as err:
             self._log(logging.ERROR, "An error has occurred during page loading: %s", err)
-            _save_page_source(browser)
-            self.close()
+            self._safe_save_page_source(browser, app_details)
+            self._handle_browser_failure(err)
         except Exception as e:
             self._log(logging.ERROR, "Unexpected exception: %s", e)
-            _save_page_source(browser)
-            self.close()
+            self._safe_save_page_source(browser, app_details)
+            self._handle_browser_failure(e)
 
         return application_status_text
 
@@ -420,9 +471,16 @@ class Browser:
         return res
 
     def close(self):
-        if self.browser:
-            self.browser.quit()
-            self.browser = None
-        if self.display:
-            self.display.stop()
-            self.display = None
+        """Tear down browser and display; always clear references"""
+        browser, self.browser = self.browser, None
+        display, self.display = self.display, None
+        if browser is not None:
+            try:
+                browser.quit()
+            except Exception as err:
+                logger.warning("Error while quitting browser: %s", err)
+        if display is not None:
+            try:
+                display.stop()
+            except Exception as err:
+                logger.warning("Error while stopping display: %s", err)

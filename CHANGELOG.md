@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## [v2.4.3] - 2026-09-06
+
+### Fetcher
+
+- Recover from dead Selenium sessions without closing the browser on soft/site errors; exit after consecutive session deaths so the orchestrator can restart
+
 ## [v2.4.2] - 2026-06-27
 
 ### Bot monitoring

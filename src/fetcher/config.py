@@ -2,7 +2,7 @@ import os
 
 
 # Version information
-BASE_VERSION = os.getenv("BASE_VERSION", "v2.4.2")
+BASE_VERSION = os.getenv("BASE_VERSION", "v2.4.3")
 GIT_COMMIT = os.getenv("GIT_COMMIT", "unknown")
 FULL_VERSION = f"{BASE_VERSION}-{GIT_COMMIT}"
 # The URL to fetch
@@ -21,6 +21,8 @@ CAPTCHA_WAIT_SECONDS = 120
 MAX_MESSAGES = int(os.getenv("MAX_MESSAGES", 10))
 # The max number of message processing attempts
 MAX_RETRIES = int(os.getenv("MAX_RETRIES", 10))
+# Exit the process after this many consecutive Selenium session deaths
+MAX_SESSION_DEAD_FAILURES = int(os.getenv("MAX_SESSION_DEAD_FAILURES", 2))
 # The max accepted status text length before treating the response as invalid
 MAX_STATUS_LENGTH = int(os.getenv("MAX_STATUS_LENGTH", 20000))
 # Max time to disperse to refresh requests
