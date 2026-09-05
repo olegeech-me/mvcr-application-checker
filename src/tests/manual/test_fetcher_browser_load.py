@@ -1,6 +1,7 @@
-import unittest
 import asyncio
 import logging
+import unittest
+
 from fetcher.browser import Browser
 
 URL = "https://ipc.gov.cz/informace-o-stavu-rizeni/"

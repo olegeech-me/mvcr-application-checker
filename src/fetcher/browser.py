@@ -4,36 +4,37 @@ Use selenium browser to interact with website
 Ideas borrowed from https://github.com/fernflower/trvalypobytexamchecker/blob/main/src/fetcher/a2exams_fetcher.py
 """
 
-import logging
 import asyncio
-import random
+import hashlib
+import json
+import logging
 import os
+import random
 import sys
 import time
-import json
-import hashlib
+
+import fake_useragent
 from bs4 import BeautifulSoup
 from pyvirtualdisplay import Display
 from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.wait import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import (
-    WebDriverException,
     ElementClickInterceptedException,
-    TimeoutException,
-    NoSuchElementException,
     InvalidSessionIdException,
+    NoSuchElementException,
+    TimeoutException,
+    WebDriverException,
 )
 from selenium.webdriver.common.action_chains import ActionChains
-import fake_useragent
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.wait import WebDriverWait
 
 from fetcher.config import (
-    PAGE_LOAD_LIMIT_SECONDS,
     CAPTCHA_WAIT_SECONDS,
-    OUTPUT_DIR,
-    RETRY_INTERVAL,
     MAX_SESSION_DEAD_FAILURES,
+    OUTPUT_DIR,
+    PAGE_LOAD_LIMIT_SECONDS,
+    RETRY_INTERVAL,
 )
 
 logger = logging.getLogger(__name__)

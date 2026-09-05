@@ -2,8 +2,13 @@ import logging
 
 from bot import prometheus_metrics
 from bot.texts import message_texts
-from bot.utils import generate_oam_full_string, user_label, user_label_short
-from bot.utils import MVCR_STATUSES, categorize_application_status
+from bot.utils import (
+    MVCR_STATUSES,
+    categorize_application_status,
+    generate_oam_full_string,
+    user_label,
+    user_label_short,
+)
 
 logger = logging.getLogger(__name__)
 

@@ -1,11 +1,13 @@
-import aio_pika
 import asyncio
 import json
 import logging
 import ssl
-from fetcher.config import MAX_MESSAGES
-from fetcher import prometheus_metrics
+
+import aio_pika
 from aiormq.exceptions import AMQPConnectionError
+
+from fetcher import prometheus_metrics
+from fetcher.config import MAX_MESSAGES
 
 MAX_RETRIES = 25  # maximum number of connection retries
 RETRY_DELAY = 5  # delay (in seconds) between retries

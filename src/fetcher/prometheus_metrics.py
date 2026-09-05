@@ -1,7 +1,13 @@
 import logging
 import time
 
-from prometheus_client import CollectorRegistry, Counter, Gauge, REGISTRY, start_http_server
+from prometheus_client import (
+    REGISTRY,
+    CollectorRegistry,
+    Counter,
+    Gauge,
+    start_http_server,
+)
 
 logger = logging.getLogger(__name__)
 

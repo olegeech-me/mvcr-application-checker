@@ -1,8 +1,14 @@
-import pytest
 from unittest.mock import AsyncMock, Mock, patch
 
+import pytest
+from conftest import make_rabbit
 from telegram.error import (
-    BadRequest, ChatMigrated, Forbidden, NetworkError, RetryAfter, TimedOut,
+    BadRequest,
+    ChatMigrated,
+    Forbidden,
+    NetworkError,
+    RetryAfter,
+    TimedOut,
 )
 
 from bot.utils import (
@@ -14,9 +20,6 @@ from bot.utils import (
     user_label,
     user_label_short,
 )
-
-from conftest import make_rabbit
-
 
 # ---------------------------------------------------------------------------
 # generate_oam_full_string

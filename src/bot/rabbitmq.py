@@ -1,10 +1,12 @@
-import json
-import aio_pika
 import asyncio
-import logging
 import hashlib
+import json
+import logging
+
+import aio_pika
 import cachetools
 from aiormq.exceptions import AMQPConnectionError
+
 from bot import prometheus_metrics
 from bot.processor import Processor
 from bot.utils import generate_oam_full_string, user_label

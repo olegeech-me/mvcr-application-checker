@@ -1,47 +1,46 @@
-import pytest
 import asyncio
-from unittest.mock import Mock, AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
-from bot.handlers import (
-    _parse_application_number_full,
-    _parse_application_number,
-    _parse_zov_number,
-    _get_user_language,
-    _is_admin,
-    user_info,
-    _sync_user_profile,
-    _show_app_number_final_confirmation,
-    check_and_update_limit,
-    create_request,
-    _is_button_click_abused,
-    BUTTON_WAIT_SECONDS,
-    subscribe_command,
-    enforce_rate_limit,
-    clean_sub_context,
-    _generate_buttons_from_subscriptions,
-    _parse_application_buttons_callback_data,
-    create_subscription,
-    application_dialog_number,
-    application_dialog_source,
-    force_refresh_command,
-    force_refresh_button,
-    fetcher_stats_command,
-    unsubscribe_command,
-    unsubscribe_button,
-    admin_broadcast_command,
-    admin_broadcast_text,
-    admin_broadcast_confirm,
-    _broadcast_to_users,
-    VALIDATE,
-    TYPE,
-    NUMBER,
-    SOURCE,
-    BROADCAST_TEXT,
-    BROADCAST_CONFIRM,
-)
-
+import pytest
 from conftest import make_zov_subscription
 
+from bot.handlers import (
+    BROADCAST_CONFIRM,
+    BROADCAST_TEXT,
+    BUTTON_WAIT_SECONDS,
+    NUMBER,
+    SOURCE,
+    TYPE,
+    VALIDATE,
+    _broadcast_to_users,
+    _generate_buttons_from_subscriptions,
+    _get_user_language,
+    _is_admin,
+    _is_button_click_abused,
+    _parse_application_buttons_callback_data,
+    _parse_application_number,
+    _parse_application_number_full,
+    _parse_zov_number,
+    _show_app_number_final_confirmation,
+    _sync_user_profile,
+    admin_broadcast_command,
+    admin_broadcast_confirm,
+    admin_broadcast_text,
+    application_dialog_number,
+    application_dialog_source,
+    check_and_update_limit,
+    clean_sub_context,
+    create_request,
+    create_subscription,
+    enforce_rate_limit,
+    fetcher_stats_command,
+    force_refresh_button,
+    force_refresh_command,
+    subscribe_command,
+    unsubscribe_button,
+    unsubscribe_command,
+    user_info,
+)
 
 # ---------------------------------------------------------------------------
 # Parsing

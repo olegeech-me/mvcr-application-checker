@@ -1,8 +1,7 @@
-import pytest
 from unittest.mock import AsyncMock, patch
 
-from conftest import make_rabbit, make_incoming_message, OAM_BASE_MSG, ZOV_BASE_MSG
-
+import pytest
+from conftest import OAM_BASE_MSG, ZOV_BASE_MSG, make_incoming_message, make_rabbit
 
 # ---------------------------------------------------------------------------
 # Unique ID generation

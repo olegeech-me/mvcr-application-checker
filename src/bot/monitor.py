@@ -1,19 +1,20 @@
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+
+from bot import prometheus_metrics
 from bot.config import (
-    REFRESH_PERIOD,
-    SCHEDULER_PERIOD,
-    NOT_FOUND_REFRESH_PERIOD,
     NOT_FOUND_MAX_DAYS,
+    NOT_FOUND_REFRESH_PERIOD,
+    NOTIFY_DELIVERED_RETENTION_DAYS,
+    NOTIFY_MONITOR_TICK,
+    NOTIFY_PENDING_MAX_AGE_DAYS,
     NOTIFY_RETRY_BASE_INTERVAL,
     NOTIFY_RETRY_MAX_INTERVAL,
-    NOTIFY_MONITOR_TICK,
-    NOTIFY_DELIVERED_RETENTION_DAYS,
-    NOTIFY_PENDING_MAX_AGE_DAYS,
+    REFRESH_PERIOD,
+    SCHEDULER_PERIOD,
 )
 from bot.utils import generate_oam_full_string, notify_user, user_label_short
-from bot import prometheus_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,7 @@ def compute_next_retry_at(current_attempts, base_interval, max_interval, now=Non
     TIME ZONE and asyncpg rejects tz-aware values for that column
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
     delay = min(base_interval * (2**current_attempts), max_interval)
     return (now + timedelta(seconds=delay)).replace(tzinfo=None)
 
@@ -52,7 +53,7 @@ class ApplicationMonitor:
             await self.expire_stale_not_found_applications()
             try:
                 await asyncio.wait_for(self.shutdown_event.wait(), timeout=SCHEDULER_PERIOD)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
 
     async def check_for_updates(self):
@@ -225,7 +226,7 @@ class ReminderMonitor:
             try:
                 # Reminders are set with precision to minute
                 await asyncio.wait_for(self.shutdown_event.wait(), timeout=60)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
 
     async def trigger_reminders(self):

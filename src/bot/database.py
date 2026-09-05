@@ -1,9 +1,11 @@
-import asyncpg
+import asyncio
 import datetime
 import logging
 import os
+
+import asyncpg
 import pytz
-import asyncio
+
 from bot import prometheus_metrics
 from bot.texts import message_texts
 from bot.utils import categorize_application_status, generate_oam_full_string

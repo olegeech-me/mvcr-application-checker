@@ -1,16 +1,16 @@
-import os
 import json
+import os
 from datetime import datetime
-from unittest.mock import Mock, AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 os.environ["RUN_MODE"] = "TEST"
 os.environ["ADMIN_CHAT_IDS"] = "1234567, 56745679"
 
 collect_ignore_glob = ["manual/*"]
 
-from bot.rabbitmq import RabbitMQ  # noqa: E402
-from bot.database import Database  # noqa: E402
-from fetcher.application_processor import ApplicationProcessor  # noqa: E402
+from bot.database import Database
+from bot.rabbitmq import RabbitMQ
+from fetcher.application_processor import ApplicationProcessor
 
 
 class FakeAcquire:

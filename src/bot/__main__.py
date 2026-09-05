@@ -1,43 +1,71 @@
-from telegram import Update
-from telegram.ext import CallbackQueryHandler, CommandHandler, ConversationHandler, MessageHandler, TypeHandler, filters
-from telegram.error import NetworkError, TimedOut
 import asyncio
 import logging
 import signal
 
-from bot.loader import loader, loop
-from bot.config import BASE_VERSION, GIT_COMMIT, FULL_VERSION, LOG_LEVEL, ADMIN_CHAT_IDS, DB_MIGRATIONS_DIR
-from bot.config import METRICS_HOST, METRICS_PORT
-from bot.handlers import start_command, help_command, unknown_text, unknown_command, status_command
-from bot.handlers import unsubscribe_command, subscribe_command, admin_stats_command, fetcher_stats_command
-from bot.handlers import force_refresh_command, subscribe_button, lang_command, set_language_startup, set_language_cmd
-from bot.handlers import status_button, unsubscribe_button, force_refresh_button
+from telegram import Update
+from telegram.error import NetworkError, TimedOut
+from telegram.ext import (
+    CallbackQueryHandler,
+    CommandHandler,
+    ConversationHandler,
+    MessageHandler,
+    TypeHandler,
+    filters,
+)
+
+from bot import monitor, prometheus_metrics
+from bot.config import (
+    ADMIN_CHAT_IDS,
+    BASE_VERSION,
+    DB_MIGRATIONS_DIR,
+    FULL_VERSION,
+    GIT_COMMIT,
+    LOG_LEVEL,
+    METRICS_HOST,
+    METRICS_PORT,
+)
 from bot.handlers import (
-    application_dialog_number,
-    application_dialog_source,
-    application_dialog_year,
-    application_dialog_type,
-    application_dialog_validate,
-    START,
-    SOURCE,
-    NUMBER,
-    TYPE,
-    YEAR,
-    VALIDATE,
-    BROADCAST_TEXT,
     BROADCAST_CONFIRM,
-    admin_broadcast_command,
-    admin_broadcast_text,
-    admin_broadcast_confirm,
+    BROADCAST_TEXT,
+    NUMBER,
     REMINDER_ADD,
     REMINDER_DELETE,
-    reminder_command,
+    SOURCE,
+    START,
+    TYPE,
+    VALIDATE,
+    YEAR,
     add_reminder,
-    reminder_button_callback,
+    admin_broadcast_command,
+    admin_broadcast_confirm,
+    admin_broadcast_text,
+    admin_stats_command,
+    application_dialog_number,
+    application_dialog_source,
+    application_dialog_type,
+    application_dialog_validate,
+    application_dialog_year,
     delete_reminder_callback,
+    fetcher_stats_command,
+    force_refresh_button,
+    force_refresh_command,
+    help_command,
+    lang_command,
+    reminder_button_callback,
+    reminder_command,
+    set_language_cmd,
+    set_language_startup,
+    start_command,
+    status_button,
+    status_command,
+    subscribe_button,
+    subscribe_command,
+    unknown_command,
+    unknown_text,
+    unsubscribe_button,
+    unsubscribe_command,
 )
-from bot import monitor
-from bot import prometheus_metrics
+from bot.loader import loader, loop
 
 MAX_RETRIES = 15  # maximum number bot of connection retries
 RETRY_DELAY = 5  # delay (in seconds) between retries

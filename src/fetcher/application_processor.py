@@ -1,10 +1,11 @@
+import asyncio
 import json
 import logging
-import sys
-import asyncio
 import random
-from fetcher.config import JITTER_SECONDS, MAX_RETRIES, MAX_STATUS_LENGTH
+import sys
+
 from fetcher import prometheus_metrics
+from fetcher.config import JITTER_SECONDS, MAX_RETRIES, MAX_STATUS_LENGTH
 
 logger = logging.getLogger(__name__)
 

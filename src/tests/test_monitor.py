@@ -1,7 +1,9 @@
 import asyncio
-import pytest
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, patch
+
+import pytest
+from conftest import make_oam_db_row, make_zov_db_row
 
 from bot.monitor import (
     ApplicationMonitor,
@@ -9,8 +11,6 @@ from bot.monitor import (
     ReminderMonitor,
     compute_next_retry_at,
 )
-
-from conftest import make_oam_db_row, make_zov_db_row
 
 
 def _make_outbox_row(notification_id=1, chat_id=100, kind="status_change",
@@ -185,7 +185,7 @@ def test_compute_next_retry_at_caps_exponential_growth(current_attempts, base, m
     """Backoff doubles per attempt but is bounded by max_interval — guarantees
     worst-case recovery latency after extended outages
     """
-    now = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
     result = compute_next_retry_at(current_attempts, base, max_, now=now)
     expected = (now + timedelta(seconds=expected_seconds)).replace(tzinfo=None)
     assert result == expected

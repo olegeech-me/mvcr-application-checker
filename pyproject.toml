@@ -11,6 +11,27 @@ requires = [
 ]
 build-backend = "setuptools.build_meta"
 
+[tool.ruff]
+target-version = "py311"
+src = ["src"]
+
+[tool.ruff.lint]
+# Keep ruff 0.16 defaults; silence noisy rules that do not match project patterns
+ignore = [
+  "ASYNC230",
+  "BLE001",
+  "DTZ001",
+  "DTZ002",
+  "DTZ003",
+  "DTZ007",
+  "LOG015",
+  "PLW1508",
+  "RUF059",
+  "SIM117",
+  "SIM118",
+  "TRY002",
+]
+
 [tool.pytest.ini_options]
 asyncio_mode = "strict"
 filterwarnings = [

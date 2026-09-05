@@ -1,28 +1,25 @@
 """Lazy-initialised singletons: PTB Application, Database, RabbitMQ, NotificationDispatcher"""
 
 import asyncio
+
 import uvloop
-
-from telegram.ext import Application, Defaults
 from telegram.constants import ParseMode
+from telegram.ext import Application, Defaults
 
-from bot import database
-from bot import fetcher_stats
-from bot import monitor
-from bot import rabbitmq
+from bot import database, fetcher_stats, monitor, rabbitmq
 from bot.config import (
-    TOKEN,
-    PROXY_URL,
-    RUN_MODE,
-    DB_NAME,
-    DB_USER,
-    DB_PASSWORD,
     DB_HOST,
+    DB_NAME,
+    DB_PASSWORD,
     DB_PORT,
+    DB_USER,
+    PROXY_URL,
     RABBIT_HOST,
-    RABBIT_USER,
     RABBIT_PASSWORD,
+    RABBIT_USER,
     REQUEUE_THRESHOLD_SECONDS,
+    RUN_MODE,
+    TOKEN,
 )
 
 asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())

@@ -1,10 +1,10 @@
-import pytest
 from pathlib import Path
 from unittest.mock import patch
 
-from bot.monitor import compute_next_retry_at
+import pytest
 from conftest import make_db_with_mock_pool
 
+from bot.monitor import compute_next_retry_at
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 

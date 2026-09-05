@@ -4,20 +4,28 @@ import logging
 import re
 import time
 
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, BotCommand, BotCommandScopeChat, ForceReply
+from telegram import (
+    BotCommand,
+    BotCommandScopeChat,
+    ForceReply,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Update,
+)
 from telegram.error import (
-    RetryAfter,
-    TimedOut,
-    NetworkError,
-    Forbidden,
     BadRequest,
     ChatMigrated,
+    Forbidden,
+    NetworkError,
+    RetryAfter,
+    TimedOut,
 )
 from telegram.ext import ContextTypes, ConversationHandler
+
+from bot.config import ADMIN_CHAT_IDS, FULL_VERSION, REFRESH_PERIOD
 from bot.loader import loader
-from bot.config import ADMIN_CHAT_IDS, REFRESH_PERIOD, FULL_VERSION
-from bot.texts import button_texts, message_texts, commands_description
-from bot.utils import generate_oam_full_string, user_label, classify_send_error
+from bot.texts import button_texts, commands_description, message_texts
+from bot.utils import classify_send_error, generate_oam_full_string, user_label
 
 SUBSCRIPTIONS_LIMIT = 5
 BUTTON_WAIT_SECONDS = 1
@@ -403,7 +411,7 @@ async def application_dialog_type(update: Update, context: ContextTypes.DEFAULT_
         # XXX FIXME(fernflower) Later switch to i18n message
         context.user_data["application_type"] = app_type
     else:
-        logger.warn("Unsupported application type %s", app_type)
+        logger.warning("Unsupported application type %s", app_type)
         # XXX FIXME(fernflower) Later switch to i18n message
         await query.edit_message_text(f"Unsupported application type {app_type}")
     # Show keyboard for application year selection

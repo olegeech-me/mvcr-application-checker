@@ -1,17 +1,18 @@
-from selenium import webdriver
-from selenium.webdriver.support.wait import WebDriverWait
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.action_chains import ActionChains
-import time
 import json
+import logging
+import random
+import time
+
+import fake_useragent
+import pyautogui
 import pytest
+from selenium import webdriver
 from selenium.common.exceptions import (
     ElementClickInterceptedException,
 )
-import random
-import fake_useragent
-import logging
-import pyautogui
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.wait import WebDriverWait
 
 logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)

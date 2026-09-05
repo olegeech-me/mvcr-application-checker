@@ -10,9 +10,10 @@ Run:
     python -m pytest src/tests/test_zov_browser.py -v -s
     cd src && python -m tests.test_zov_browser
 """
-import unittest
 import asyncio
 import logging
+import unittest
+
 from fetcher.browser import Browser
 from fetcher.config import URL
 

@@ -1,10 +1,12 @@
-import aiohttp
 import asyncio
-import time
 import logging
-from fetcher.config import FULL_VERSION
-from fetcher import prometheus_metrics
+import time
 from collections import deque
+
+import aiohttp
+
+from fetcher import prometheus_metrics
+from fetcher.config import FULL_VERSION
 
 logger = logging.getLogger(__name__)
 

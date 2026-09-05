@@ -2,22 +2,37 @@
 Read requests from the message queue, collect application status, post status update message
 """
 
+import asyncio
 import logging
 import signal
-import asyncio
+
 import uvloop
 
-from fetcher.config import BASE_VERSION, GIT_COMMIT, FULL_VERSION, URL, LOG_LEVEL
-from fetcher.config import RABBIT_HOST, RABBIT_SSL_PORT, RABBIT_USER, RABBIT_PASSWORD
-from fetcher.config import RABBIT_SSL_CACERTFILE, RABBIT_SSL_CERTFILE, RABBIT_SSL_KEYFILE
-from fetcher.config import ID, METRICS_TTL, METRICS_RATE, METRICS_SEND_INTERVAL
-from fetcher.config import METRICS_HOST, METRICS_PORT
-from fetcher.browser import Browser
-from fetcher.messaging import Messaging
-from fetcher.application_processor import ApplicationProcessor
-from fetcher.metrics_collector import MetricsCollector
 from fetcher import prometheus_metrics
-
+from fetcher.application_processor import ApplicationProcessor
+from fetcher.browser import Browser
+from fetcher.config import (
+    BASE_VERSION,
+    FULL_VERSION,
+    GIT_COMMIT,
+    ID,
+    LOG_LEVEL,
+    METRICS_HOST,
+    METRICS_PORT,
+    METRICS_RATE,
+    METRICS_SEND_INTERVAL,
+    METRICS_TTL,
+    RABBIT_HOST,
+    RABBIT_PASSWORD,
+    RABBIT_SSL_CACERTFILE,
+    RABBIT_SSL_CERTFILE,
+    RABBIT_SSL_KEYFILE,
+    RABBIT_SSL_PORT,
+    RABBIT_USER,
+    URL,
+)
+from fetcher.messaging import Messaging
+from fetcher.metrics_collector import MetricsCollector
 
 # Set up logging
 log_level_int = eval(f"logging.{LOG_LEVEL}")
@@ -85,7 +100,7 @@ async def main():
             metrics = metrics_collector.get_metrics()
             logger.info(f"Fetcher metrics: {metrics}")
             await asyncio.wait_for(shutdown_event.wait(), timeout=300)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             pass
 
     await processor.shutdown()

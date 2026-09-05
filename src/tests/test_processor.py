@@ -1,9 +1,9 @@
-import pytest
 from unittest.mock import patch
 
-from conftest import make_processor, make_incoming_message, OAM_BASE_MSG
-from fetcher.application_processor import MAX_RETRIES, MAX_STATUS_LENGTH
+import pytest
+from conftest import OAM_BASE_MSG, make_incoming_message, make_processor
 
+from fetcher.application_processor import MAX_RETRIES, MAX_STATUS_LENGTH
 
 # ---------------------------------------------------------------------------
 # Error message generation

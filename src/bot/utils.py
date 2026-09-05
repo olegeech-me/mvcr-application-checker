@@ -1,15 +1,20 @@
 import asyncio
 import logging
 
-from bot import prometheus_metrics
-
 # https://docs.python-telegram-bot.org/en/v20.5/telegram.error.html
 # Order matters: BadRequest is a subclass of NetworkError in PTB v20.5,
 # so it MUST be caught before NetworkError or terminal 400s (e.g. "chat not found")
 # get treated as transient and silently retried forever
 from telegram.error import (
-    Forbidden, BadRequest, RetryAfter, TimedOut, NetworkError, ChatMigrated,
+    BadRequest,
+    ChatMigrated,
+    Forbidden,
+    NetworkError,
+    RetryAfter,
+    TimedOut,
 )
+
+from bot import prometheus_metrics
 
 logger = logging.getLogger(__name__)
 

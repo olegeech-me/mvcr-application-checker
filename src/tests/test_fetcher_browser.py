@@ -64,12 +64,13 @@ def _install_selenium_stubs():
 
 _install_selenium_stubs()
 
-from selenium.common.exceptions import (  # noqa: E402
+from selenium.common.exceptions import (
     InvalidSessionIdException,
     TimeoutException,
     WebDriverException,
 )
-from fetcher.browser import Browser, is_session_dead  # noqa: E402
+
+from fetcher.browser import Browser, is_session_dead
 
 
 @pytest.mark.parametrize(
