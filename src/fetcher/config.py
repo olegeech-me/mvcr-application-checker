@@ -1,7 +1,7 @@
 import os
 
 # Version information
-BASE_VERSION = os.getenv("BASE_VERSION", "v2.4.3")
+BASE_VERSION = os.getenv("BASE_VERSION", "v2.4.4")
 GIT_COMMIT = os.getenv("GIT_COMMIT", "unknown")
 FULL_VERSION = f"{BASE_VERSION}-{GIT_COMMIT}"
 # The URL to fetch

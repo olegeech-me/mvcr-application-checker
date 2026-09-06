@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## [v2.4.4] - 2026-09-06
+
+### Fetcher
+
+- Fix idle-loop crash on Python 3.10: catch `asyncio.TimeoutError` again after ruff UP041 rewrote it to builtin `TimeoutError` (process exited every 5 minutes)
+
 ## [v2.4.3] - 2026-09-06
 
 ### Fetcher

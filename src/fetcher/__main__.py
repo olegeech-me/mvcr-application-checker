@@ -100,7 +100,7 @@ async def main():
             metrics = metrics_collector.get_metrics()
             logger.info(f"Fetcher metrics: {metrics}")
             await asyncio.wait_for(shutdown_event.wait(), timeout=300)
-        except TimeoutError:
+        except asyncio.TimeoutError:
             pass
 
     await processor.shutdown()
