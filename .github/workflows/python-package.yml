@@ -16,6 +16,7 @@ on:
       - "requirements-fetcher.txt"
       - "pyproject.toml"
       - "Makefile"
+      - "tox.ini"
       - ".github/workflows/python-package.yml"
   pull_request:
     branches: ["main"]
@@ -27,6 +28,7 @@ on:
       - "requirements-fetcher.txt"
       - "pyproject.toml"
       - "Makefile"
+      - "tox.ini"
       - ".github/workflows/python-package.yml"
 
 jobs:
