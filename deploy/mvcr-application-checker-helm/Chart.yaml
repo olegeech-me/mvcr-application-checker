@@ -3,4 +3,4 @@ name: mvcr-application-checker-helm
 description: MVCR Application Checker — Telegram bot and web fetcher for tracking Czech immigration application status
 type: application
 version: 0.3.3
-appVersion: "2.4.4"
+appVersion: "2.4.5"

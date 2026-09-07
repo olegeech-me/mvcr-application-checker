@@ -56,13 +56,13 @@ ssl/ca.crt:
 
 venv: .venv/.installed ## Create/update .venv with project + test dependencies
 
-.venv/.installed: requirements-bot.txt Makefile
+.venv/.installed: requirements-bot.txt requirements-fetcher.txt Makefile
 	@if [ ! -d .venv ]; then \
 		echo "==> Creating virtual environment"; \
 		python3 -m venv .venv; \
 	fi
 	.venv/bin/pip install --quiet --upgrade pip
-	.venv/bin/pip install --quiet -r requirements-bot.txt pytest pytest-asyncio pytest-mock 'ruff==0.16.6'
+	.venv/bin/pip install --quiet -r requirements-bot.txt -r requirements-fetcher.txt pytest pytest-asyncio pytest-mock 'ruff==0.16.6'
 	@touch $@
 
 # ---------------------------------------------------------------------------

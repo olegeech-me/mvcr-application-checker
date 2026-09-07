@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## [v2.4.5] - 2026-09-07
+
+### Fetcher
+
+- Bound the aiohttp latency probe with a 15s timeout and treat probe timeouts as connection failures so `connection_status` can recover instead of sticking on `🚨 Error`
+
 ## [v2.4.4] - 2026-09-06
 
 ### Fetcher

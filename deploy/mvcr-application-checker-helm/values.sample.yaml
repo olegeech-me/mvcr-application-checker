@@ -45,6 +45,7 @@ fetcher:
     MAX_RETRIES: "5"
     MAX_SESSION_DEAD_FAILURES: "2"
     MAX_STATUS_LENGTH: "20000"
+    LATENCY_CHECK_TIMEOUT_SECONDS: "15"
 
 metrics:
   enabled: true

@@ -6,7 +6,7 @@ from collections import deque
 import aiohttp
 
 from fetcher import prometheus_metrics
-from fetcher.config import FULL_VERSION
+from fetcher.config import FULL_VERSION, LATENCY_CHECK_TIMEOUT_SECONDS
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,8 @@ class MetricsCollector:
         """Measure latency to the target website"""
         start_time = time.time()
         try:
-            async with aiohttp.ClientSession() as session:
+            timeout = aiohttp.ClientTimeout(total=LATENCY_CHECK_TIMEOUT_SECONDS, connect=5)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.get(self.url) as response:
                     latency = time.time() - start_time
                     self.record_latency(latency)
@@ -42,20 +43,36 @@ class MetricsCollector:
                         prometheus_metrics.set_target_up(False)
                         prometheus_metrics.record_error("latency_check", "unexpected")
                         logger.error(f"HTTP latency check failed: {response.status}")
-        except aiohttp.client_exceptions.ClientConnectorError as e:
+        except (asyncio.TimeoutError, aiohttp.ServerTimeoutError) as e:
+            self.connection_status = "⚠️ Connection Failed"
+            latency = time.time() - start_time
+            prometheus_metrics.set_target_latency(latency)
+            prometheus_metrics.set_target_up(False)
+            prometheus_metrics.record_error("latency_check", "timeout")
+            logger.error(
+                "Latency check timed out for %s. Error: %r. Latency: %ss",
+                self.url, e, latency,
+            )
+        except aiohttp.ClientConnectorError as e:
             self.connection_status = "⚠️ Connection Failed"
             latency = time.time() - start_time
             prometheus_metrics.set_target_latency(latency)
             prometheus_metrics.set_target_up(False)
             prometheus_metrics.record_error("latency_check", "connection")
-            logger.error(f"Failed to connect to {self.url}. Error: {e}. Latency: {latency}s")
+            logger.error(
+                "Failed to connect to %s. Error: %r. Latency: %ss",
+                self.url, e, latency,
+            )
         except Exception as e:
             self.connection_status = "🚨 Error"
             latency = time.time() - start_time
             prometheus_metrics.set_target_latency(latency)
             prometheus_metrics.set_target_up(False)
             prometheus_metrics.record_error("latency_check", "unexpected")
-            logger.error(f"An unexpected error occurred while connecting to {self.url}. Error: {e}. Latency: {latency}s")
+            logger.error(
+                "Unexpected latency check error for %s. Error: %r. Latency: %ss",
+                self.url, e, latency,
+            )
 
     def record_latency(self, latency):
         """Record the latency data"""

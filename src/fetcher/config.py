@@ -1,7 +1,7 @@
 import os
 
 # Version information
-BASE_VERSION = os.getenv("BASE_VERSION", "v2.4.4")
+BASE_VERSION = os.getenv("BASE_VERSION", "v2.4.5")
 GIT_COMMIT = os.getenv("GIT_COMMIT", "unknown")
 FULL_VERSION = f"{BASE_VERSION}-{GIT_COMMIT}"
 # The URL to fetch
@@ -42,3 +42,4 @@ METRICS_RATE = int(os.getenv("METRICS_RATE", 600))
 METRICS_SEND_INTERVAL = int(os.getenv("METRICS_SEND_INTERVAL", 30))
 METRICS_HOST = os.getenv("METRICS_HOST", "0.0.0.0")
 METRICS_PORT = int(os.getenv("METRICS_PORT", 8000))
+LATENCY_CHECK_TIMEOUT_SECONDS = int(os.getenv("LATENCY_CHECK_TIMEOUT_SECONDS", 15))
