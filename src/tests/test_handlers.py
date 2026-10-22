@@ -5,6 +5,7 @@ import pytest
 from conftest import make_zov_subscription
 
 from bot.handlers import (
+    BROADCAST_AUDIENCE,
     BROADCAST_CONFIRM,
     BROADCAST_TEXT,
     BUTTON_WAIT_SECONDS,
@@ -23,6 +24,7 @@ from bot.handlers import (
     _parse_zov_number,
     _show_app_number_final_confirmation,
     _sync_user_profile,
+    admin_broadcast_audience,
     admin_broadcast_command,
     admin_broadcast_confirm,
     admin_broadcast_text,
@@ -1179,10 +1181,11 @@ async def test_admin_broadcast_command_authorized():
 
 
 @pytest.mark.asyncio
-async def test_admin_broadcast_text_stores_message():
-    """Broadcast text step stores message and shows confirmation with user count"""
+async def test_admin_broadcast_text_stores_message_and_asks_audience():
+    """Broadcast text step stores message and shows audience buttons with counts"""
     mock_db = AsyncMock()
-    mock_db.count_users_total = AsyncMock(return_value=42)
+    mock_db.count_active_chat_ids = AsyncMock(return_value=42)
+    mock_db.count_chat_ids_with_active_subscriptions = AsyncMock(return_value=17)
 
     update = Mock()
     update.message.text = "Hello everyone!"
@@ -1194,16 +1197,64 @@ async def test_admin_broadcast_text_stores_message():
     with patch("bot.handlers.db", mock_db):
         result = await admin_broadcast_text(update, context)
 
-    assert result == BROADCAST_CONFIRM
+    assert result == BROADCAST_AUDIENCE
     assert context.user_data["broadcast_message"] == "Hello everyone!"
     call_text = update.message.reply_text.call_args[0][0]
-    assert "42" in call_text
     assert "Hello everyone!" in call_text
+    assert "Who should receive" in call_text
+    markup = update.message.reply_text.call_args.kwargs["reply_markup"]
+    button_labels = [btn.text for row in markup.inline_keyboard for btn in row]
+    assert any("42" in label and "All active" in label for label in button_labels)
+    assert any("17" in label and "Active subscriptions" in label for label in button_labels)
+
+
+@pytest.mark.asyncio
+async def test_admin_broadcast_audience_shows_confirmation():
+    """Audience step stores choice and shows confirm with matching count"""
+    mock_db = AsyncMock()
+    mock_db.count_chat_ids_with_active_subscriptions = AsyncMock(return_value=17)
+
+    update = Mock()
+    update.callback_query = AsyncMock()
+    update.callback_query.data = "broadcast_audience:active"
+    update.callback_query.edit_message_text = AsyncMock()
+
+    context = Mock()
+    context.user_data = {"broadcast_message": "Site is down"}
+
+    with patch("bot.handlers.db", mock_db):
+        result = await admin_broadcast_audience(update, context)
+
+    assert result == BROADCAST_CONFIRM
+    assert context.user_data["broadcast_audience"] == "active"
+    edit_text = update.callback_query.edit_message_text.call_args[0][0]
+    assert "17" in edit_text
+    assert "active (unresolved) subscriptions" in edit_text
+    assert "Site is down" in edit_text
+
+
+@pytest.mark.asyncio
+async def test_admin_broadcast_audience_cancel():
+    """Cancel on audience step ends the conversation and cleans up"""
+    update = Mock()
+    update.callback_query = AsyncMock()
+    update.callback_query.data = "cancel_broadcast"
+    update.callback_query.edit_message_text = AsyncMock()
+
+    context = Mock()
+    context.user_data = {"broadcast_message": "Nope"}
+
+    result = await admin_broadcast_audience(update, context)
+
+    from telegram.ext import ConversationHandler
+    assert result == ConversationHandler.END
+    update.callback_query.edit_message_text.assert_called_once_with("Broadcast canceled.")
+    assert "broadcast_message" not in context.user_data
 
 
 @pytest.mark.asyncio
 async def test_admin_broadcast_confirm_starts_background_task():
-    """Confirm broadcast responds immediately and fires async task"""
+    """Confirm broadcast responds immediately and fires async task for all audience"""
     mock_db = AsyncMock()
     mock_db.fetch_all_chat_ids = AsyncMock(return_value=[100, 200, 300])
 
@@ -1218,7 +1269,7 @@ async def test_admin_broadcast_confirm_starts_background_task():
     update.effective_chat.last_name = "User"
 
     context = Mock()
-    context.user_data = {"broadcast_message": "Test broadcast"}
+    context.user_data = {"broadcast_message": "Test broadcast", "broadcast_audience": "all"}
     context.bot = AsyncMock()
 
     with patch("bot.handlers.db", mock_db), \
@@ -1227,14 +1278,48 @@ async def test_admin_broadcast_confirm_starts_background_task():
 
     from telegram.ext import ConversationHandler
     assert result == ConversationHandler.END
-    # Responded immediately with "started" message
     edit_text = update.callback_query.edit_message_text.call_args[0][0]
     assert "3 users" in edit_text
     assert "started" in edit_text.lower()
-    # Background task was fired
     mock_create_task.assert_called_once()
-    # Context cleaned up
     assert "broadcast_message" not in context.user_data
+    assert "broadcast_audience" not in context.user_data
+    mock_db.fetch_all_chat_ids.assert_called_once()
+    mock_db.fetch_chat_ids_with_active_subscriptions.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_admin_broadcast_confirm_uses_active_subscription_audience():
+    """Confirm with active audience fetches unresolved-subscription chat IDs"""
+    mock_db = AsyncMock()
+    mock_db.fetch_chat_ids_with_active_subscriptions = AsyncMock(return_value=[100, 200])
+
+    update = Mock()
+    update.callback_query = AsyncMock()
+    update.callback_query.data = "confirm_broadcast"
+    update.callback_query.message.chat_id = 1234567
+    update.callback_query.edit_message_text = AsyncMock()
+    update.effective_chat.id = 1234567
+    update.effective_chat.username = "admin"
+    update.effective_chat.first_name = "Admin"
+    update.effective_chat.last_name = "User"
+
+    context = Mock()
+    context.user_data = {"broadcast_message": "Outage", "broadcast_audience": "active"}
+    context.bot = AsyncMock()
+
+    with patch("bot.handlers.db", mock_db), \
+         patch("bot.handlers.asyncio.create_task") as mock_create_task:
+        result = await admin_broadcast_confirm(update, context)
+
+    from telegram.ext import ConversationHandler
+    assert result == ConversationHandler.END
+    edit_text = update.callback_query.edit_message_text.call_args[0][0]
+    assert "2 users" in edit_text
+    assert "unresolved" in edit_text
+    mock_create_task.assert_called_once()
+    mock_db.fetch_chat_ids_with_active_subscriptions.assert_called_once()
+    mock_db.fetch_all_chat_ids.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -1250,7 +1335,7 @@ async def test_admin_broadcast_cancel():
     update.effective_chat.last_name = "User"
 
     context = Mock()
-    context.user_data = {"broadcast_message": "Test broadcast"}
+    context.user_data = {"broadcast_message": "Test broadcast", "broadcast_audience": "active"}
 
     with patch("bot.handlers.db", AsyncMock()):
         result = await admin_broadcast_confirm(update, context)
@@ -1259,6 +1344,7 @@ async def test_admin_broadcast_cancel():
     assert result == ConversationHandler.END
     update.callback_query.edit_message_text.assert_called_once_with("Broadcast canceled.")
     assert "broadcast_message" not in context.user_data
+    assert "broadcast_audience" not in context.user_data
 
 
 @pytest.mark.asyncio

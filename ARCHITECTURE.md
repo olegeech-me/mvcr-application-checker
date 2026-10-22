@@ -101,7 +101,7 @@ User subscription is a multi-step dialog implemented via `ConversationHandler`:
 
 There are two additional conversation handlers:
 
-- **Broadcast** (`/admin_broadcast`): `BROADCAST_TEXT → BROADCAST_CONFIRM` — admin sends a message to all users
+- **Broadcast** (`/admin_broadcast`): `BROADCAST_TEXT → BROADCAST_AUDIENCE → BROADCAST_CONFIRM` — admin picks audience (all active chats, or users with unresolved subscriptions) then confirms
 - **Reminder** (`/reminder`): `REMINDER_ADD / REMINDER_DELETE` — schedule daily status checks at a specific time
 
 ### 2.2 Command Handlers
@@ -118,7 +118,7 @@ There are two additional conversation handlers:
 | `/reminder`        | Add or remove scheduled daily reminders (hour:minute, Prague TZ)              |
 | `/admin_stats`     | Admin only — user/subscription counts                                         |
 | `/fetcher_stats`   | Admin only — live fetcher metrics                                             |
-| `/admin_broadcast` | Admin only — send a message to all users                                      |
+| `/admin_broadcast` | Admin only — send a message to a chosen audience (all / active subscriptions) |
 
 Rate limiting uses a sliding window of timestamps per user per command (stored in `context.user_data`).
 

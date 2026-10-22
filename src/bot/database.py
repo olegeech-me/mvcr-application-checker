@@ -605,6 +605,34 @@ class Database:
                 logger.error(f"Error while fetching count of active users. Error: {e}")
                 return None
 
+    async def count_active_chat_ids(self):
+        """Count reachable users (Users.is_active = TRUE) for broadcast audience 'all'"""
+
+        query = "SELECT COUNT(*) FROM Users WHERE is_active = TRUE"
+        async with self.pool.acquire() as conn:
+            try:
+                return await conn.fetchval(query)
+            except Exception as e:
+                logger.error(f"Error while fetching count of active chat IDs. Error: {e}")
+                return None
+
+    async def count_chat_ids_with_active_subscriptions(self):
+        """Count reachable users with at least one unresolved application"""
+
+        query = """
+            SELECT COUNT(DISTINCT u.chat_id)
+            FROM Users u
+            JOIN Applications a ON a.user_id = u.user_id
+            WHERE u.is_active = TRUE
+              AND a.is_resolved = FALSE
+        """
+        async with self.pool.acquire() as conn:
+            try:
+                return await conn.fetchval(query)
+            except Exception as e:
+                logger.error(f"Error while fetching count of chat IDs with active subscriptions. Error: {e}")
+                return None
+
     async def fetch_user_language(self, chat_id):
         """Fetch the preferred language for a user"""
 
@@ -706,6 +734,24 @@ class Database:
                 return [row["chat_id"] for row in rows]
             except Exception as e:
                 logger.error(f"Error while fetching all chat IDs. Error: {e}")
+                return []
+
+    async def fetch_chat_ids_with_active_subscriptions(self):
+        """Fetch chat IDs of reachable users with at least one unresolved application"""
+
+        query = """
+            SELECT DISTINCT u.chat_id
+            FROM Users u
+            JOIN Applications a ON a.user_id = u.user_id
+            WHERE u.is_active = TRUE
+              AND a.is_resolved = FALSE
+        """
+        async with self.pool.acquire() as conn:
+            try:
+                rows = await conn.fetch(query)
+                return [row["chat_id"] for row in rows]
+            except Exception as e:
+                logger.error(f"Error while fetching chat IDs with active subscriptions. Error: {e}")
                 return []
 
     async def fetch_user_reminders(self, chat_id):

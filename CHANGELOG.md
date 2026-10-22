@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## [v2.4.6] - 2026-10-22
+
+### Bot
+
+- `/admin_broadcast` asks for an audience before confirm: all active chats, or only users with unresolved subscriptions; confirm count matches the recipients who will actually be messaged
+
 ## [v2.4.5] - 2026-09-07
 
 ### Fetcher

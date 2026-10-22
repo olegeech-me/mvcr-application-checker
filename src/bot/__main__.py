@@ -25,6 +25,7 @@ from bot.config import (
     METRICS_PORT,
 )
 from bot.handlers import (
+    BROADCAST_AUDIENCE,
     BROADCAST_CONFIRM,
     BROADCAST_TEXT,
     NUMBER,
@@ -36,6 +37,7 @@ from bot.handlers import (
     VALIDATE,
     YEAR,
     add_reminder,
+    admin_broadcast_audience,
     admin_broadcast_command,
     admin_broadcast_confirm,
     admin_broadcast_text,
@@ -185,6 +187,7 @@ async def main():
         entry_points=[CommandHandler("admin_broadcast", admin_broadcast_command)],
         states={
             BROADCAST_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_broadcast_text)],
+            BROADCAST_AUDIENCE: [CallbackQueryHandler(admin_broadcast_audience)],
             BROADCAST_CONFIRM: [CallbackQueryHandler(admin_broadcast_confirm)],
         },
         fallbacks=[],

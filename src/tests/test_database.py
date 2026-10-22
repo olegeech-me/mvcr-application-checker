@@ -180,6 +180,38 @@ async def test_db_fetch_all_chat_ids_filters_inactive_users():
     assert "is_active = TRUE" in sql
 
 
+@pytest.mark.asyncio
+async def test_db_fetch_chat_ids_with_active_subscriptions_filters():
+    """Active-subscription broadcast list requires reachable user + unresolved app"""
+    db, conn = make_db_with_mock_pool()
+    conn.fetch.return_value = [{"chat_id": 100}, {"chat_id": 200}]
+    chat_ids = await db.fetch_chat_ids_with_active_subscriptions()
+    assert chat_ids == [100, 200]
+    sql = conn.fetch.call_args[0][0]
+    assert "u.is_active = TRUE" in sql
+    assert "a.is_resolved = FALSE" in sql
+    assert "DISTINCT u.chat_id" in sql
+
+
+@pytest.mark.asyncio
+async def test_db_count_active_chat_ids():
+    db, conn = make_db_with_mock_pool()
+    conn.fetchval.return_value = 7
+    assert await db.count_active_chat_ids() == 7
+    sql = conn.fetchval.call_args[0][0]
+    assert "is_active = TRUE" in sql
+
+
+@pytest.mark.asyncio
+async def test_db_count_chat_ids_with_active_subscriptions():
+    db, conn = make_db_with_mock_pool()
+    conn.fetchval.return_value = 3
+    assert await db.count_chat_ids_with_active_subscriptions() == 3
+    sql = conn.fetchval.call_args[0][0]
+    assert "u.is_active = TRUE" in sql
+    assert "a.is_resolved = FALSE" in sql
+
+
 # ---------------------------------------------------------------------------
 # Notifications outbox
 # ---------------------------------------------------------------------------

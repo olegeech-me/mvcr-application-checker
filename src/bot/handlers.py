@@ -40,8 +40,15 @@ POPULAR_ALLOWED_TYPES = ["DP", "TP", "ZM", "ST", "MK", "DV"]
 
 
 START, SOURCE, NUMBER, TYPE, YEAR, VALIDATE = range(6)
-BROADCAST_TEXT, BROADCAST_CONFIRM = range(2)
+BROADCAST_TEXT, BROADCAST_AUDIENCE, BROADCAST_CONFIRM = range(3)
 REMINDER_ADD, REMINDER_DELETE = range(2)
+
+BROADCAST_AUDIENCE_ALL = "all"
+BROADCAST_AUDIENCE_ACTIVE = "active"
+BROADCAST_AUDIENCE_LABELS = {
+    BROADCAST_AUDIENCE_ALL: "all active chats",
+    BROADCAST_AUDIENCE_ACTIVE: "users with active (unresolved) subscriptions",
+}
 
 
 logger = logging.getLogger(__name__)
@@ -897,24 +904,84 @@ async def admin_broadcast_command(update: Update, context: ContextTypes.DEFAULT_
 
 
 async def admin_broadcast_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handles the provided broadcast message and asks for confirmation"""
+    """Handles the provided broadcast message and asks for audience selection"""
     user_message = update.message.text
 
-    # Store the broadcast message in the context for future reference
     context.user_data["broadcast_message"] = user_message
 
-    total_users = await db.count_users_total()
+    all_count = await db.count_active_chat_ids()
+    active_count = await db.count_chat_ids_with_active_subscriptions()
+    keyboard = [
+        [InlineKeyboardButton(f"All active chats ({all_count})", callback_data="broadcast_audience:all")],
+        [
+            InlineKeyboardButton(
+                f"Active subscriptions only ({active_count})",
+                callback_data="broadcast_audience:active",
+            )
+        ],
+        [InlineKeyboardButton("Cancel", callback_data="cancel_broadcast")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await update.message.reply_text(
+        f"Message:\n\n{user_message}\n\nWho should receive this broadcast?",
+        reply_markup=reply_markup,
+    )
+    return BROADCAST_AUDIENCE
+
+
+async def admin_broadcast_audience(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Stores the chosen audience and asks for final confirmation"""
+    query = update.callback_query
+    await query.answer()
+
+    if query.data == "cancel_broadcast":
+        await query.edit_message_text("Broadcast canceled.")
+        context.user_data.pop("broadcast_message", None)
+        context.user_data.pop("broadcast_audience", None)
+        return ConversationHandler.END
+
+    if not query.data.startswith("broadcast_audience:"):
+        await query.edit_message_text("Broadcast canceled.")
+        context.user_data.pop("broadcast_message", None)
+        context.user_data.pop("broadcast_audience", None)
+        return ConversationHandler.END
+
+    audience = query.data.split(":", 1)[1]
+    if audience not in BROADCAST_AUDIENCE_LABELS:
+        await query.edit_message_text("Broadcast canceled.")
+        context.user_data.pop("broadcast_message", None)
+        context.user_data.pop("broadcast_audience", None)
+        return ConversationHandler.END
+
+    context.user_data["broadcast_audience"] = audience
+    user_message = context.user_data.get("broadcast_message")
+    recipient_count = await _broadcast_audience_count(audience)
+    audience_label = BROADCAST_AUDIENCE_LABELS[audience]
     confirmation_text = (
-        f"This will be broadcasted to {total_users} users. Message:\n\n{user_message}\n\n" "Do you confirm to send this?"
+        f"This will be broadcasted to {recipient_count} users ({audience_label}). "
+        f"Message:\n\n{user_message}\n\nDo you confirm to send this?"
     )
     keyboard = [
         [InlineKeyboardButton("Yes", callback_data="confirm_broadcast")],
         [InlineKeyboardButton("No", callback_data="cancel_broadcast")],
     ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    await update.message.reply_text(confirmation_text, reply_markup=reply_markup)
+    await query.edit_message_text(confirmation_text, reply_markup=InlineKeyboardMarkup(keyboard))
     return BROADCAST_CONFIRM
+
+
+async def _broadcast_audience_count(audience):
+    """Return recipient count for a broadcast audience key"""
+    if audience == BROADCAST_AUDIENCE_ACTIVE:
+        return await db.count_chat_ids_with_active_subscriptions()
+    return await db.count_active_chat_ids()
+
+
+async def _broadcast_audience_chat_ids(audience):
+    """Return chat IDs for a broadcast audience key"""
+    if audience == BROADCAST_AUDIENCE_ACTIVE:
+        return await db.fetch_chat_ids_with_active_subscriptions()
+    return await db.fetch_all_chat_ids()
 
 
 async def _broadcast_to_users(bot, admin_chat_id, chat_ids, message):
@@ -975,22 +1042,29 @@ async def _broadcast_to_users(bot, admin_chat_id, chat_ids, message):
 
 
 async def admin_broadcast_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handles the confirmation of the broadcast and sends the message to all users"""
+    """Handles the confirmation of the broadcast and sends the message to the chosen audience"""
     query = update.callback_query
+    await query.answer()
     user_message = context.user_data.get("broadcast_message")
+    audience = context.user_data.get("broadcast_audience", BROADCAST_AUDIENCE_ALL)
 
     if query.data == "confirm_broadcast":
-        chat_ids = await db.fetch_all_chat_ids()
+        chat_ids = await _broadcast_audience_chat_ids(audience)
+        audience_label = BROADCAST_AUDIENCE_LABELS.get(audience, audience)
 
-        logger.warning(f"📢 Admin broadcast message was issued to all users by {user_info(update)}")
-        await query.edit_message_text(f"Broadcast started, sending to {len(chat_ids)} users...")
+        logger.warning(
+            f"📢 Admin broadcast ({audience_label}) was issued to {len(chat_ids)} users by {user_info(update)}"
+        )
+        await query.edit_message_text(
+            f"Broadcast started, sending to {len(chat_ids)} users ({audience_label})..."
+        )
 
         asyncio.create_task(_broadcast_to_users(context.bot, query.message.chat_id, chat_ids, user_message))
     elif query.data == "cancel_broadcast":
         await query.edit_message_text("Broadcast canceled.")
 
-    # Clear the stored broadcast message from the context
     context.user_data.pop("broadcast_message", None)
+    context.user_data.pop("broadcast_audience", None)
 
     return ConversationHandler.END
 
