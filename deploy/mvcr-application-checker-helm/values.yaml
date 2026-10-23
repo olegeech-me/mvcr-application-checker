@@ -74,6 +74,7 @@ metrics:
   prometheusRule:
     enabled: true
     labels: {}
+    service: mvcr
     fetcherHardFailuresThreshold: 25
     fetcherHardFailuresWindow: 30m
     fetcherHardFailuresDuration: 10m

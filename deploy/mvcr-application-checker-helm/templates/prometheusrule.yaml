@@ -19,7 +19,7 @@ spec:
           for: {{ .Values.metrics.prometheusRule.fetcherHardFailuresDuration }}
           labels:
             severity: critical
-            service: mvcr
+            {{- include "mvcr-application-checker.alertServiceLabel" . | nindent 12 }}
           annotations:
             summary: "MVCR fetcher has many exhausted failures"
             description: >-
@@ -37,7 +37,7 @@ spec:
           for: {{ .Values.metrics.prometheusRule.fetcherRetryStormDuration }}
           labels:
             severity: warning
-            service: mvcr
+            {{- include "mvcr-application-checker.alertServiceLabel" . | nindent 12 }}
           annotations:
             summary: "MVCR fetcher retry/failure storm"
             description: >-
@@ -50,7 +50,7 @@ spec:
           for: {{ .Values.metrics.prometheusRule.fetcherTargetDownDuration }}
           labels:
             severity: critical
-            service: mvcr
+            {{- include "mvcr-application-checker.alertServiceLabel" . | nindent 12 }}
           annotations:
             summary: "MVCR target website check is failing"
             description: "All reporting fetchers say that the MVCR target website is unreachable or unhealthy."
@@ -62,7 +62,7 @@ spec:
           for: {{ .Values.metrics.prometheusRule.fetcherNoSuccessDuration }}
           labels:
             severity: critical
-            service: mvcr
+            {{- include "mvcr-application-checker.alertServiceLabel" . | nindent 12 }}
           annotations:
             summary: "No successful MVCR fetch for over two hours"
             description: >-
@@ -76,7 +76,7 @@ spec:
           for: {{ .Values.metrics.prometheusRule.botErrorBurstDuration }}
           labels:
             severity: warning
-            service: mvcr
+            {{- include "mvcr-application-checker.alertServiceLabel" . | nindent 12 }}
           annotations:
             summary: "MVCR bot error burst"
             description: "Bot recorded {{ "{{ $value }}" }} operational error(s) during the last {{ .Values.metrics.prometheusRule.botErrorBurstWindow }}."
@@ -86,7 +86,7 @@ spec:
           for: {{ .Values.metrics.prometheusRule.notificationFailuresDuration }}
           labels:
             severity: warning
-            service: mvcr
+            {{- include "mvcr-application-checker.alertServiceLabel" . | nindent 12 }}
           annotations:
             summary: "MVCR bot notification delivery failures"
             description: "Bot had {{ "{{ $value }}" }} notification(s) fail delivery during the last {{ .Values.metrics.prometheusRule.notificationFailuresWindow }}."
@@ -96,7 +96,7 @@ spec:
           for: {{ .Values.metrics.prometheusRule.botTelegramStaleDuration }}
           labels:
             severity: warning
-            service: mvcr
+            {{- include "mvcr-application-checker.alertServiceLabel" . | nindent 12 }}
           annotations:
             summary: "MVCR bot lost contact with Telegram"
             description: >-

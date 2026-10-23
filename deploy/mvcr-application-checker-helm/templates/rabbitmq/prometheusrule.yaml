@@ -21,6 +21,7 @@ spec:
           for: {{ .Values.rabbitmq.metrics.prometheusRule.queuePilingUpDuration }}
           labels:
             severity: warning
+            {{- include "mvcr-application-checker.alertServiceLabel" . | nindent 12 }}
           annotations:
             summary: "RabbitMQ queue {{ "{{ $labels.queue }}" }} is piling up"
             description: >-
@@ -36,6 +37,7 @@ spec:
           for: {{ .Values.rabbitmq.metrics.prometheusRule.noConsumersDuration }}
           labels:
             severity: critical
+            {{- include "mvcr-application-checker.alertServiceLabel" . | nindent 12 }}
           annotations:
             summary: "RabbitMQ queue {{ "{{ $labels.queue }}" }} has no consumers"
             description: >-
@@ -51,6 +53,7 @@ spec:
           for: {{ .Values.rabbitmq.metrics.prometheusRule.noConsumersDuration }}
           labels:
             severity: critical
+            {{- include "mvcr-application-checker.alertServiceLabel" . | nindent 12 }}
           annotations:
             summary: "StatusUpdateQueue has no consumers"
             description: >-

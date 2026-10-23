@@ -158,3 +158,12 @@ Name of the credentials secret.
 {{- define "mvcr-application-checker.secretName" -}}
 {{- printf "%s-credentials" (include "mvcr-application-checker.fullname" .) -}}
 {{- end -}}
+
+{{/*
+`service` label for MVCR alerts. Omitted when metrics.prometheusRule.service is empty.
+*/}}
+{{- define "mvcr-application-checker.alertServiceLabel" -}}
+{{- with .Values.metrics.prometheusRule.service -}}
+service: {{ . | quote }}
+{{- end -}}
+{{- end -}}
