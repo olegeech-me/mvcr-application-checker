@@ -137,8 +137,9 @@ rabbitmq:
     annotations:
       external-dns.alpha.kubernetes.io/hostname: mvcr.example.com
 
-# -- Fill these in!
+# -- Fill these in! (or set existingSecret and leave the three values empty)
 secrets:
+  existingSecret: ""
   telegramBotToken: "YOUR_TELEGRAM_BOT_TOKEN"
   dbPassword: "YOUR_DB_PASSWORD"
   rabbitPassword: "YOUR_RABBIT_PASSWORD"

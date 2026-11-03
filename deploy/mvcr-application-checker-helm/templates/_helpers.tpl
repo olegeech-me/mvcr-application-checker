@@ -156,7 +156,11 @@ Whether RabbitMQ SSL is active (integrated or external).
 Name of the credentials secret.
 */}}
 {{- define "mvcr-application-checker.secretName" -}}
+{{- if .Values.secrets.existingSecret -}}
+{{- .Values.secrets.existingSecret -}}
+{{- else -}}
 {{- printf "%s-credentials" (include "mvcr-application-checker.fullname" .) -}}
+{{- end -}}
 {{- end -}}
 
 {{/*

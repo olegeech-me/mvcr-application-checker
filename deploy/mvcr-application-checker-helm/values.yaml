@@ -187,6 +187,9 @@ externalRabbitmq:
 
 # -- Secrets (credentials and SSL certs)
 secrets:
+  # If set, chart does not create the credentials Secret; ESO (or other) owns it.
+  # Expected keys: TELEGRAM_BOT_TOKEN, DB_PASSWORD, RABBIT_PASSWORD
+  existingSecret: ""
   telegramBotToken: ""
   dbPassword: ""
   rabbitPassword: ""
