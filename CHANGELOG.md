@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## [Helm 0.3.6] - 2026-11-04
+
+### Monitoring
+
+- Update prometheus rules to include per fetcher alert
+
 ## [v2.4.6] - 2026-10-22
 
 ### Bot

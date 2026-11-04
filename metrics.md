@@ -88,13 +88,13 @@ Values:
 - `1`: target check is healthy
 - `0`: target check is failing
 
-Use this to alert when all fetchers agree that the MVCR target website is unreachable or unhealthy.
+Use this to alert per fetcher when that instance reports the MVCR target website as unreachable or unhealthy.
 
 ### `mvcr_fetcher_last_success_timestamp_seconds`
 
 Gauge containing the Unix timestamp of the last successful fetch.
 
-Use this to alert when no fetch has succeeded for too long while the fetcher has had recent request activity.
+Use this to alert per fetcher when that instance has not succeeded for too long (including never-succeeded / timestamp 0).
 
 ### `mvcr_fetcher_build_info`
 
@@ -213,38 +213,36 @@ Fires when a sustained majority of fetcher traffic is retrying or failing.
 
 ### Fetcher Target Down
 
-Fires when all fetchers report that they cannot reach the MVCR target website.
+Fires per fetcher instance when that scraper reports the MVCR target website as down.
 
 ```yaml
 - alert: MvcrFetcherTargetDown
   expr: |
-    max(mvcr_fetcher_target_up) == 0
+    mvcr_fetcher_target_up == 0
   for: 10m
   labels:
     severity: critical
     service: mvcr
   annotations:
-    summary: "MVCR target website check is failing"
-    description: "All reporting fetchers say that the MVCR target website is unreachable or unhealthy."
+    summary: "MVCR target check failing on {{ $labels.job }}"
+    description: "Fetcher {{ $labels.instance }} (job {{ $labels.job }}) reports mvcr_fetcher_target_up=0 for more than 10m."
 ```
 
 ### Fetcher No Successful Fetch
 
-Fires when no successful fetch has happened recently, but fetchers have still seen request activity.
+Fires per fetcher instance when that scraper's last success is older than the threshold (including never-succeeded / timestamp 0).
 
 ```yaml
 - alert: MvcrFetcherNoSuccessfulFetch
   expr: |
-    (time() - max(mvcr_fetcher_last_success_timestamp_seconds) > 7200)
-    and
-    sum(increase(mvcr_fetcher_requests_total[2h])) > 0
+    time() - mvcr_fetcher_last_success_timestamp_seconds > 7200
   for: 10m
   labels:
     severity: critical
     service: mvcr
   annotations:
-    summary: "No successful MVCR fetch for over two hours"
-    description: "Fetchers have had request activity, but no fetcher has reported a successful fetch for more than two hours."
+    summary: "No successful MVCR fetch on {{ $labels.job }}"
+    description: "Fetcher {{ $labels.instance }} (job {{ $labels.job }}) last success age exceeds 7200 seconds (includes never-succeeded / timestamp 0)."
 ```
 
 ### Bot Error Burst

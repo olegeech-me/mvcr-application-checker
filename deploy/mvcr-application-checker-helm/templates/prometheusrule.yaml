@@ -46,28 +46,32 @@ spec:
               retry/failure events in {{ .Values.metrics.prometheusRule.fetcherRetryStormWindow }}.
         - alert: MvcrFetcherTargetDown
           expr: |
-            max(mvcr_fetcher_target_up) == 0
+            mvcr_fetcher_target_up == 0
           for: {{ .Values.metrics.prometheusRule.fetcherTargetDownDuration }}
           labels:
             severity: critical
             {{- include "mvcr-application-checker.alertServiceLabel" . | nindent 12 }}
           annotations:
-            summary: "MVCR target website check is failing"
-            description: "All reporting fetchers say that the MVCR target website is unreachable or unhealthy."
+            summary: "MVCR target check failing on {{ "{{ $labels.job }}" }}"
+            description: >-
+              Fetcher {{ "{{ $labels.instance }}" }} (job {{ "{{ $labels.job }}" }})
+              reports mvcr_fetcher_target_up=0 for more than
+              {{ .Values.metrics.prometheusRule.fetcherTargetDownDuration }}.
         - alert: MvcrFetcherNoSuccessfulFetch
           expr: |
-            (time() - max(mvcr_fetcher_last_success_timestamp_seconds) > {{ .Values.metrics.prometheusRule.fetcherNoSuccessSeconds }})
-            and
-            sum(increase(mvcr_fetcher_requests_total[{{ .Values.metrics.prometheusRule.fetcherNoSuccessWindow }}])) > 0
+            time() - mvcr_fetcher_last_success_timestamp_seconds
+              > {{ .Values.metrics.prometheusRule.fetcherNoSuccessSeconds }}
           for: {{ .Values.metrics.prometheusRule.fetcherNoSuccessDuration }}
           labels:
             severity: critical
             {{- include "mvcr-application-checker.alertServiceLabel" . | nindent 12 }}
           annotations:
-            summary: "No successful MVCR fetch for over two hours"
+            summary: "No successful MVCR fetch on {{ "{{ $labels.job }}" }}"
             description: >-
-              Fetchers have had request activity, but no fetcher has reported
-              a successful fetch for more than {{ .Values.metrics.prometheusRule.fetcherNoSuccessSeconds }} seconds.
+              Fetcher {{ "{{ $labels.instance }}" }} (job {{ "{{ $labels.job }}" }})
+              last success age exceeds
+              {{ .Values.metrics.prometheusRule.fetcherNoSuccessSeconds }} seconds
+              (includes never-succeeded / timestamp 0).
         {{- end }}
         {{- if .Values.metrics.bot.enabled }}
         - alert: MvcrBotErrorBurst
