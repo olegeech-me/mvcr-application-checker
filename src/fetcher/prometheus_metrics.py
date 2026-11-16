@@ -38,6 +38,8 @@ class FetcherPrometheusMetrics:
     """Prometheus metrics exported by fetcher workers"""
 
     def __init__(self, registry=REGISTRY):
+        self._registry = registry
+        self._last_success_registered = False
         self.requests_total = Counter(
             "mvcr_fetcher_requests_total",
             "Fetcher request outcomes.",
@@ -66,10 +68,11 @@ class FetcherPrometheusMetrics:
             "Whether the MVCR target website check is healthy.",
             registry=registry,
         )
+        # Absent until first success (registry=None)
         self.last_success_timestamp_seconds = Gauge(
             "mvcr_fetcher_last_success_timestamp_seconds",
             "Unix timestamp of the last successful fetch.",
-            registry=registry,
+            registry=None,
         )
         self.build_info = Gauge(
             "mvcr_fetcher_build_info",
@@ -107,6 +110,9 @@ class FetcherPrometheusMetrics:
 
     def mark_success(self, timestamp=None):
         """Record the latest successful fetch timestamp"""
+        if not self._last_success_registered:
+            self._registry.register(self.last_success_timestamp_seconds)
+            self._last_success_registered = True
         self.last_success_timestamp_seconds.set(timestamp or time.time())
 
     def set_build_info(self, version, commit):

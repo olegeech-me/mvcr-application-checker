@@ -59,8 +59,10 @@ spec:
               {{ .Values.metrics.prometheusRule.fetcherTargetDownDuration }}.
         - alert: MvcrFetcherNoSuccessfulFetch
           expr: |
-            time() - mvcr_fetcher_last_success_timestamp_seconds
-              > {{ .Values.metrics.prometheusRule.fetcherNoSuccessSeconds }}
+            time() - (
+              mvcr_fetcher_last_success_timestamp_seconds
+              or on(instance, job) process_start_time_seconds
+            ) > {{ .Values.metrics.prometheusRule.fetcherNoSuccessSeconds }}
           for: {{ .Values.metrics.prometheusRule.fetcherNoSuccessDuration }}
           labels:
             severity: critical
@@ -69,9 +71,8 @@ spec:
             summary: "No successful MVCR fetch on {{ "{{ $labels.job }}" }}"
             description: >-
               Fetcher {{ "{{ $labels.instance }}" }} (job {{ "{{ $labels.job }}" }})
-              last success age exceeds
-              {{ .Values.metrics.prometheusRule.fetcherNoSuccessSeconds }} seconds
-              (includes never-succeeded / timestamp 0).
+              has not succeeded within
+              {{ .Values.metrics.prometheusRule.fetcherNoSuccessSeconds }} seconds.
         {{- end }}
         {{- if .Values.metrics.bot.enabled }}
         - alert: MvcrBotErrorBurst

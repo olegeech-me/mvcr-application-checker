@@ -432,7 +432,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Seconds since the latest successful fetch reported by any fetcher.",
+      "description": "Seconds since the latest successful fetch. Empty until first success.",
       "fieldConfig": {
         "defaults": {
           "color": {

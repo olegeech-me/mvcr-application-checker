@@ -92,9 +92,7 @@ Use this to alert per fetcher when that instance reports the MVCR target website
 
 ### `mvcr_fetcher_last_success_timestamp_seconds`
 
-Gauge containing the Unix timestamp of the last successful fetch.
-
-Use this to alert per fetcher when that instance has not succeeded for too long (including never-succeeded / timestamp 0).
+Unix timestamp of the last successful fetch. Absent until the first success.
 
 ### `mvcr_fetcher_build_info`
 
@@ -230,19 +228,20 @@ Fires per fetcher instance when that scraper reports the MVCR target website as 
 
 ### Fetcher No Successful Fetch
 
-Fires per fetcher instance when that scraper's last success is older than the threshold (including never-succeeded / timestamp 0).
-
 ```yaml
 - alert: MvcrFetcherNoSuccessfulFetch
   expr: |
-    time() - mvcr_fetcher_last_success_timestamp_seconds > 7200
+    time() - (
+      mvcr_fetcher_last_success_timestamp_seconds
+      or on(instance, job) process_start_time_seconds
+    ) > 7200
   for: 10m
   labels:
     severity: critical
     service: mvcr
   annotations:
     summary: "No successful MVCR fetch on {{ $labels.job }}"
-    description: "Fetcher {{ $labels.instance }} (job {{ $labels.job }}) last success age exceeds 7200 seconds (includes never-succeeded / timestamp 0)."
+    description: "Fetcher {{ $labels.instance }} (job {{ $labels.job }}) has not succeeded within 7200 seconds."
 ```
 
 ### Bot Error Burst
