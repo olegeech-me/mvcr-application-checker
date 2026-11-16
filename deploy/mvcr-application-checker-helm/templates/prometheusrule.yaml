@@ -61,7 +61,7 @@ spec:
           expr: |
             time() - (
               mvcr_fetcher_last_success_timestamp_seconds
-              or on(instance, job) process_start_time_seconds
+              or on(instance, job) process_start_time_seconds{job=~"mvcr-fetcher.*"}
             ) > {{ .Values.metrics.prometheusRule.fetcherNoSuccessSeconds }}
           for: {{ .Values.metrics.prometheusRule.fetcherNoSuccessDuration }}
           labels:

@@ -233,7 +233,7 @@ Fires per fetcher instance when that scraper reports the MVCR target website as 
   expr: |
     time() - (
       mvcr_fetcher_last_success_timestamp_seconds
-      or on(instance, job) process_start_time_seconds
+      or on(instance, job) process_start_time_seconds{job=~"mvcr-fetcher.*"}
     ) > 7200
   for: 10m
   labels:

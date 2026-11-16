@@ -1,11 +1,11 @@
 # CHANGELOG
 
-## [v2.4.7] / [Helm 0.3.7] - 2026-11-16
+## [v2.4.7] - 2026-11-16
 
 ### Monitoring
 
 - `last_success` metric exported only after first success
-- `MvcrFetcherNoSuccessfulFetch` uses `last_success or process_start_time`
+- `MvcrFetcherNoSuccessfulFetch` uses `last_success or process_start_time{job=~"mvcr-fetcher.*"}`
 
 ## [Helm 0.3.6] - 2026-11-04
 
